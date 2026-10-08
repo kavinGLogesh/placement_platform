@@ -1,0 +1,1084 @@
+// Prisma Schema for College Placement Assessment Platform (Phases 1, 2, 3, 4)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// System Health verification table (Phase 1)
+model SystemHealthCheck {
+  id        Int      @id @default(autoincrement())
+  service   String   @default("college-placement-api")
+  status    String   @default("HEALTHY")
+  createdAt DateTime @default(now())
+
+  @@map("_system_health_checks")
+}
+
+// =============================================================================
+// PHASE 2: AUTHENTICATION AND ROLE-BASED ACCESS CONTROL (RBAC)
+// =============================================================================
+
+enum Role {
+  SUPER_ADMIN
+  PLACEMENT_ADMIN
+  STUDENT
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  PLACED
+  BLOCKED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  role          Role           @default(STUDENT)
+  isActive           Boolean        @default(true)
+  mustChangePassword Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  student       Student?
+  refreshTokens RefreshToken[]
+  questions     Question[]
+  assessments   Assessment[]
+  gdRoundsEvaluated        GdRound[]              @relation("GdEvaluator")
+  gdRoundsCreated          GdRound[]              @relation("GdCreator")
+  gdEvaluations            GdEvaluation[]
+  interviewRoundsEvaluated InterviewRound[]       @relation("InterviewEvaluator")
+  interviewRoundsCreated   InterviewRound[]       @relation("InterviewCreator")
+  interviewEvaluations     InterviewEvaluation[]
+  approvedQuestionClassifications QuestionAiClassification[] @relation("ApprovedClassifications")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  isRevoked Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// =============================================================================
+// PHASE 3: COLLEGE, DEPARTMENT, COURSE, CLASS, SECTION, STUDENT HIERARCHY
+// =============================================================================
+
+model College {
+  id           String       @id @default(uuid())
+  code         String       @unique
+  name         String
+  address      String?
+  website      String?
+  contactEmail String?
+  contactPhone String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  departments  Department[]
+
+  @@map("colleges")
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  collegeId   String
+  code        String
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  courses     Course[]
+  classes     Class[]
+  students    Student[]
+  gdRounds    GdRound[]
+  interviewRounds InterviewRound[]
+
+  @@unique([collegeId, code])
+  @@index([collegeId])
+  @@map("departments")
+}
+
+model Course {
+  id            String     @id @default(uuid())
+  departmentId  String
+  code          String
+  name          String
+  durationYears Int        @default(4)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  department    Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  classes       Class[]
+  students      Student[]
+  gdRounds      GdRound[]
+  interviewRounds InterviewRound[]
+
+  @@unique([departmentId, code])
+  @@index([departmentId])
+  @@map("courses")
+}
+
+model Class {
+  id           String     @id @default(uuid())
+  departmentId String
+  courseId     String
+  batchYear    Int        // e.g. 2026
+  currentYear  Int        // e.g. 1, 2, 3, 4
+  name         String     // e.g. "CSE 2022-2026 - Year 3"
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  course       Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sections     Section[]
+  students     Student[]
+
+  @@unique([courseId, batchYear, currentYear])
+  @@index([departmentId])
+  @@index([courseId])
+  @@map("classes")
+}
+
+model Section {
+  id        String    @id @default(uuid())
+  classId   String
+  name      String    // e.g. "A", "B", "C"
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  class     Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  students  Student[]
+
+  @@unique([classId, name])
+  @@index([classId])
+  @@map("sections")
+}
+
+model Student {
+  id             String         @id @default(uuid())
+  userId         String?        @unique
+  registerNumber String         @unique
+  name           String
+  collegeEmail   String         @unique
+  phone          String?
+  dob            String?
+  departmentId   String
+  courseId       String
+  classId        String
+  sectionId      String
+  year           Int
+  cgpa           Float?
+  status         StudentStatus  @default(ACTIVE)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  department     Department     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  course         Course         @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  class          Class          @relation(fields: [classId], references: [id], onDelete: Restrict)
+  section        Section        @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  questionUsages QuestionUsage[]
+  assessmentAssignments AssessmentAssignment[]
+  attempts       AssessmentAttempt[]
+  results        AssessmentResult[]
+  codingSubmissions CodingSubmission[]
+  gdParticipations        GdParticipant[]
+  interviewParticipations InterviewParticipant[]
+  attendanceEmailLogs     AttendanceEmailLog[]
+
+  @@index([departmentId])
+  @@index([courseId])
+  @@index([classId])
+  @@index([sectionId])
+  @@index([status])
+  @@index([year])
+  @@index([name])
+  @@index([registerNumber])
+  @@index([collegeEmail])
+  @@map("students")
+}
+
+// =============================================================================
+// PHASE 4: QUESTION BANK
+// =============================================================================
+
+enum QuestionCategory {
+  QUANTITATIVE_APTITUDE
+  LOGICAL_REASONING
+  VERBAL_ABILITY
+  TECHNICAL_MCQ
+  CODING
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  FILL_BLANK
+  DESCRIPTIVE
+}
+
+enum QuestionStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+model Company {
+  id          String            @id @default(uuid())
+  code        String            @unique
+  name        String
+  description String?           @db.Text
+  logoUrl     String?
+  website     String?
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  assessments      Assessment[]
+  questions        Question[]
+  companyQuestions CompanyQuestion[]
+  duplicateCandidates QuestionDuplicateCandidate[]
+
+  @@map("companies")
+}
+
+model Question {
+  id            String             @id @default(uuid())
+  companyId     String?
+  exactHash     String?            @db.VarChar(64)
+  category      QuestionCategory
+  topic         String             // Validated against CategoryTopicsMap
+  difficulty    QuestionDifficulty @default(MEDIUM)
+  questionType  QuestionType       @default(SINGLE_CHOICE)
+  questionText  String             @db.Text
+  marks         Float              @default(1.0)
+  negativeMarks Float              @default(0.0)
+  correctAnswer String?            @db.Text
+  explanation   String?            @db.Text
+  imageUrl      String?            @db.Text
+  status        QuestionStatus     @default(ACTIVE)
+  createdById   String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  company       Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy     User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  options       QuestionOption[]
+  usages        QuestionUsage[]
+  assessmentQuestions AssessmentQuestion[]
+  attemptAnswers AttemptAnswer[]
+  codingSubmissions CodingSubmission[]
+  companyQuestions  CompanyQuestion[]
+  duplicateCandidatesAsOriginal QuestionDuplicateCandidate[] @relation("OriginalQuestionDuplicates")
+  duplicateCandidatesAsCandidate QuestionDuplicateCandidate[] @relation("CandidateQuestionDuplicates")
+  aiClassification              QuestionAiClassification?
+
+  @@index([companyId])
+  @@index([exactHash])
+  @@index([category])
+  @@index([topic])
+  @@index([difficulty])
+  @@index([questionType])
+  @@index([status])
+  @@index([createdById])
+  @@map("questions")
+}
+
+model CompanyQuestion {
+  id              String   @id @default(uuid())
+  companyId       String
+  questionId      String
+  source          String?  @db.VarChar(191) // e.g. "Campus Drive", "NQT", "Reported 2024"
+  year            Int?     // e.g. 2023, 2024, 2025
+  occurrenceCount Int      @default(1)
+  label           String   @default("Company Tagged") @db.VarChar(64) // "Company Tagged" | "Reported Question" | "Repeated Question" | "Frequently Used" | "Possible Duplicate"
+  isReported      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, questionId])
+  @@index([companyId])
+  @@index([questionId])
+  @@index([year])
+  @@index([label])
+  @@map("company_questions")
+}
+
+model QuestionDuplicateCandidate {
+  id                  String   @id @default(uuid())
+  companyId           String?
+  originalQuestionId  String
+  candidateQuestionId String?
+  candidateText       String   @db.Text
+  similarityScore     Float    // e.g. 0.85
+  reason              String   @db.VarChar(255)
+  status              String   @default("PENDING") @db.VarChar(32) // PENDING, CONFIRMED_DUPLICATE, REJECTED
+  metadata            String?  @db.Text // JSON metadata of candidate
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  company             Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  originalQuestion    Question  @relation("OriginalQuestionDuplicates", fields: [originalQuestionId], references: [id], onDelete: Cascade)
+  candidateQuestion   Question? @relation("CandidateQuestionDuplicates", fields: [candidateQuestionId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([originalQuestionId])
+  @@index([candidateQuestionId])
+  @@index([status])
+  @@map("question_duplicate_candidates")
+}
+
+enum AiClassificationStatus {
+  AI_PENDING
+  CLASSIFIED
+  NEEDS_REVIEW
+  AI_FAILED
+}
+
+model QuestionAiClassification {
+  id                    String                 @id @default(uuid())
+  questionId            String                 @unique
+  suggestedCategory     QuestionCategory
+  suggestedTopic        String                 @db.VarChar(191)
+  suggestedDifficulty   QuestionDifficulty
+  suggestedQuestionType QuestionType
+  categoryConfidence    Float                  @default(0.0)
+  topicConfidence       Float                  @default(0.0)
+  difficultyConfidence  Float                  @default(0.0)
+  typeConfidence        Float                  @default(0.0)
+  overallConfidence     Float                  @default(0.0)
+  reasoning             String?                @db.Text
+  status                AiClassificationStatus @default(AI_PENDING)
+  rawAiResponse         String?                @db.Text
+  errorMessage          String?                @db.Text
+  modelName             String?                @db.VarChar(64)
+  isApproved            Boolean                @default(false)
+  approvedAt            DateTime?
+  approvedById          String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  question              Question               @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  approvedBy            User?                  @relation("ApprovedClassifications", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([questionId])
+  @@index([status])
+  @@index([isApproved])
+  @@map("question_ai_classifications")
+}
+
+model QuestionOption {
+  id          String   @id @default(uuid())
+  questionId  String
+  optionText  String   @db.Text
+  optionOrder Int
+  isCorrect   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, optionOrder])
+  @@index([questionId])
+  @@map("question_options")
+}
+
+model QuestionUsage {
+  id           String   @id @default(uuid())
+  questionId   String
+  assessmentId String?
+  studentId    String?
+  usageMonth   Int      // 1 - 12
+  usageYear    Int      // e.g. 2026
+  usedAt       DateTime @default(now())
+
+  question     Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  student      Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  assessment   Assessment? @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@index([assessmentId])
+  @@index([studentId])
+  @@index([usageYear, usageMonth])
+  @@map("question_usage")
+}
+
+// =============================================================================
+// PHASE 5: ASSESSMENT BUILDER & QUESTION SELECTION ENGINE
+// =============================================================================
+
+enum AssessmentStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AssessmentComponent {
+  APTITUDE
+  LOGICAL_REASONING
+  VERBAL_ABILITY
+  TECHNICAL_MCQ
+  CODING
+  COMMUNICATION
+  PSYCHOMETRIC
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
+model Assessment {
+  id                  String               @id @default(uuid())
+  companyId           String?
+  isCompanyAssessment Boolean              @default(false)
+  name                String
+  description         String?              @db.Text
+  duration            Int                  // in minutes
+  maximumAttempts     Int                  @default(1)
+  negativeMarking     Boolean              @default(false)
+  randomQuestions     Boolean              @default(false)
+  randomOptions       Boolean              @default(false)
+  passingPercentage   Float                @default(50.0)
+  startDate           DateTime?
+  endDate             DateTime?
+  status              AssessmentStatus     @default(DRAFT)
+  totalMarks          Float                @default(0.0)
+  totalQuestions      Int                  @default(0)
+  numberOfPapers      Int                  @default(1)
+  createdById         String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  company             Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy           User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  sections            AssessmentSection[]
+  papers              AssessmentPaper[]
+  assignments         AssessmentAssignment[]
+  usages              QuestionUsage[]
+  attempts            AssessmentAttempt[]
+  results             AssessmentResult[]
+  attendanceAlert     AttendanceNotification?
+  attendanceEmailLogs AttendanceEmailLog[]
+  attendanceConfig    AttendanceAutomationConfig?
+
+  @@index([companyId])
+  @@index([isCompanyAssessment])
+  @@index([status])
+  @@index([createdById])
+  @@index([startDate, endDate])
+  @@map("assessments")
+}
+
+model AssessmentSection {
+  id                  String              @id @default(uuid())
+  assessmentId        String
+  component           AssessmentComponent
+  name                String
+  sectionOrder        Int                 @default(1)
+  duration            Int?                // optional section time limit in minutes
+  topics              String              @db.Text // JSON array of configured topics
+  difficulty          QuestionDifficulty? // optional target difficulty or null for mixed
+  questionType        QuestionType?       // optional target questionType or null for mixed
+  questionsCount      Int                 @default(1)
+  marksPerQuestion    Float               @default(1.0)
+  negativeMarks       Float               @default(0.0)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  assessment          Assessment          @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  assessmentQuestions AssessmentQuestion[]
+
+  @@unique([assessmentId, sectionOrder])
+  @@index([assessmentId])
+  @@map("assessment_sections")
+}
+
+model AssessmentPaper {
+  id            String               @id @default(uuid())
+  assessmentId  String
+  paperCode     String               // e.g. "SET-A", "SET-B"
+  paperIndex    Int                  // 1, 2, ...
+  createdAt     DateTime             @default(now())
+
+  assessment    Assessment           @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questions     AssessmentQuestion[]
+  assignments   AssessmentAssignment[]
+  attempts      AssessmentAttempt[]
+
+  @@unique([assessmentId, paperIndex])
+  @@index([assessmentId])
+  @@map("assessment_papers")
+}
+
+model AssessmentQuestion {
+  id                String             @id @default(uuid())
+  paperId           String
+  sectionId         String?
+  questionId        String
+  questionOrder     Int                // 1, 2, ...
+  marks             Float              @default(1.0)
+  negativeMarks     Float              @default(0.0)
+  randomizedOptions String?            @db.Text // JSON array of randomized option objects for deterministic reload
+  createdAt         DateTime           @default(now())
+
+  paper             AssessmentPaper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  section           AssessmentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  question          Question           @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([paperId, questionId])
+  @@unique([paperId, questionOrder])
+  @@index([paperId])
+  @@index([questionId])
+  @@index([sectionId])
+  @@map("assessment_questions")
+}
+
+model AssessmentAssignment {
+  id           String           @id @default(uuid())
+  assessmentId String
+  studentId    String?
+  departmentId String?
+  classId      String?
+  sectionId    String?
+  paperId      String?
+  status       AssignmentStatus @default(ASSIGNED)
+  assignedAt   DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  assessment   Assessment       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  paper        AssessmentPaper? @relation(fields: [paperId], references: [id], onDelete: SetNull)
+  student      Student?         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@index([studentId])
+  @@index([departmentId])
+  @@index([classId])
+  @@index([paperId])
+  @@map("assessment_assignments")
+}
+
+// =============================================================================
+// PHASE 6: STUDENT ASSESSMENT ENGINE & ATTEMPTS
+// =============================================================================
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+}
+
+model AssessmentAttempt {
+  id              String             @id @default(uuid())
+  studentId       String
+  assessmentId    String
+  paperId         String?
+  attemptNumber   Int                @default(1)
+  startTime       DateTime           @default(now())
+  expectedEndTime DateTime
+  status          AttemptStatus      @default(IN_PROGRESS)
+  currentQuestion Int                @default(1)
+  submittedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  student         Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assessment      Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  paper           AssessmentPaper?   @relation(fields: [paperId], references: [id], onDelete: SetNull)
+  answers         AttemptAnswer[]
+  result          AssessmentResult?
+  codingSubmissions CodingSubmission[]
+
+  @@index([studentId])
+  @@index([assessmentId])
+  @@index([paperId])
+  @@index([status])
+  @@map("assessment_attempts")
+}
+
+model AttemptAnswer {
+  id                 String            @id @default(uuid())
+  attemptId          String
+  questionId         String
+  selectedOptionIds  String?           @db.Text // JSON array of selected option IDs
+  textAnswer         String?           @db.Text // Text answer for descriptive / fill in blank
+  isMarkedForReview  Boolean           @default(false)
+  answeredAt         DateTime          @default(now())
+  version            Int               @default(1)
+  isCorrect          Boolean?
+  marksAwarded       Float?
+
+  attempt            AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question           Question          @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+  @@map("attempt_answers")
+}
+
+model AssessmentResult {
+  id               String            @id @default(uuid())
+  attemptId        String            @unique
+  assessmentId     String
+  studentId        String
+  totalMarks       Float
+  obtainedMarks    Float
+  percentage       Float
+  correctCount     Int
+  incorrectCount   Int
+  unansweredCount  Int
+  accuracy         Float
+  isPassed         Boolean
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  attempt          AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  assessment       Assessment        @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student          Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([assessmentId])
+  @@map("assessment_results")
+}
+
+// =============================================================================
+// PHASE 7: CODING ASSESSMENT & SECURE CODE EXECUTION
+// =============================================================================
+
+enum CodingLanguage {
+  C
+  CPP
+  PYTHON
+  JAVA
+}
+
+enum CodingSubmissionType {
+  RUN
+  SUBMIT
+}
+
+enum CodingExecutionStatus {
+  PENDING
+  ACCEPTED
+  WRONG_ANSWER
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  COMPILATION_ERROR
+  RUNTIME_ERROR
+  INTERNAL_ERROR
+  EXECUTION_FAILED
+}
+
+model CodingSubmission {
+  id              String                @id @default(uuid())
+  attemptId       String
+  questionId      String
+  studentId       String
+  language        CodingLanguage
+  sourceCode      String                @db.Text
+  submissionType  CodingSubmissionType
+  status          CodingExecutionStatus
+  compileError    String?               @db.Text
+  runtimeError    String?               @db.Text
+  passedTestCount Int                   @default(0)
+  totalTestCount  Int                   @default(0)
+  executionTime   Float?
+  memoryUsed      Float?
+  judge0Token     String?
+  judge0Status    String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  attempt         AssessmentAttempt     @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question        Question              @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  student         Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  results         CodingExecutionResult[]
+
+  @@index([attemptId])
+  @@index([questionId])
+  @@index([studentId])
+  @@index([status])
+  @@index([submissionType])
+  @@index([createdAt])
+  @@map("coding_submissions")
+}
+
+model CodingExecutionResult {
+  id             String                @id @default(uuid())
+  submissionId   String
+  testCaseIndex  Int
+  isSample       Boolean               @default(false)
+  status         CodingExecutionStatus
+  input          String?               @db.Text
+  expectedOutput String?               @db.Text
+  actualOutput   String?               @db.Text
+  executionTime  Float?
+  memoryUsed     Float?
+  errorMessage   String?               @db.Text
+  createdAt      DateTime              @default(now())
+
+  submission     CodingSubmission      @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@index([status])
+  @@index([isSample])
+  @@map("coding_execution_results")
+}
+
+// =============================================================================
+// PHASE 10: STRUCTURED GD + INTERVIEW EVALUATION
+// =============================================================================
+
+enum GdRoundStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InterviewType {
+  MOCK
+  HR
+  TECHNICAL
+  MANAGERIAL
+}
+
+enum InterviewRoundStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  PENDING
+}
+
+enum EvaluationStatus {
+  PENDING
+  DRAFT
+  EVALUATED
+}
+
+model GdRound {
+  id              String          @id @default(uuid())
+  title           String
+  topic           String          @db.Text
+  instructions    String?         @db.Text
+  scheduledDate   DateTime
+  durationMinutes Int             @default(30)
+  status          GdRoundStatus   @default(SCHEDULED)
+  evaluatorId     String?
+  departmentId    String?
+  courseId        String?
+  batchYear       Int?
+  createdById     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  evaluator       User?           @relation("GdEvaluator", fields: [evaluatorId], references: [id], onDelete: SetNull)
+  department      Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  course          Course?         @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdBy       User?           @relation("GdCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  criteria        GdCriterion[]
+  participants    GdParticipant[]
+
+  @@index([status])
+  @@index([evaluatorId])
+  @@index([scheduledDate])
+  @@index([departmentId])
+  @@map("gd_rounds")
+}
+
+model GdCriterion {
+  id          String             @id @default(uuid())
+  roundId     String
+  name        String
+  maxMarks    Float              @default(10.0)
+  order       Int                @default(0)
+  createdAt   DateTime           @default(now())
+
+  round       GdRound            @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  scores      GdCriterionScore[]
+
+  @@unique([roundId, name])
+  @@index([roundId])
+  @@map("gd_criteria")
+}
+
+model GdParticipant {
+  id          String           @id @default(uuid())
+  roundId     String
+  studentId   String
+  attendance  AttendanceStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  round       GdRound          @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  evaluation  GdEvaluation?
+
+  @@unique([roundId, studentId])
+  @@index([roundId])
+  @@index([studentId])
+  @@index([attendance])
+  @@map("gd_participants")
+}
+
+model GdEvaluation {
+  id               String             @id @default(uuid())
+  participantId    String             @unique
+  evaluatorId      String
+  totalScore       Float
+  maxPossibleMarks Float
+  percentage       Float
+  feedback         String?            @db.Text
+  status           EvaluationStatus   @default(EVALUATED)
+  evaluatedAt      DateTime           @default(now())
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  participant      GdParticipant      @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  evaluator        User               @relation(fields: [evaluatorId], references: [id], onDelete: Restrict)
+  criterionScores  GdCriterionScore[]
+
+  @@index([evaluatorId])
+  @@index([evaluatedAt])
+  @@map("gd_evaluations")
+}
+
+model GdCriterionScore {
+  id           String       @id @default(uuid())
+  evaluationId String
+  criterionId  String
+  score        Float
+  maxMarks     Float
+  comment      String?      @db.Text
+
+  evaluation   GdEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  criterion    GdCriterion  @relation(fields: [criterionId], references: [id], onDelete: Restrict)
+
+  @@unique([evaluationId, criterionId])
+  @@index([evaluationId])
+  @@index([criterionId])
+  @@map("gd_criterion_scores")
+}
+
+model InterviewRound {
+  id              String               @id @default(uuid())
+  title           String
+  interviewType   InterviewType        @default(TECHNICAL)
+  instructions    String?              @db.Text
+  scheduledDate   DateTime
+  durationMinutes Int                  @default(30)
+  status          InterviewRoundStatus @default(SCHEDULED)
+  evaluatorId     String?
+  departmentId    String?
+  courseId        String?
+  batchYear       Int?
+  createdById     String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  evaluator       User?                @relation("InterviewEvaluator", fields: [evaluatorId], references: [id], onDelete: SetNull)
+  department      Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  course          Course?              @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdBy       User?                @relation("InterviewCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  criteria        InterviewCriterion[]
+  participants    InterviewParticipant[]
+
+  @@index([status])
+  @@index([interviewType])
+  @@index([evaluatorId])
+  @@index([scheduledDate])
+  @@map("interview_rounds")
+}
+
+model InterviewCriterion {
+  id          String                    @id @default(uuid())
+  roundId     String
+  name        String
+  maxMarks    Float                     @default(10.0)
+  order       Int                       @default(0)
+  createdAt   DateTime                  @default(now())
+
+  round       InterviewRound            @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  scores      InterviewCriterionScore[]
+
+  @@unique([roundId, name])
+  @@index([roundId])
+  @@map("interview_criteria")
+}
+
+model InterviewParticipant {
+  id          String              @id @default(uuid())
+  roundId     String
+  studentId   String
+  attendance  AttendanceStatus    @default(PENDING)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  round       InterviewRound      @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  student     Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  evaluation  InterviewEvaluation?
+
+  @@unique([roundId, studentId])
+  @@index([roundId])
+  @@index([studentId])
+  @@index([attendance])
+  @@map("interview_participants")
+}
+
+model InterviewEvaluation {
+  id                  String                    @id @default(uuid())
+  participantId       String                    @unique
+  evaluatorId         String
+  totalScore          Float
+  maxPossibleMarks    Float
+  percentage          Float
+  strengths           String?                   @db.Text
+  areasForImprovement String?                   @db.Text
+  overallFeedback     String?                   @db.Text
+  status              EvaluationStatus          @default(EVALUATED)
+  evaluatedAt         DateTime                  @default(now())
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  participant         InterviewParticipant      @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  evaluator           User                      @relation(fields: [evaluatorId], references: [id], onDelete: Restrict)
+  criterionScores     InterviewCriterionScore[]
+
+  @@index([evaluatorId])
+  @@index([evaluatedAt])
+  @@map("interview_evaluations")
+}
+
+model InterviewCriterionScore {
+  id           String              @id @default(uuid())
+  evaluationId String
+  criterionId  String
+  score        Float
+  maxMarks     Float
+  comment      String?             @db.Text
+
+  evaluation   InterviewEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  criterion    InterviewCriterion  @relation(fields: [criterionId], references: [id], onDelete: Restrict)
+
+  @@unique([evaluationId, criterionId])
+  @@index([evaluationId])
+  @@index([criterionId])
+  @@map("interview_criterion_scores")
+}
+
+// =============================================================================
+// PHASE 11: ASSESSMENT ATTENDANCE & FOLLOW-UP AUTOMATION
+// =============================================================================
+
+model AttendanceNotification {
+  id                String      @id @default(uuid())
+  assessmentId      String      @unique
+  assessmentTitle   String
+  notAttendedCount  Int
+  assignedCount     Int
+  alertMessage      String      @db.Text
+  isResolved        Boolean     @default(false)
+  reminderSentCount Int         @default(0)
+  lastReminderAt    DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  assessment        Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([isResolved])
+  @@index([createdAt])
+  @@map("attendance_notifications")
+}
+
+model AttendanceEmailLog {
+  id             String      @id @default(uuid())
+  assessmentId   String
+  studentId      String
+  recipientEmail String
+  emailType      String      // "REMINDER" | "FOLLOWUP" | "CLOSING_SOON" | "START_REMINDER"
+  status         String      @default("SENT") // "SENT" | "FAILED"
+  subject        String
+  messageBody    String      @db.Text
+  errorMessage   String?     @db.Text
+  sentAt         DateTime    @default(now())
+
+  assessment     Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student        Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, studentId, emailType])
+  @@index([assessmentId])
+  @@index([studentId])
+  @@index([emailType])
+  @@index([sentAt])
+  @@map("attendance_email_logs")
+}
+
+model AttendanceAutomationConfig {
+  id                      String      @id @default(uuid())
+  assessmentId            String      @unique
+  isEmailReminderEnabled  Boolean     @default(true)
+  autoClosureReminder     Boolean     @default(false)
+  sendClosingSoonReminder Boolean     @default(false)
+  closingSoonHours        Int         @default(2)
+  reminderSubjectTemplate String?
+  reminderBodyTemplate    String?     @db.Text
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  assessment              Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@map("attendance_automation_configs")
+}
+
+model StudentImportHistory {
+  id              String   @id @default(uuid())
+  fileName        String
+  uploadedByEmail String
+  totalRecords    Int
+  importedCount   Int
+  duplicateCount  Int
+  invalidCount    Int
+  status          String   @default("COMPLETED")
+  detailsJson     String?  @db.LongText
+  createdAt       DateTime @default(now())
+
+  @@map("student_import_history")
+}

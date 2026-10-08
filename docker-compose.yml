@@ -1,0 +1,146 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # MySQL Database Service (MySQL 8.x)
+  # ----------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: placement_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root_secure_password}
+      MYSQL_DATABASE: ${DB_NAME:-college_placement_db}
+      MYSQL_USER: ${DB_USER:-placement_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-placement_password}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-root_secure_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - placement_network
+
+  # ----------------------------------------------------------------------------
+  # Backend API Service (Node.js + Express + TypeScript)
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: placement_backend
+    restart: unless-stopped
+    environment:
+      PORT: ${PORT:-5000}
+      NODE_ENV: ${NODE_ENV:-development}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      DATABASE_URL: mysql://${DB_USER:-placement_user}:${DB_PASSWORD:-placement_password}@mysql:3306/${DB_NAME:-college_placement_db}
+    ports:
+      - "${PORT:-5000}:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - placement_network
+
+  # ----------------------------------------------------------------------------
+  # Frontend Application Service (React + Vite + Material UI)
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: placement_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5000/api}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - placement_network
+
+  # ----------------------------------------------------------------------------
+  # Judge0 Code Execution Engine (Judge0 CE)
+  # ----------------------------------------------------------------------------
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    container_name: placement_judge0_server
+    restart: unless-stopped
+    ports:
+      - "2358:2358"
+    environment:
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0_password
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    networks:
+      - placement_network
+
+  judge0-worker:
+    image: judge0/judge0:1.13.1
+    container_name: placement_judge0_worker
+    restart: unless-stopped
+    command: ["./scripts/workers"]
+    privileged: true
+    environment:
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0_password
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    networks:
+      - placement_network
+
+  judge0-db:
+    image: postgres:13.0
+    container_name: placement_judge0_db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0_password
+    volumes:
+      - judge0_db_data:/var/lib/postgresql/data
+    networks:
+      - placement_network
+
+  judge0-redis:
+    image: redis:6.0
+    container_name: placement_judge0_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - judge0_redis_data:/data
+    networks:
+      - placement_network
+
+networks:
+  placement_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  judge0_db_data:
+    driver: local
+  judge0_redis_data:
+    driver: local
