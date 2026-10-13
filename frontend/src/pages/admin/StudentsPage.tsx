@@ -219,9 +219,9 @@ export const StudentsPage: React.FC = () => {
         dob: st.dob || '',
         password: '',
         departmentId: st.departmentId,
-        courseId: st.courseId,
-        classId: st.classId,
-        sectionId: st.sectionId,
+        courseId: st.courseId || '',
+        classId: st.classId || '',
+        sectionId: st.sectionId || '',
         year: st.year,
         cgpa: st.cgpa || 8.0,
         status: st.status,
@@ -277,10 +277,16 @@ export const StudentsPage: React.FC = () => {
         await managementService.updateStudent(editingStudent.id, updatePayload);
       } else {
         const created = await managementService.createStudent({
-          ...studentForm,
+          registerNumber: studentForm.registerNumber,
+          name: studentForm.name,
+          collegeEmail: studentForm.collegeEmail,
+          phone: studentForm.phone,
+          dob: studentForm.dob,
+          password: studentForm.password,
+          departmentId: studentForm.departmentId,
           year: Number(studentForm.year),
           cgpa: studentForm.cgpa ? Number(studentForm.cgpa) : undefined,
-          password: studentForm.password ? studentForm.password.trim() : undefined,
+          status: studentForm.status,
         });
         if (created.temporaryPassword) {
           setCredentialModalData({
@@ -459,23 +465,10 @@ export const StudentsPage: React.FC = () => {
     },
     {
       id: 'department',
-      label: 'Dept & Course',
+      label: 'Department',
       minWidth: 160,
       render: (s) => (
-        <div>
-          <Chip label={s.department?.code || '—'} size="small" sx={{ mr: 0.5, fontWeight: 600 }} />
-          <Chip label={s.course?.code || '—'} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
-        </div>
-      ),
-    },
-    {
-      id: 'class',
-      label: 'Class & Section',
-      minWidth: 140,
-      render: (s) => (
-        <Typography variant="body2" color="text.secondary">
-          {s.class?.name ? `${s.class.name} / Sec ${s.section?.name || ''}` : '—'}
-        </Typography>
+        <Chip label={s.department?.code || '—'} size="small" sx={{ fontWeight: 600 }} />
       ),
     },
     {
@@ -616,7 +609,7 @@ export const StudentsPage: React.FC = () => {
               '&:hover': { bgcolor: '#1e293b' },
             }}
           >
-            + Add Student
+             Add Student
           </Button>
 
           <Button
@@ -743,10 +736,16 @@ export const StudentsPage: React.FC = () => {
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Department</InputLabel>
+              <InputLabel shrink>Department</InputLabel>
               <Select
                 value={departmentId}
                 label="Department"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Departments';
+                  const d = departments.find((dept) => dept.id === val);
+                  return d ? d.name : 'All Departments';
+                }}
                 onChange={(e) => {
                   setDepartmentId(e.target.value);
                   setCourseId('');
@@ -767,10 +766,16 @@ export const StudentsPage: React.FC = () => {
 
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Course</InputLabel>
+              <InputLabel shrink>Course</InputLabel>
               <Select
                 value={courseId}
                 label="Course"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Courses';
+                  const c = courses.find((course) => course.id === val);
+                  return c ? c.code : 'All Courses';
+                }}
                 onChange={(e) => {
                   setCourseId(e.target.value);
                   setClassId('');
@@ -792,10 +797,21 @@ export const StudentsPage: React.FC = () => {
 
           <Grid item xs={12} sm={4} md={2}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Academic Year</InputLabel>
+              <InputLabel shrink>Academic Year</InputLabel>
               <Select
                 value={yearFilter}
                 label="Academic Year"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Years';
+                  const yearLabels: Record<number, string> = {
+                    1: '1st Year',
+                    2: '2nd Year',
+                    3: '3rd Year',
+                    4: '4th Year',
+                  };
+                  return yearLabels[Number(val)] || `${val} Year`;
+                }}
                 onChange={(e) => {
                   setYearFilter(e.target.value as number | '');
                   setPage(0);
@@ -812,10 +828,15 @@ export const StudentsPage: React.FC = () => {
 
           <Grid item xs={12} sm={4} md={2.4}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Placement Status</InputLabel>
+              <InputLabel shrink>Placement Status</InputLabel>
               <Select
                 value={statusFilter}
                 label="Placement Status"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Statuses';
+                  return String(val);
+                }}
                 onChange={(e) => {
                   setStatusFilter(e.target.value as StudentStatus | '');
                   setPage(0);

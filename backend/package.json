@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "db:seed": "tsx src/config/seed.ts",
     "db:check": "tsx src/config/dbCheck.ts",
     "test:auth": "tsx --test --import ./tests/setup.ts tests/auth.test.ts",
     "test:management": "tsx --test --import ./tests/setup.ts tests/management.test.ts",

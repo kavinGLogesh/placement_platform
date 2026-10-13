@@ -168,7 +168,9 @@ export type AttemptViolationType =
   | 'CLIPBOARD_COPY'
   | 'CLIPBOARD_CUT'
   | 'CLIPBOARD_PASTE'
-  | 'RIGHT_CLICK';
+  | 'RIGHT_CLICK'
+  | 'LOOKING_AWAY'
+  | 'FACE_NOT_VISIBLE';
 
 export interface AttemptViolationDto {
   id: string;

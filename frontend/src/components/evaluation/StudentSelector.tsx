@@ -303,6 +303,17 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
               onChange={(e) => setSelectedDeptId(e.target.value)}
               disabled={loadingLookups}
               sx={{ bgcolor: '#ffffff' }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => {
+                  if (!selected || selected === '') {
+                    return 'All Departments';
+                  }
+                  const dept = departments.find((d) => d.id === selected);
+                  return dept ? dept.name : 'All Departments';
+                },
+              }}
+              InputLabelProps={{ shrink: true }}
             >
               <MenuItem value="">
                 <em>All Departments</em>
@@ -325,6 +336,22 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value as number | '')}
               sx={{ bgcolor: '#ffffff' }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => {
+                  if (!selected || selected === '') {
+                    return 'All Years';
+                  }
+                  const yearLabels: Record<number, string> = {
+                    1: '1st Year',
+                    2: '2nd Year',
+                    3: '3rd Year',
+                    4: '4th Year',
+                  };
+                  return yearLabels[Number(selected)] || `${selected} Year`;
+                },
+              }}
+              InputLabelProps={{ shrink: true }}
             >
               <MenuItem value="">
                 <em>All Years</em>

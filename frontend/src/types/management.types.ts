@@ -128,9 +128,9 @@ export interface Student {
   phone?: string | null;
   dob?: string | null;
   departmentId: string;
-  courseId: string;
-  classId: string;
-  sectionId: string;
+  courseId: string | null;
+  classId: string | null;
+  sectionId: string | null;
   year: number;
   cgpa?: number | null;
   status: StudentStatus;
@@ -377,4 +377,3 @@ export interface StudentImportHistoryRecord {
   detailsJson?: string | null;
   createdAt: string;
 }
-
