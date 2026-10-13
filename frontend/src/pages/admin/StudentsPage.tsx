@@ -616,7 +616,7 @@ export const StudentsPage: React.FC = () => {
               '&:hover': { bgcolor: '#1e293b' },
             }}
           >
-            + Add Student
+             Add Student
           </Button>
 
           <Button
@@ -743,10 +743,16 @@ export const StudentsPage: React.FC = () => {
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Department</InputLabel>
+              <InputLabel shrink>Department</InputLabel>
               <Select
                 value={departmentId}
                 label="Department"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Departments';
+                  const d = departments.find((dept) => dept.id === val);
+                  return d ? d.name : 'All Departments';
+                }}
                 onChange={(e) => {
                   setDepartmentId(e.target.value);
                   setCourseId('');
@@ -767,10 +773,16 @@ export const StudentsPage: React.FC = () => {
 
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Course</InputLabel>
+              <InputLabel shrink>Course</InputLabel>
               <Select
                 value={courseId}
                 label="Course"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Courses';
+                  const c = courses.find((course) => course.id === val);
+                  return c ? c.code : 'All Courses';
+                }}
                 onChange={(e) => {
                   setCourseId(e.target.value);
                   setClassId('');
@@ -792,10 +804,21 @@ export const StudentsPage: React.FC = () => {
 
           <Grid item xs={12} sm={4} md={2}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Academic Year</InputLabel>
+              <InputLabel shrink>Academic Year</InputLabel>
               <Select
                 value={yearFilter}
                 label="Academic Year"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Years';
+                  const yearLabels: Record<number, string> = {
+                    1: '1st Year',
+                    2: '2nd Year',
+                    3: '3rd Year',
+                    4: '4th Year',
+                  };
+                  return yearLabels[Number(val)] || `${val} Year`;
+                }}
                 onChange={(e) => {
                   setYearFilter(e.target.value as number | '');
                   setPage(0);
@@ -812,10 +835,15 @@ export const StudentsPage: React.FC = () => {
 
           <Grid item xs={12} sm={4} md={2.4}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Placement Status</InputLabel>
+              <InputLabel shrink>Placement Status</InputLabel>
               <Select
                 value={statusFilter}
                 label="Placement Status"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Statuses';
+                  return String(val);
+                }}
                 onChange={(e) => {
                   setStatusFilter(e.target.value as StudentStatus | '');
                   setPage(0);

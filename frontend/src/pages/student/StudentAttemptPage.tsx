@@ -48,6 +48,7 @@ import {
   AttemptViolationType,
 } from '../../types/attempt.types.js';
 import { MonacoCodingWorkspace } from '../../components/coding/MonacoCodingWorkspace.js';
+import { CameraProctorMonitor } from '../../components/proctoring/CameraProctorMonitor.js';
 
 type SyncStatus = 'SAVED' | 'SYNCING' | 'OFFLINE';
 
@@ -995,6 +996,12 @@ export const StudentAttemptPage: React.FC = () => {
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
+                <CheckCircleOutlineIcon sx={{ color: '#059669', fontSize: 18, mt: 0.25 }} />
+                <Typography variant="body2" fontWeight={600} color="#1E293B">
+                  <strong>Live Camera Monitoring (No Footage Stored):</strong> Real-time in-memory head posture tracking. Turning left or right for more than 2 seconds incurs an integrity warning strike. Video is analyzed locally; no recordings are stored.
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
                 <WarningAmberIcon sx={{ color: '#DC2626', fontSize: 18, mt: 0.25 }} />
                 <Typography variant="body2" fontWeight={700} color="#991B1B">
                   <strong>3-Strike Policy:</strong> You will receive 2 warnings. On the 3rd violation, the test is permanently stopped and submitted.
@@ -1883,6 +1890,14 @@ export const StudentAttemptPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Real-Time Camera Proctoring Monitor (Zero Footage Stored) */}
+      <CameraProctorMonitor
+        onViolation={triggerViolation}
+        violationCount={violationCount}
+        maxViolations={(attempt?.assessment as any)?.maxViolations || 3}
+        isActive={isFullscreen && !isTerminated && !violationWarningOpen}
+      />
     </Box>
     </>
   );
