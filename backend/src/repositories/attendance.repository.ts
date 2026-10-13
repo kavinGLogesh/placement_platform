@@ -34,7 +34,7 @@ export class AttendanceRepository {
   private isTest(): boolean {
     return (
       process.env.NODE_ENV === 'test' ||
-      !Boolean((prisma as any).attendanceNotification) ||
+      !(prisma as any).attendanceNotification ||
       typeof (prisma as any).attendanceNotification?.findUnique !== 'function'
     );
   }
@@ -116,7 +116,7 @@ export class AttendanceRepository {
     }
 
     const findAssessmentInclude: any = {};
-    if (Boolean((prisma as any).company)) {
+    if ((prisma as any).company) {
       findAssessmentInclude.company = { select: { name: true, code: true } };
     }
 

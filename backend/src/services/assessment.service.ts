@@ -9,6 +9,7 @@ import {
   AssessmentPaperDto,
   AssessmentAssignmentDto,
   PaperGenerationResult,
+  QuestionAvailabilityValidationDto,
 } from '../types/assessment.types.js';
 import { PaginatedResult } from '../types/management.types.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -38,12 +39,23 @@ export class AssessmentService {
     return assessmentRepository.deleteAssessment(id);
   }
 
+  async validateQuestionAvailability(assessmentId: string): Promise<QuestionAvailabilityValidationDto> {
+    const assessment = await this.getAssessmentById(assessmentId);
+    const sections = assessment.sections;
+    if (!sections || sections.length === 0) {
+      throw new AppError('Assessment has no configured sections. Please configure sections first', 400);
+    }
+    return questionSelectionEngine.validateQuestionAvailability(assessment, sections);
+  }
+
   async generatePapers(assessmentId: string): Promise<PaperGenerationResult> {
-    // Acquire mutex lock to guarantee concurrency safety
+    // Acquire mutex lock to guarantee concurrency safety for this assessment
     const lockAcquired = assessmentRepository.acquireGenerationLock(assessmentId);
     if (!lockAcquired) {
       throw new AppError('Assessment paper generation is already in progress for this assessment. Please wait.', 409);
     }
+
+    let scopeKeyToRelease: string | null = null;
 
     try {
       const assessment = await assessmentRepository.getAssessmentById(assessmentId);
@@ -60,7 +72,15 @@ export class AssessmentService {
         throw new AppError('Assessment has no configured sections. Please configure sections first', 400);
       }
 
-      // Execute Selection Engine Pipeline
+      // Acquire scope-level generation lock to prevent concurrent generations in same rotation scope
+      const scopeKey = assessment.companyId ? `company-${assessment.companyId}` : 'general';
+      const scopeLock = assessmentRepository.acquireScopeGenerationLock(scopeKey);
+      if (!scopeLock) {
+        throw new AppError('Assessment paper generation is already in progress in this rotation scope. Please wait.', 409);
+      }
+      scopeKeyToRelease = scopeKey;
+
+      // Execute Selection Engine Pipeline (with 5-assessment rotation rule & availability validation)
       const { papers, usageRecords, resultSummary } = await questionSelectionEngine.generatePapers(
         assessment,
         sections
@@ -75,6 +95,9 @@ export class AssessmentService {
 
       return resultSummary;
     } finally {
+      if (scopeKeyToRelease) {
+        assessmentRepository.releaseScopeGenerationLock(scopeKeyToRelease);
+      }
       assessmentRepository.releaseGenerationLock(assessmentId);
     }
   }

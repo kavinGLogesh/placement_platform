@@ -16,27 +16,23 @@ export class AnalyticsService {
    * Get paginated, filtered, and sorted assessment results (Admin)
    */
   async getResults(query: ResultsFilterQuery = {}): Promise<PaginatedResultsDto> {
-    const params: Record<string, any> = {};
-    if (query.page) params.page = query.page;
-    if (query.limit) params.limit = query.limit;
-    if (query.search) params.search = query.search;
-    if (query.departmentId) params.departmentId = query.departmentId;
-    if (query.assessmentId) params.assessmentId = query.assessmentId;
-    if (query.isPassed !== undefined) params.isPassed = query.isPassed;
-    if (query.startDate) params.startDate = query.startDate;
-    if (query.endDate) params.endDate = query.endDate;
-    if (query.sortBy) params.sortBy = query.sortBy;
-    if (query.sortOrder) params.sortOrder = query.sortOrder;
-
-    const res = await apiClient.get('/results', { params });
+    const res = await apiClient.get('/results', { params: query });
     return res.data.data;
   }
 
   /**
-   * Get executive KPIs and summary (Admin)
+   * Get executive KPIs and summary with dynamic filters (Admin)
    */
-  async getAdminOverview(): Promise<AdminAnalyticsSummaryDto> {
-    const res = await apiClient.get('/analytics');
+  async getAdminOverview(filters: ResultsFilterQuery = {}): Promise<AdminAnalyticsSummaryDto> {
+    const res = await apiClient.get('/analytics', { params: filters });
+    return res.data.data;
+  }
+
+  /**
+   * Get assessment-level breakdown (Admin)
+   */
+  async getAssessmentSummary(assessmentId: string): Promise<any> {
+    const res = await apiClient.get('/analytics/assessment-summary', { params: { assessmentId } });
     return res.data.data;
   }
 

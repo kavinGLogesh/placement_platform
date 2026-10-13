@@ -5,6 +5,7 @@ import { authenticateToken, requireRole } from '../middleware/auth.middleware.js
 import { Role } from '../types/auth.types.js';
 import {
   validateCollegeInput,
+  validateCollegeUpdateInput,
   validateDepartmentInput,
   validateCourseInput,
   validateClassInput,
@@ -37,7 +38,7 @@ collegeRouter.use(...adminAuth);
 collegeRouter.get('/', managementController.getColleges);
 collegeRouter.post('/', validateCollegeInput, managementController.createCollege);
 collegeRouter.get('/:id', managementController.getCollegeById);
-collegeRouter.put('/:id', managementController.updateCollege);
+collegeRouter.put('/:id', validateCollegeUpdateInput, managementController.updateCollege);
 collegeRouter.delete('/:id', managementController.deleteCollege);
 
 // =============================================================================

@@ -11,6 +11,8 @@ import {
   PlacementFunnelDto,
   StudentDrilldownDto,
   StudentDashboardDto,
+  ScoreDistributionBucketDto,
+  AssessmentWiseSummaryDto,
   StudentPerformanceAnalyticsDto,
   TrendDataPointDto,
   CategoryComparisonDto,
@@ -39,102 +41,157 @@ export class AnalyticsRepository {
 
     const where: any = {};
 
-      if (query.assessmentId) {
-        where.assessmentId = query.assessmentId;
-      }
+    if (query.assessmentId) {
+      where.assessmentId = query.assessmentId;
+    }
 
-      if (query.isPassed !== undefined) {
-        where.isPassed = query.isPassed;
-      }
+    if (query.isPassed !== undefined) {
+      where.isPassed = query.isPassed;
+    }
 
-      if (query.departmentId) {
-        where.student = { departmentId: query.departmentId };
-      }
+    if (query.resultStatus) {
+      if (query.resultStatus === 'PASSED') where.isPassed = true;
+      else if (query.resultStatus === 'FAILED') where.isPassed = false;
+    }
 
-      if (query.startDate || query.endDate) {
-        where.createdAt = {};
-        if (query.startDate) where.createdAt.gte = new Date(query.startDate);
-        if (query.endDate) where.createdAt.lte = new Date(query.endDate);
-      }
+    const studentWhere: any = {};
+    if (query.departmentId) studentWhere.departmentId = query.departmentId;
+    if (query.courseId) studentWhere.courseId = query.courseId;
+    if (query.classId) studentWhere.classId = query.classId;
+    if (query.sectionId) studentWhere.sectionId = query.sectionId;
+    if (query.academicYear) studentWhere.year = Number(query.academicYear);
+    if (Object.keys(studentWhere).length > 0) {
+      where.student = studentWhere;
+    }
 
-      if (query.search) {
-        const s = query.search.trim();
-        where.OR = [
-          { student: { name: { contains: s } } },
-          { student: { registerNumber: { contains: s } } },
-          { assessment: { name: { contains: s } } },
+    if (query.category) {
+      where.assessment = {
+        ...(where.assessment || {}),
+        sections: { some: { component: query.category as any } },
+      };
+    }
+
+    if (query.companyId) {
+      where.assessment = {
+        ...(where.assessment || {}),
+        companyId: query.companyId,
+      };
+    }
+
+    if (query.status) {
+      where.attempt = {
+        ...(where.attempt || {}),
+        status: query.status as any,
+      };
+    }
+
+    if (query.startDate || query.endDate) {
+      where.createdAt = {};
+      if (query.startDate) where.createdAt.gte = new Date(query.startDate);
+      if (query.endDate) where.createdAt.lte = new Date(query.endDate);
+    }
+
+    if (query.search) {
+      const s = query.search.trim();
+      where.OR = [
+        { student: { name: { contains: s } } },
+        { student: { registerNumber: { contains: s } } },
+        { assessment: { name: { contains: s } } },
+      ];
+    }
+
+    // Sorting with deterministic tie-breakers
+    let orderBy: any = { createdAt: 'desc' };
+    if (query.sortBy) {
+      const order = query.sortOrder === 'asc' ? 'asc' : 'desc';
+      if (query.sortBy === 'studentName') {
+        orderBy = { student: { name: order } };
+      } else if (query.sortBy === 'percentage' || query.sortBy === 'obtainedMarks') {
+        orderBy = [
+          { [query.sortBy]: order },
+          { accuracy: 'desc' },
+          { student: { registerNumber: 'asc' } },
         ];
+      } else {
+        orderBy = { [query.sortBy]: order };
       }
+    }
 
-      // Sorting with deterministic tie-breakers
-      let orderBy: any = { createdAt: 'desc' };
-      if (query.sortBy) {
-        const order = query.sortOrder === 'asc' ? 'asc' : 'desc';
-        if (query.sortBy === 'studentName') {
-          orderBy = { student: { name: order } };
-        } else if (query.sortBy === 'percentage' || query.sortBy === 'obtainedMarks') {
-          orderBy = [
-            { [query.sortBy]: order },
-            { accuracy: 'desc' },
-            { student: { registerNumber: 'asc' } },
-          ];
-        } else {
-          orderBy = { [query.sortBy]: order };
-        }
-      }
-
-      const [totalCount, rows] = await Promise.all([
-        prisma.assessmentResult.count({ where }),
-        prisma.assessmentResult.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy,
-          include: {
-            attempt: { select: { submittedAt: true } },
-            assessment: { select: { id: true, name: true } },
-            student: {
-              select: {
-                id: true,
-                name: true,
-                registerNumber: true,
-                departmentId: true,
-                department: { select: { id: true, name: true, code: true } },
-              },
+    const [totalCount, rows] = await Promise.all([
+      prisma.assessmentResult.count({ where }),
+      prisma.assessmentResult.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy,
+        include: {
+          attempt: { select: { id: true, status: true, startTime: true, submittedAt: true } },
+          assessment: { select: { id: true, name: true } },
+          student: {
+            select: {
+              id: true,
+              name: true,
+              registerNumber: true,
+              departmentId: true,
+              department: { select: { id: true, name: true, code: true } },
+              course: { select: { id: true, name: true, code: true } },
+              class: { select: { id: true, name: true } },
+              section: { select: { id: true, name: true } },
             },
           },
-        }),
-      ]);
+        },
+      }),
+    ]);
 
-      const items: ResultListItemDto[] = await Promise.all(
-        rows.map(async (r) => {
-          const viols = await attemptRepository.getViolationsByAttempt(r.attemptId);
-          return {
-            id: r.id,
-            attemptId: r.attemptId,
-            assessmentId: r.assessmentId,
-            assessmentTitle: r.assessment?.name || 'Assessment',
-            studentId: r.studentId,
-            studentName: r.student?.name || 'Student',
-            registerNumber: r.student?.registerNumber || '',
-            departmentId: r.student?.departmentId,
-            departmentName: r.student?.department?.name,
-            departmentCode: r.student?.department?.code,
-            totalMarks: r.totalMarks,
-            obtainedMarks: r.obtainedMarks,
-            percentage: r.percentage,
-            accuracy: r.accuracy,
-            isPassed: r.isPassed,
-            correctCount: r.correctCount,
-            incorrectCount: r.incorrectCount,
-            unansweredCount: r.unansweredCount,
-            submittedAt: r.attempt?.submittedAt ? r.attempt.submittedAt.toISOString() : null,
-            createdAt: r.createdAt.toISOString(),
-            violationCount: viols.length,
-            violations: viols,
-          };
-        })
-      );
+    const items: ResultListItemDto[] = await Promise.all(
+      rows.map(async (r) => {
+        const viols = await attemptRepository.getViolationsByAttempt(r.attemptId);
+        let timeTakenMinutes: number | null = null;
+        if (r.attempt?.startTime && r.attempt?.submittedAt) {
+          timeTakenMinutes = Math.max(
+            1,
+            Math.round(
+              (new Date(r.attempt.submittedAt).getTime() - new Date(r.attempt.startTime).getTime()) /
+                60000
+            )
+          );
+        }
+
+        return {
+          id: r.id,
+          attemptId: r.attemptId,
+          assessmentId: r.assessmentId,
+          assessmentTitle: r.assessment?.name || 'Assessment',
+          studentId: r.studentId,
+          studentName: r.student?.name || 'Student',
+          registerNumber: r.student?.registerNumber || '',
+          departmentId: r.student?.departmentId,
+          departmentName: r.student?.department?.name,
+          departmentCode: r.student?.department?.code,
+          courseId: r.student?.course?.id,
+          courseCode: r.student?.course?.code,
+          classId: r.student?.class?.id,
+          className: r.student?.class?.name,
+          sectionId: r.student?.section?.id,
+          sectionName: r.student?.section?.name,
+          totalMarks: r.totalMarks,
+          obtainedMarks: r.obtainedMarks,
+          percentage: r.percentage,
+          accuracy: r.accuracy,
+          isPassed: r.isPassed,
+          correctCount: r.correctCount,
+          incorrectCount: r.incorrectCount,
+          unansweredCount: r.unansweredCount,
+          submittedAt: r.attempt?.submittedAt ? r.attempt.submittedAt.toISOString() : null,
+          createdAt: r.createdAt.toISOString(),
+          attemptStatus: r.attempt?.status || 'SUBMITTED',
+          timeTakenMinutes,
+          startTime: r.attempt?.startTime ? r.attempt.startTime.toISOString() : null,
+          violationCount: viols.length,
+          violations: viols,
+        };
+      })
+    );
 
       const totalPages = Math.ceil(totalCount / limit) || 1;
       return {
@@ -267,71 +324,183 @@ export class AnalyticsRepository {
   // ===========================================================================
   // 2. ADMIN OVERVIEW KPIS & SUMMARY
   // ===========================================================================
-  async getAdminOverviewMetrics(): Promise<AdminAnalyticsSummaryDto> {
+  async getAdminOverviewMetrics(filters?: ResultsFilterQuery): Promise<AdminAnalyticsSummaryDto> {
     if (process.env.NODE_ENV === 'test') {
-      return this.getAdminOverviewMetricsMemStore();
+      return this.getAdminOverviewMetricsMemStore(filters);
     }
-      const [
-        totalStudents,
-        totalAssessments,
-        activeAssessments,
-        completedAssessments,
-        totalAttempts,
-        activeStudentCount,
-        resultsAggregate,
-        passedResultsCount,
-      ] = await Promise.all([
-        prisma.student.count(),
-        prisma.assessment.count(),
-        prisma.assessment.count({ where: { status: 'PUBLISHED' } }),
-        prisma.assessment.count({
-          where: { OR: [{ status: 'ARCHIVED' }, { endDate: { lt: new Date() } }] },
-        }),
-        prisma.assessmentAttempt.count(),
-        prisma.assessmentAttempt
-          .findMany({ select: { studentId: true }, distinct: ['studentId'] })
-          .then((rows) => rows.length),
-        prisma.assessmentResult.aggregate({
-          _avg: { percentage: true },
-          _count: { id: true },
-        }),
-        prisma.assessmentResult.count({ where: { isPassed: true } }),
-      ]);
 
-      const totalResults = resultsAggregate._count.id;
-      const averageScore = Number((resultsAggregate._avg.percentage || 0).toFixed(2));
-      const passPercentage =
-        totalResults > 0 ? Number(((passedResultsCount / totalResults) * 100).toFixed(2)) : 0;
-      const overallParticipationRate =
-        totalStudents > 0 ? Number(((activeStudentCount / totalStudents) * 100).toFixed(2)) : 0;
+    // Build filter clauses for students, attempts, and results
+    const studentWhere: any = {};
+    if (filters?.departmentId) studentWhere.departmentId = filters.departmentId;
+    if (filters?.courseId) studentWhere.courseId = filters.courseId;
+    if (filters?.classId) studentWhere.classId = filters.classId;
+    if (filters?.sectionId) studentWhere.sectionId = filters.sectionId;
+    if (filters?.academicYear) studentWhere.year = Number(filters.academicYear);
 
-      const recentResults = await this.getPaginatedResults({
-        page: 1,
-        limit: 5,
-        sortBy: 'createdAt',
-        sortOrder: 'desc',
-      });
+    const attemptWhere: any = {};
+    if (filters?.assessmentId) attemptWhere.assessmentId = filters.assessmentId;
+    if (filters?.status) attemptWhere.status = filters.status;
+    if (filters?.startDate || filters?.endDate) {
+      attemptWhere.createdAt = {};
+      if (filters.startDate) attemptWhere.createdAt.gte = new Date(filters.startDate);
+      if (filters.endDate) attemptWhere.createdAt.lte = new Date(filters.endDate);
+    }
+    if (Object.keys(studentWhere).length > 0) {
+      attemptWhere.student = studentWhere;
+    }
 
-      const passedCount = passedResultsCount;
-      const failedCount = Math.max(0, totalResults - passedResultsCount);
-
-      return {
-        totalStudents,
-        activeStudents: activeStudentCount,
-        totalAssessments,
-        activeAssessments,
-        completedAssessments,
-        totalAttempts,
-        averageScore,
-        passPercentage,
-        overallParticipationRate,
-        passedCount,
-        failedCount,
-        recentResults: recentResults.items,
+    const resultWhere: any = {};
+    if (filters?.assessmentId) resultWhere.assessmentId = filters.assessmentId;
+    if (filters?.isPassed !== undefined) resultWhere.isPassed = filters.isPassed;
+    if (filters?.resultStatus === 'PASSED') resultWhere.isPassed = true;
+    if (filters?.resultStatus === 'FAILED') resultWhere.isPassed = false;
+    if (filters?.startDate || filters?.endDate) {
+      resultWhere.createdAt = {};
+      if (filters.startDate) resultWhere.createdAt.gte = new Date(filters.startDate);
+      if (filters.endDate) resultWhere.createdAt.lte = new Date(filters.endDate);
+    }
+    if (Object.keys(studentWhere).length > 0) {
+      resultWhere.student = studentWhere;
+    }
+    if (filters?.category) {
+      resultWhere.assessment = {
+        sections: { some: { component: filters.category as any } },
       };
+    }
+    if (filters?.companyId) {
+      resultWhere.assessment = {
+        ...(resultWhere.assessment || {}),
+        companyId: filters.companyId,
+      };
+    }
+
+    const [
+      totalStudents,
+      totalAssessments,
+      activeAssessments,
+      completedAssessmentsCount,
+      totalAttempts,
+      appearedStudentsRows,
+      startedIncompleteCount,
+      resultsAggregate,
+      passedResultsCount,
+      allResultsPercentages,
+    ] = await Promise.all([
+      prisma.student.count({
+        where: Object.keys(studentWhere).length > 0 ? studentWhere : undefined,
+      }),
+      prisma.assessment.count(),
+      prisma.assessment.count({ where: { status: 'PUBLISHED' } }),
+      prisma.assessmentAttempt.count({
+        where: {
+          ...attemptWhere,
+          status: 'SUBMITTED',
+        },
+      }),
+      prisma.assessmentAttempt.count({
+        where: Object.keys(attemptWhere).length > 0 ? attemptWhere : undefined,
+      }),
+      prisma.assessmentAttempt.findMany({
+        where: Object.keys(attemptWhere).length > 0 ? attemptWhere : undefined,
+        select: { studentId: true },
+        distinct: ['studentId'],
+      }),
+      prisma.assessmentAttempt.count({
+        where: {
+          ...attemptWhere,
+          status: 'IN_PROGRESS',
+        },
+      }),
+      prisma.assessmentResult.aggregate({
+        where: Object.keys(resultWhere).length > 0 ? resultWhere : undefined,
+        _avg: { percentage: true },
+        _max: { percentage: true },
+        _min: { percentage: true },
+        _count: { id: true },
+      }),
+      prisma.assessmentResult.count({
+        where: {
+          ...(Object.keys(resultWhere).length > 0 ? resultWhere : {}),
+          isPassed: true,
+        },
+      }),
+      prisma.assessmentResult.findMany({
+        where: Object.keys(resultWhere).length > 0 ? resultWhere : undefined,
+        select: { percentage: true },
+      }),
+    ]);
+
+    const appearedStudents = appearedStudentsRows.length;
+    const notAppearedStudents = Math.max(0, totalStudents - appearedStudents);
+    const totalResults = resultsAggregate._count.id;
+    const averageScore = Number((resultsAggregate._avg.percentage || 0).toFixed(2));
+    const highestScore = Number((resultsAggregate._max.percentage || 0).toFixed(2));
+    const lowestScore = Number((resultsAggregate._min.percentage || 0).toFixed(2));
+    const passPercentage =
+      totalResults > 0 ? Number(((passedResultsCount / totalResults) * 100).toFixed(2)) : 0;
+    const failedCount = Math.max(0, totalResults - passedResultsCount);
+    const failPercentage =
+      totalResults > 0 ? Number(((failedCount / totalResults) * 100).toFixed(2)) : 0;
+    const overallParticipationRate =
+      totalStudents > 0 ? Number(((appearedStudents / totalStudents) * 100).toFixed(2)) : 0;
+
+    // Score distribution buckets: 0-39%, 40-59%, 60-74%, 75-89%, 90-100%
+    const buckets: ScoreDistributionBucketDto[] = [
+      { range: '0-39', label: '0 - 39%', count: 0, percentage: 0 },
+      { range: '40-59', label: '40 - 59%', count: 0, percentage: 0 },
+      { range: '60-74', label: '60 - 74%', count: 0, percentage: 0 },
+      { range: '75-89', label: '75 - 89%', count: 0, percentage: 0 },
+      { range: '90-100', label: '90 - 100%', count: 0, percentage: 0 },
+    ];
+
+    for (const r of allResultsPercentages) {
+      const p = r.percentage;
+      if (p < 40) buckets[0].count++;
+      else if (p < 60) buckets[1].count++;
+      else if (p < 75) buckets[2].count++;
+      else if (p < 90) buckets[3].count++;
+      else buckets[4].count++;
+    }
+
+    if (totalResults > 0) {
+      buckets.forEach((b) => {
+        b.percentage = Number(((b.count / totalResults) * 100).toFixed(1));
+      });
+    }
+
+    const recentResults = await this.getPaginatedResults({
+      page: 1,
+      limit: 5,
+      departmentId: filters?.departmentId,
+      assessmentId: filters?.assessmentId,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    });
+
+    return {
+      totalStudents,
+      activeStudents: appearedStudents,
+      appearedStudents,
+      notAppearedStudents,
+      startedIncompleteCount,
+      totalAssessments,
+      activeAssessments,
+      completedAssessments: completedAssessmentsCount,
+      totalAttempts,
+      averageScore,
+      highestScore,
+      lowestScore,
+      passPercentage,
+      failPercentage,
+      overallParticipationRate,
+      passedCount: passedResultsCount,
+      failedCount,
+      scoreDistribution: buckets,
+      recentResults: recentResults.items,
+    };
   }
 
-  private async getAdminOverviewMetricsMemStore(): Promise<AdminAnalyticsSummaryDto> {
+  private async getAdminOverviewMetricsMemStore(filters?: ResultsFilterQuery): Promise<AdminAnalyticsSummaryDto> {
     const totalStudents = managementRepository.memStore.students.size || 2;
     const totalAssessments = assessmentRepository.memStore.assessments.size;
     let activeAssessments = 0;
@@ -346,48 +515,95 @@ export class AnalyticsRepository {
 
     const totalAttempts = attemptRepository.memStore.attempts.size;
     const attemptedStudents = new Set<string>();
+    let startedIncompleteCount = 0;
     for (const att of attemptRepository.memStore.attempts.values()) {
+      if (filters?.assessmentId && att.assessmentId !== filters.assessmentId) continue;
       attemptedStudents.add(att.studentId);
+      if (att.status === 'IN_PROGRESS') startedIncompleteCount++;
     }
-    const activeStudents = attemptedStudents.size;
+    const appearedStudents = attemptedStudents.size;
+    const notAppearedStudents = Math.max(0, totalStudents - appearedStudents);
 
-    const results = Array.from(attemptRepository.memStore.results.values());
+    const results = Array.from(attemptRepository.memStore.results.values()).filter((r) => {
+      if (filters?.assessmentId && r.assessmentId !== filters.assessmentId) return false;
+      if (filters?.departmentId) {
+        const stu = managementRepository.memStore.students.get(r.studentId);
+        if (stu?.departmentId !== filters.departmentId) return false;
+      }
+      return true;
+    });
+
     const totalResults = results.length;
     let sumScore = 0;
+    let highestScore = 0;
+    let lowestScore = totalResults > 0 ? 100 : 0;
     let passedCount = 0;
+
+    const buckets: ScoreDistributionBucketDto[] = [
+      { range: '0-39', label: '0 - 39%', count: 0, percentage: 0 },
+      { range: '40-59', label: '40 - 59%', count: 0, percentage: 0 },
+      { range: '60-74', label: '60 - 74%', count: 0, percentage: 0 },
+      { range: '75-89', label: '75 - 89%', count: 0, percentage: 0 },
+      { range: '90-100', label: '90 - 100%', count: 0, percentage: 0 },
+    ];
 
     for (const r of results) {
       sumScore += r.percentage;
+      if (r.percentage > highestScore) highestScore = r.percentage;
+      if (r.percentage < lowestScore) lowestScore = r.percentage;
       if (r.isPassed) passedCount++;
+
+      const p = r.percentage;
+      if (p < 40) buckets[0].count++;
+      else if (p < 60) buckets[1].count++;
+      else if (p < 75) buckets[2].count++;
+      else if (p < 90) buckets[3].count++;
+      else buckets[4].count++;
+    }
+
+    if (totalResults > 0) {
+      buckets.forEach((b) => {
+        b.percentage = Number(((b.count / totalResults) * 100).toFixed(1));
+      });
     }
 
     const averageScore = totalResults > 0 ? Number((sumScore / totalResults).toFixed(2)) : 0;
     const passPercentage =
       totalResults > 0 ? Number(((passedCount / totalResults) * 100).toFixed(2)) : 0;
+    const failedCount = Math.max(0, totalResults - passedCount);
+    const failPercentage =
+      totalResults > 0 ? Number(((failedCount / totalResults) * 100).toFixed(2)) : 0;
     const overallParticipationRate =
-      totalStudents > 0 ? Number(((activeStudents / totalStudents) * 100).toFixed(2)) : 0;
+      totalStudents > 0 ? Number(((appearedStudents / totalStudents) * 100).toFixed(2)) : 0;
 
     const recentResults = await this.getPaginatedResults({
       page: 1,
       limit: 5,
+      departmentId: filters?.departmentId,
+      assessmentId: filters?.assessmentId,
       sortBy: 'createdAt',
       sortOrder: 'desc',
     });
 
-    const failedCount = Math.max(0, totalResults - passedCount);
-
     return {
       totalStudents,
-      activeStudents,
+      activeStudents: appearedStudents,
+      appearedStudents,
+      notAppearedStudents,
+      startedIncompleteCount,
       totalAssessments,
       activeAssessments,
       completedAssessments,
       totalAttempts,
       averageScore,
+      highestScore: Number(highestScore.toFixed(2)),
+      lowestScore: Number(lowestScore.toFixed(2)),
       passPercentage,
+      failPercentage,
       overallParticipationRate,
       passedCount,
       failedCount,
+      scoreDistribution: buckets,
       recentResults: recentResults.items,
     };
   }
@@ -434,6 +650,8 @@ export class AnalyticsRepository {
         let sumPercentage = 0;
         let sumAccuracy = 0;
         let passedCount = 0;
+        let highestScore = 0;
+        let lowestScore = 100;
 
         for (const s of dept.students) {
           if (s.results.length > 0) {
@@ -442,17 +660,23 @@ export class AnalyticsRepository {
               totalResults++;
               sumPercentage += r.percentage;
               sumAccuracy += r.accuracy;
+              if (r.percentage > highestScore) highestScore = r.percentage;
+              if (r.percentage < lowestScore) lowestScore = r.percentage;
               if (r.isPassed) passedCount++;
             }
           }
         }
 
+        const notAppeared = Math.max(0, totalStudents - participatingStudents);
         const participationRate =
           totalStudents > 0 ? Number(((participatingStudents / totalStudents) * 100).toFixed(2)) : 0;
         const averageScore =
           totalResults > 0 ? Number((sumPercentage / totalResults).toFixed(2)) : 0;
         const passPercentage =
           totalResults > 0 ? Number(((passedCount / totalResults) * 100).toFixed(2)) : 0;
+        const failedCount = Math.max(0, totalResults - passedCount);
+        const failPercentage =
+          totalResults > 0 ? Number(((failedCount / totalResults) * 100).toFixed(2)) : 0;
         const averageAccuracy =
           totalResults > 0 ? Number((sumAccuracy / totalResults).toFixed(2)) : 0;
 
@@ -462,9 +686,14 @@ export class AnalyticsRepository {
           departmentCode: dept.code,
           totalStudents,
           participatingStudents,
+          notAppeared,
+          completedAssessments: totalResults,
           participationRate,
           averageScore,
+          highestScore: totalResults > 0 ? Number(highestScore.toFixed(2)) : 0,
+          lowestScore: totalResults > 0 ? Number(lowestScore.toFixed(2)) : 0,
           passPercentage,
+          failPercentage,
           averageAccuracy,
         };
       });
@@ -490,6 +719,8 @@ export class AnalyticsRepository {
       let sumPercentage = 0;
       let sumAccuracy = 0;
       let passedCount = 0;
+      let highestScore = 0;
+      let lowestScore = 100;
 
       for (const res of attemptRepository.memStore.results.values()) {
         if (!studentIds.has(res.studentId)) continue;
@@ -501,16 +732,22 @@ export class AnalyticsRepository {
         totalResults++;
         sumPercentage += res.percentage;
         sumAccuracy += res.accuracy;
+        if (res.percentage > highestScore) highestScore = res.percentage;
+        if (res.percentage < lowestScore) lowestScore = res.percentage;
         if (res.isPassed) passedCount++;
       }
 
       const participatingStudents = participatingSet.size;
+      const notAppeared = Math.max(0, totalStudents - participatingStudents);
       const participationRate =
         totalStudents > 0 ? Number(((participatingStudents / totalStudents) * 100).toFixed(2)) : 0;
       const averageScore =
         totalResults > 0 ? Number((sumPercentage / totalResults).toFixed(2)) : 0;
       const passPercentage =
         totalResults > 0 ? Number(((passedCount / totalResults) * 100).toFixed(2)) : 0;
+      const failedCount = Math.max(0, totalResults - passedCount);
+      const failPercentage =
+        totalResults > 0 ? Number(((failedCount / totalResults) * 100).toFixed(2)) : 0;
       const averageAccuracy =
         totalResults > 0 ? Number((sumAccuracy / totalResults).toFixed(2)) : 0;
 
@@ -520,14 +757,159 @@ export class AnalyticsRepository {
         departmentCode: dept.code,
         totalStudents,
         participatingStudents,
+        notAppeared,
+        completedAssessments: totalResults,
         participationRate,
         averageScore,
+        highestScore: totalResults > 0 ? Number(highestScore.toFixed(2)) : 0,
+        lowestScore: totalResults > 0 ? Number(lowestScore.toFixed(2)) : 0,
         passPercentage,
+        failPercentage,
         averageAccuracy,
       });
     }
 
     return list;
+  }
+
+  // ===========================================================================
+  // 3b. ASSESSMENT-WISE SUMMARY
+  // ===========================================================================
+  async getAssessmentWiseSummary(assessmentId: string): Promise<AssessmentWiseSummaryDto | null> {
+    if (process.env.NODE_ENV === 'test') {
+      const a = assessmentRepository.memStore.assessments.get(assessmentId);
+      if (!a) return null;
+      const totalEligible = managementRepository.memStore.students.size;
+      const attempts = Array.from(attemptRepository.memStore.attempts.values()).filter(
+        (att) => att.assessmentId === assessmentId
+      );
+      const distinctStudents = new Set(attempts.map((att) => att.studentId));
+      const appeared = distinctStudents.size;
+      const results = Array.from(attemptRepository.memStore.results.values()).filter(
+        (r) => r.assessmentId === assessmentId
+      );
+      const completed = attempts.filter((att) => att.status === 'SUBMITTED').length;
+      const startedIncomplete = attempts.filter((att) => att.status === 'IN_PROGRESS').length;
+      const passed = results.filter((r) => r.isPassed).length;
+      const failed = Math.max(0, results.length - passed);
+      const sum = results.reduce((s, r) => s + r.percentage, 0);
+      const avg = results.length > 0 ? Number((sum / results.length).toFixed(2)) : 0;
+      const high = results.length > 0 ? Math.max(...results.map((r) => r.percentage)) : 0;
+      const low = results.length > 0 ? Math.min(...results.map((r) => r.percentage)) : 0;
+      const passRate = results.length > 0 ? Number(((passed / results.length) * 100).toFixed(2)) : 0;
+      const failRate = results.length > 0 ? Number(((failed / results.length) * 100).toFixed(2)) : 0;
+
+      return {
+        assessmentId: a.id,
+        assessmentName: a.name,
+        category: 'General Assessment',
+        status: a.status,
+        durationMinutes: a.duration,
+        totalMarks: a.totalMarks,
+        passingPercentage: a.passingPercentage,
+        eligibleScope: 'All Enrolled Students',
+        totalEligibleStudents: totalEligible,
+        appearedStudents: appeared,
+        notAppearedStudents: Math.max(0, totalEligible - appeared),
+        startedIncompleteCount: startedIncomplete,
+        completedAssessments: completed,
+        passedCount: passed,
+        failedCount: failed,
+        averageScore: avg,
+        highestScore: high,
+        lowestScore: low,
+        passPercentage: passRate,
+        failPercentage: failRate,
+      };
+    }
+
+    const assessment = await prisma.assessment.findUnique({
+      where: { id: assessmentId },
+      include: {
+        sections: { select: { component: true, name: true } },
+        assignments: {
+          select: { studentId: true, departmentId: true, classId: true, sectionId: true },
+        },
+      },
+    });
+
+    if (!assessment) return null;
+
+    let totalEligibleStudents = await prisma.student.count();
+    let eligibleScope = 'All Departments';
+    if (assessment.assignments && assessment.assignments.length > 0) {
+      const deptIds = assessment.assignments.map((a) => a.departmentId).filter(Boolean) as string[];
+      const studentIds = assessment.assignments.map((a) => a.studentId).filter(Boolean) as string[];
+      if (deptIds.length > 0 || studentIds.length > 0) {
+        totalEligibleStudents = await prisma.student.count({
+          where: {
+            OR: [
+              deptIds.length > 0 ? { departmentId: { in: deptIds } } : {},
+              studentIds.length > 0 ? { id: { in: studentIds } } : {},
+            ],
+          },
+        });
+        eligibleScope = `${deptIds.length} Targeted Department${deptIds.length > 1 ? 's' : ''}`;
+      }
+    }
+
+    const [attempts, resultsAgg, passedCount] = await Promise.all([
+      prisma.assessmentAttempt.findMany({
+        where: { assessmentId },
+        select: { id: true, studentId: true, status: true },
+      }),
+      prisma.assessmentResult.aggregate({
+        where: { assessmentId },
+        _avg: { percentage: true },
+        _max: { percentage: true },
+        _min: { percentage: true },
+        _count: { id: true },
+      }),
+      prisma.assessmentResult.count({
+        where: { assessmentId, isPassed: true },
+      }),
+    ]);
+
+    const distinctStudents = new Set(attempts.map((a) => a.studentId));
+    const appearedStudents = distinctStudents.size;
+    const notAppearedStudents = Math.max(0, totalEligibleStudents - appearedStudents);
+    const startedIncompleteCount = attempts.filter((a) => a.status === 'IN_PROGRESS').length;
+    const completedAssessments = attempts.filter((a) => a.status === 'SUBMITTED').length;
+    const totalResults = resultsAgg._count.id;
+    const averageScore = Number((resultsAgg._avg.percentage || 0).toFixed(2));
+    const highestScore = Number((resultsAgg._max.percentage || 0).toFixed(2));
+    const lowestScore = Number((resultsAgg._min.percentage || 0).toFixed(2));
+    const passPercentage =
+      totalResults > 0 ? Number(((passedCount / totalResults) * 100).toFixed(2)) : 0;
+    const failedCount = Math.max(0, totalResults - passedCount);
+    const failPercentage =
+      totalResults > 0 ? Number(((failedCount / totalResults) * 100).toFixed(2)) : 0;
+
+    const categoryNames =
+      assessment.sections.map((s) => s.component).join(', ') || 'General Assessment';
+
+    return {
+      assessmentId: assessment.id,
+      assessmentName: assessment.name,
+      category: categoryNames,
+      status: assessment.status,
+      durationMinutes: assessment.duration,
+      totalMarks: assessment.totalMarks,
+      passingPercentage: assessment.passingPercentage,
+      eligibleScope,
+      totalEligibleStudents,
+      appearedStudents,
+      notAppearedStudents,
+      startedIncompleteCount,
+      completedAssessments,
+      passedCount,
+      failedCount,
+      averageScore,
+      highestScore,
+      lowestScore,
+      passPercentage,
+      failPercentage,
+    };
   }
 
   // ===========================================================================
@@ -1440,7 +1822,7 @@ export class AnalyticsRepository {
 
     return {
       summary: {
-        totalAssigned: summary.totalAssigned,
+        totalAssigned: Math.max(summary.totalAssigned, upcomingAssessments.length + summary.totalCompleted),
         completedAssessments: summary.totalCompleted,
         availableAssessments: upcomingAssessments.length,
         averageScore: summary.averageScore,

@@ -145,10 +145,10 @@ export class QuestionSegmenter {
   /**
    * Parses an individual question block into statement, options, answers, and explanations
    */
-  private static parseIndividualBlock(
+  static parseIndividualBlock(
     block: string,
     fallbackNumber: number,
-    answerKeyMap: Map<number, string>
+    answerKeyMap: Map<number, string> = new Map()
   ): RawParsedQuestion | null {
     // 1. Extract Question Number
     let questionNumber: number | string = fallbackNumber;

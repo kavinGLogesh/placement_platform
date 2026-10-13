@@ -202,6 +202,7 @@ model Student {
   gdParticipations        GdParticipant[]
   interviewParticipations InterviewParticipant[]
   attendanceEmailLogs     AttendanceEmailLog[]
+  attemptViolations       AttemptViolation[]
 
   @@index([departmentId])
   @@index([courseId])
@@ -609,6 +610,8 @@ model AssessmentAttempt {
   expectedEndTime DateTime
   status          AttemptStatus      @default(IN_PROGRESS)
   currentQuestion Int                @default(1)
+  violationCount     Int                @default(0)
+  terminationReason  String?            @db.VarChar(255)
   submittedAt     DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
@@ -619,12 +622,31 @@ model AssessmentAttempt {
   answers         AttemptAnswer[]
   result          AssessmentResult?
   codingSubmissions CodingSubmission[]
+  violations      AttemptViolation[]
 
   @@index([studentId])
   @@index([assessmentId])
   @@index([paperId])
   @@index([status])
   @@map("assessment_attempts")
+}
+
+model AttemptViolation {
+  id            String            @id @default(uuid())
+  attemptId     String
+  studentId     String
+  violationType String            @db.VarChar(64)
+  details       String?           @db.Text
+  timestamp     DateTime          @default(now())
+  createdAt     DateTime          @default(now())
+
+  attempt       AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  student       Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+  @@index([studentId])
+  @@index([violationType])
+  @@map("attempt_violations")
 }
 
 model AttemptAnswer {

@@ -17,6 +17,7 @@ assessmentRouter.put('/:id', assessmentController.updateAssessment);
 assessmentRouter.delete('/:id', assessmentController.deleteAssessment);
 
 // Selection Engine & Paper Generation
+assessmentRouter.get('/:id/validate-availability', assessmentController.validateQuestionAvailability);
 assessmentRouter.post('/:id/generate', assessmentController.generatePapers);
 assessmentRouter.post('/:id/generate-papers', assessmentController.generatePapers);
 assessmentRouter.get('/:id/papers', assessmentController.getAssessmentPapers);

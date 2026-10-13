@@ -26,6 +26,7 @@
     "test:student-flow": "tsx --test --import ./tests/setup.ts tests/student_account_flow.test.ts",
     "test:audit-gaps": "tsx --test --import ./tests/setup.ts tests/critical_audit_gaps.test.ts",
     "test:anti-cheating": "tsx --test --import ./tests/setup.ts tests/advanced_anti_cheating.test.ts",
+    "test:three-warning": "tsx --test --import ./tests/setup.ts tests/three_warning_security.test.ts",
     "test:evaluation": "tsx --test --import ./tests/setup.ts tests/structured_evaluation.test.ts",
     "test:company": "tsx --test --import ./tests/setup.ts tests/company_assessment.test.ts",
     "test:company-intelligence": "tsx --test --import ./tests/setup.ts tests/company_intelligence.test.ts",

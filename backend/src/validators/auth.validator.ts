@@ -52,3 +52,26 @@ export const validateLogoutInput = (req: Request, _res: Response, next: NextFunc
 
   next();
 };
+
+export const validateChangePasswordInput = (req: Request, _res: Response, next: NextFunction): void => {
+  const { currentPassword, newPassword, confirmPassword } = req.body || {};
+
+  if (!currentPassword || typeof currentPassword !== 'string' || currentPassword.length === 0) {
+    return next(new AppError('Current password is required', 400));
+  }
+
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length === 0) {
+    return next(new AppError('New password is required', 400));
+  }
+
+  if (confirmPassword !== undefined && confirmPassword !== newPassword) {
+    return next(new AppError('New password and confirm password do not match', 400));
+  }
+
+  if (currentPassword === newPassword) {
+    return next(new AppError('New password cannot be the same as current password', 400));
+  }
+
+  next();
+};
+

@@ -35,6 +35,7 @@ export const CollegePage: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingCollege, setEditingCollege] = useState<College | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<CreateCollegeInput>({
     code: '',
@@ -64,6 +65,7 @@ export const CollegePage: React.FC = () => {
   }, []);
 
   const handleOpenDialog = (college?: College) => {
+    setDialogError(null);
     if (college) {
       setEditingCollege(college);
       setFormData({
@@ -91,22 +93,41 @@ export const CollegePage: React.FC = () => {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingCollege(null);
+    setDialogError(null);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmedCode = formData.code.trim().toUpperCase();
+    if (!trimmedCode) {
+      setDialogError('College code is required');
+      return;
+    }
+    const trimmedName = formData.name.trim();
+    if (!trimmedName) {
+      setDialogError('College name is required');
+      return;
+    }
+
     setSaving(true);
+    setDialogError(null);
     setError(null);
     try {
+      const payload = {
+        ...formData,
+        code: trimmedCode,
+        name: trimmedName,
+      };
       if (editingCollege) {
-        await managementService.updateCollege(editingCollege.id, formData);
+        await managementService.updateCollege(editingCollege.id, payload);
       } else {
-        await managementService.createCollege(formData);
+        await managementService.createCollege(payload);
       }
       handleCloseDialog();
       fetchColleges();
     } catch (err: unknown) {
       const msg = err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : 'Failed to save college';
+      setDialogError(msg);
       setError(msg);
     } finally {
       setSaving(false);
@@ -314,14 +335,21 @@ export const CollegePage: React.FC = () => {
             {editingCollege ? 'Edit College Information' : 'Register College'}
           </DialogTitle>
           <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 2.5 }}>
+            {dialogError && (
+              <Alert severity="error" onClose={() => setDialogError(null)}>
+                {dialogError}
+              </Alert>
+            )}
             <TextField
               label="College Code"
               required
               fullWidth
-              disabled={!!editingCollege}
               value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-              helperText={editingCollege ? 'College code cannot be altered once registered' : 'Unique identifier (e.g. MIT, CIT)'}
+              onChange={(e) => {
+                setFormData({ ...formData, code: e.target.value.toUpperCase() });
+                if (dialogError) setDialogError(null);
+              }}
+              helperText="Unique uppercase institutional code (e.g. KEC, MIT, CIT)"
             />
             <TextField
               label="College Name"

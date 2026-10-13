@@ -25,20 +25,13 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { managementService } from '../../services/management.service.js';
-import {
-  Department,
-  Course,
-  ClassEntity,
-  Section,
-  Student,
-} from '../../types/management.types.js';
+import { Department, Student } from '../../types/management.types.js';
 
 export interface StudentSelectorProps {
-  // Array of newly selected student IDs
+  // Array of selected student IDs
   selectedStudentIds: string[];
   // Callback when selected student IDs change
   onSelectionChange: (selectedIds: string[]) => void;
@@ -46,7 +39,7 @@ export interface StudentSelectorProps {
   alreadyAssignedStudentIds?: string[];
   // Optional pre-selected department ID
   initialDepartmentId?: string;
-  // Optional pre-selected course ID
+  // Deprecated course ID kept for prop compatibility
   initialCourseId?: string;
   // Optional max height for table container
   maxHeight?: number | string;
@@ -61,29 +54,23 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
   onSelectionChange,
   alreadyAssignedStudentIds = [],
   initialDepartmentId = '',
-  initialCourseId = '',
-  maxHeight = 360,
+  maxHeight = 400,
   title = 'Student Selection',
   helperText,
 }) => {
-  // Cascading Hierarchy state
+  // Department options
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [classes, setClasses] = useState<ClassEntity[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
 
-  // Selected filter values
+  // Filter state
   const [selectedDeptId, setSelectedDeptId] = useState<string>(initialDepartmentId);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId);
-  const [selectedClassId, setSelectedClassId] = useState<string>('');
-  const [selectedSectionId, setSelectedSectionId] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<number | ''>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
   // UI state
   const [loadingLookups, setLoadingLookups] = useState(false);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
-  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Student cache to remember student objects across filter switches
@@ -101,7 +88,7 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
     [selectedStudentIds]
   );
 
-  // 1. Initial Load: Load departments
+  // 1. Load departments dynamically from database
   useEffect(() => {
     let isMounted = true;
     const loadDepartments = async () => {
@@ -109,7 +96,15 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
         setLoadingLookups(true);
         const data = await managementService.getDepartments();
         if (isMounted) {
-          setDepartments(data || []);
+          // Ensure canonical uniqueness by department name
+          const uniqueMap = new Map<string, Department>();
+          (data || []).forEach((d) => {
+            const key = d.name.trim().toLowerCase();
+            if (!uniqueMap.has(key)) {
+              uniqueMap.set(key, d);
+            }
+          });
+          setDepartments(Array.from(uniqueMap.values()));
         }
       } catch (err: unknown) {
         if (isMounted) setError('Failed to load departments');
@@ -123,96 +118,7 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
     };
   }, []);
 
-  // 2. Cascade: Department -> Courses
-  useEffect(() => {
-    let isMounted = true;
-    const loadCourses = async () => {
-      try {
-        if (!selectedDeptId) {
-          // If no department selected, load all courses or empty
-          const data = await managementService.getCourses();
-          if (isMounted) setCourses(data || []);
-        } else {
-          const data = await managementService.getCourses(selectedDeptId);
-          if (isMounted) setCourses(data || []);
-        }
-      } catch (err: unknown) {
-        if (isMounted) setCourses([]);
-      }
-    };
-    loadCourses();
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedDeptId]);
-
-  // 3. Cascade: Course / Dept -> Classes
-  useEffect(() => {
-    let isMounted = true;
-    const loadClasses = async () => {
-      try {
-        if (!selectedCourseId && !selectedDeptId) {
-          if (isMounted) setClasses([]);
-          return;
-        }
-        const data = await managementService.getClasses(
-          selectedCourseId || undefined,
-          selectedDeptId || undefined
-        );
-        if (isMounted) setClasses(data || []);
-      } catch (err: unknown) {
-        if (isMounted) setClasses([]);
-      }
-    };
-    loadClasses();
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedDeptId, selectedCourseId]);
-
-  // 4. Cascade: Class -> Sections
-  useEffect(() => {
-    let isMounted = true;
-    const loadSections = async () => {
-      try {
-        if (!selectedClassId) {
-          if (isMounted) setSections([]);
-          return;
-        }
-        const data = await managementService.getSections(selectedClassId);
-        if (isMounted) setSections(data || []);
-      } catch (err: unknown) {
-        if (isMounted) setSections([]);
-      }
-    };
-    loadSections();
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedClassId]);
-
-  // Handle department filter change
-  const handleDepartmentChange = (deptId: string) => {
-    setSelectedDeptId(deptId);
-    setSelectedCourseId('');
-    setSelectedClassId('');
-    setSelectedSectionId('');
-  };
-
-  // Handle course filter change
-  const handleCourseChange = (courseId: string) => {
-    setSelectedCourseId(courseId);
-    setSelectedClassId('');
-    setSelectedSectionId('');
-  };
-
-  // Handle class filter change
-  const handleClassChange = (classId: string) => {
-    setSelectedClassId(classId);
-    setSelectedSectionId('');
-  };
-
-  // 5. Load Students matching the current filter
+  // 2. Load Students matching current Department and Year filters
   const fetchStudents = useCallback(async () => {
     try {
       setLoadingStudents(true);
@@ -222,13 +128,11 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
       let currentPage = 1;
       let hasMore = true;
 
-      // Safely fetch up to 300 students in batches of 100
-      while (hasMore && currentPage <= 3) {
+      // Safely fetch students matching active filters
+      while (hasMore && currentPage <= 5) {
         const res = await managementService.getStudents({
           departmentId: selectedDeptId || undefined,
-          courseId: selectedCourseId || undefined,
-          classId: selectedClassId || undefined,
-          sectionId: selectedSectionId || undefined,
+          year: selectedYear !== '' ? Number(selectedYear) : undefined,
           search: searchQuery.trim() || undefined,
           page: currentPage,
           limit: 100,
@@ -257,7 +161,7 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
     } finally {
       setLoadingStudents(false);
     }
-  }, [selectedDeptId, selectedCourseId, selectedClassId, selectedSectionId, searchQuery]);
+  }, [selectedDeptId, selectedYear, searchQuery]);
 
   useEffect(() => {
     fetchStudents();
@@ -266,7 +170,6 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
   // List of students to display (filtering by "Show Selected Only" if enabled)
   const displayedStudents = useMemo(() => {
     if (showSelectedOnly) {
-      // Gather all selected students from studentCache and students
       const allSelected: Student[] = [];
       const seen = new Set<string>();
 
@@ -306,20 +209,18 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
   };
 
   const handleSelectAllVisible = () => {
-    // Collect all visible unassigned student IDs
     const unassignedVisibleIds = displayedStudents
       .filter((s) => !alreadyAssignedSet.has(s.id))
       .map((s) => s.id);
 
-    const areAllVisibleSelected = unassignedVisibleIds.length > 0 &&
+    const areAllVisibleSelected =
+      unassignedVisibleIds.length > 0 &&
       unassignedVisibleIds.every((id) => selectedSet.has(id));
 
     if (areAllVisibleSelected) {
-      // Deselect all visible
       const unassignedVisibleSet = new Set(unassignedVisibleIds);
       onSelectionChange(selectedStudentIds.filter((id) => !unassignedVisibleSet.has(id)));
     } else {
-      // Select all visible (preserving existing selections from other filters)
       const merged = Array.from(new Set([...selectedStudentIds, ...unassignedVisibleIds]));
       onSelectionChange(merged);
     }
@@ -329,7 +230,7 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
     onSelectionChange([]);
   };
 
-  // Header checkbox state
+  // Unassigned visible students
   const unassignedVisible = displayedStudents.filter((s) => !alreadyAssignedSet.has(s.id));
   const isAllVisibleSelected =
     unassignedVisible.length > 0 &&
@@ -337,32 +238,42 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
   const isSomeVisibleSelected =
     unassignedVisible.some((s) => selectedSet.has(s.id)) && !isAllVisibleSelected;
 
-  const newSelectedCount = selectedStudentIds.filter(
+  const totalSelectedCount = selectedStudentIds.filter(
     (id) => !alreadyAssignedSet.has(id)
   ).length;
+
+  const visibleSelectedCount = displayedStudents.filter(
+    (s) => selectedSet.has(s.id) && !alreadyAssignedSet.has(s.id)
+  ).length;
+
+  // Active filter naming
+  const activeDept = departments.find((d) => d.id === selectedDeptId);
+  const activeDeptName = activeDept ? activeDept.name : 'All Departments';
+  const activeYearLabel = selectedYear !== '' ? ` (Year ${selectedYear})` : '';
 
   return (
     <Box sx={{ width: '100%' }}>
       {/* Title & Stats */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#14264B' }}>
             {title}
           </Typography>
           <Typography variant="caption" sx={{ color: '#7182A0' }}>
-            {helperText || 'Filter by Department → Course → Class → Section to select students across cohorts'}
+            {helperText || 'Filter by Department and Academic Year to select participant candidates'}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
           <Chip
             icon={<PersonOutlineIcon />}
-            label={`${newSelectedCount} Selected`}
-            color={newSelectedCount > 0 ? 'primary' : 'default'}
+            label={`${totalSelectedCount} Selected`}
+            color={totalSelectedCount > 0 ? 'primary' : 'default'}
             size="small"
-            sx={{ fontWeight: 600 }}
+            sx={{ fontWeight: 700 }}
           />
           {alreadyAssignedStudentIds.length > 0 && (
             <Chip
+              icon={<CheckCircleOutlineIcon />}
               label={`${alreadyAssignedStudentIds.length} Already in Round`}
               color="success"
               variant="outlined"
@@ -378,109 +289,66 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
         </Alert>
       )}
 
-      {/* Dynamic Cascading Filters */}
-      <Paper variant="outlined" sx={{ p: 2, mb: 2, backgroundColor: '#EDF2FF', borderRadius: 1.5 }}>
-        <Grid container spacing={1.5} alignItems="center">
-          {/* 1. Department */}
-          <Grid item xs={12} sm={6} md={3}>
+      {/* Simplified Filters (Department, Year, Search & Toggle) */}
+      <Paper variant="outlined" sx={{ p: 2, mb: 2, backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', borderRadius: 2 }}>
+        <Grid container spacing={2} alignItems="center">
+          {/* Department Filter with All Departments at the top */}
+          <Grid item xs={12} sm={6} md={4}>
             <TextField
               select
               size="small"
               fullWidth
-              label="1. Department"
+              label="Department"
               value={selectedDeptId}
-              onChange={(e) => handleDepartmentChange(e.target.value)}
+              onChange={(e) => setSelectedDeptId(e.target.value)}
               disabled={loadingLookups}
+              sx={{ bgcolor: '#ffffff' }}
             >
               <MenuItem value="">
                 <em>All Departments</em>
               </MenuItem>
               {departments.map((d) => (
                 <MenuItem key={d.id} value={d.id}>
-                  {d.name} ({d.code})
+                  {d.name}
                 </MenuItem>
               ))}
             </TextField>
           </Grid>
 
-          {/* 2. Course */}
+          {/* Academic Year Filter */}
           <Grid item xs={12} sm={6} md={3}>
             <TextField
               select
               size="small"
               fullWidth
-              label="2. Course"
-              value={selectedCourseId}
-              onChange={(e) => handleCourseChange(e.target.value)}
-              disabled={courses.length === 0}
+              label="Academic Year"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value as number | '')}
+              sx={{ bgcolor: '#ffffff' }}
             >
               <MenuItem value="">
-                <em>All Courses</em>
+                <em>All Years</em>
               </MenuItem>
-              {courses.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name} ({c.code})
-                </MenuItem>
-              ))}
+              <MenuItem value={1}>1st Year</MenuItem>
+              <MenuItem value={2}>2nd Year</MenuItem>
+              <MenuItem value={3}>3rd Year</MenuItem>
+              <MenuItem value={4}>4th Year</MenuItem>
             </TextField>
           </Grid>
 
-          {/* 3. Class */}
-          <Grid item xs={12} sm={6} md={3}>
-            <TextField
-              select
-              size="small"
-              fullWidth
-              label="3. Class"
-              value={selectedClassId}
-              onChange={(e) => handleClassChange(e.target.value)}
-              disabled={classes.length === 0}
-            >
-              <MenuItem value="">
-                <em>All Classes</em>
-              </MenuItem>
-              {classes.map((cl) => (
-                <MenuItem key={cl.id} value={cl.id}>
-                  {cl.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-
-          {/* 4. Section */}
-          <Grid item xs={12} sm={6} md={3}>
-            <TextField
-              select
-              size="small"
-              fullWidth
-              label="4. Section"
-              value={selectedSectionId}
-              onChange={(e) => setSelectedSectionId(e.target.value)}
-              disabled={sections.length === 0}
-            >
-              <MenuItem value="">
-                <em>All Sections</em>
-              </MenuItem>
-              {sections.map((sec) => (
-                <MenuItem key={sec.id} value={sec.id}>
-                  Section {sec.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-
-          {/* Search bar & toggles */}
-          <Grid item xs={12} sm={8} md={8}>
+          {/* Student Search */}
+          <Grid item xs={12} sm={8} md={5}>
             <TextField
               size="small"
               fullWidth
               placeholder="Search by student name or register number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              sx={{ bgcolor: '#ffffff' }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon fontSize="small" sx={{ color: '#8293B0' }} />
+                    <SearchIcon fontSize="small" sx={{ color: '#94A3B8' }} />
                   </InputAdornment>
                 ),
                 endAdornment: searchQuery ? (
@@ -493,30 +361,79 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
               }}
             />
           </Grid>
-
-          <Grid item xs={12} sm={4} md={4} sx={{ textAlign: 'right' }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  size="small"
-                  checked={showSelectedOnly}
-                  onChange={(e) => setShowSelectedOnly(e.target.checked)}
-                />
-              }
-              label={
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                  Show Selected Only
-                </Typography>
-              }
-            />
-          </Grid>
         </Grid>
+
+        {/* Clear Selection Status & Filter Indicators (Requirement 4) */}
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mt: 2,
+            pt: 1.5,
+            borderTop: '1px solid #E2E8F0',
+            flexWrap: 'wrap',
+            gap: 1.5,
+          }}
+        >
+          {/* Active Filter and Student Counts */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#1E293B' }}>
+                Student list:
+              </Typography>
+              <Chip
+                label={`${activeDeptName}${activeYearLabel} — ${students.length} student${students.length !== 1 ? 's' : ''}`}
+                size="small"
+                sx={{
+                  backgroundColor: '#E0F2FE',
+                  color: '#0369A1',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#1E293B' }}>
+                Selected:
+              </Typography>
+              <Chip
+                label={
+                  selectedDeptId === ''
+                    ? `${totalSelectedCount} students across all departments`
+                    : `${visibleSelectedCount} of ${students.length} in ${activeDeptName} (${totalSelectedCount} total)`
+                }
+                size="small"
+                color={totalSelectedCount > 0 ? 'primary' : 'default'}
+                variant={totalSelectedCount > 0 ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 700, fontSize: '0.8rem' }}
+              />
+            </Box>
+          </Box>
+
+          {/* Show Selected Only Toggle */}
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showSelectedOnly}
+                onChange={(e) => setShowSelectedOnly(e.target.checked)}
+              />
+            }
+            label={
+              <Typography variant="caption" sx={{ fontWeight: 600, color: '#475569' }}>
+                Show Selected Only
+              </Typography>
+            }
+          />
+        </Box>
       </Paper>
 
       {/* Action Toolbar */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Typography variant="body2" sx={{ color: '#7182A0' }}>
-          Showing <strong>{displayedStudents.length}</strong> student{displayedStudents.length !== 1 ? 's' : ''}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+        <Typography variant="body2" sx={{ color: '#64748B' }}>
+          Showing <strong>{displayedStudents.length}</strong> eligible student{displayedStudents.length !== 1 ? 's' : ''}
         </Typography>
         <Stack direction="row" spacing={1}>
           <Button
@@ -524,14 +441,17 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
             variant="outlined"
             onClick={handleSelectAllVisible}
             disabled={unassignedVisible.length === 0 || loadingStudents}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}
           >
             {isAllVisibleSelected ? 'Deselect Visible' : 'Select All Visible'}
           </Button>
           <Button
             size="small"
-            color="secondary"
+            variant="text"
+            color="error"
             onClick={handleClearSelection}
-            disabled={newSelectedCount === 0}
+            disabled={totalSelectedCount === 0}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
           >
             Clear Selection
           </Button>
@@ -545,14 +465,15 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
         sx={{
           maxHeight,
           overflowY: 'auto',
-          borderRadius: 1.5,
-          borderColor: '#DCE6F5',
+          borderRadius: 2,
+          borderColor: '#E2E8F0',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
         }}
       >
         <Table stickyHeader size="small">
           <TableHead>
-            <TableRow sx={{ backgroundColor: '#E7EEFA' }}>
-              <TableCell padding="checkbox" sx={{ backgroundColor: '#E7EEFA' }}>
+            <TableRow sx={{ backgroundColor: '#F1F5F9' }}>
+              <TableCell padding="checkbox" sx={{ backgroundColor: '#F1F5F9' }}>
                 <Checkbox
                   size="small"
                   indeterminate={isSomeVisibleSelected}
@@ -561,122 +482,101 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
                   disabled={unassignedVisible.length === 0 || loadingStudents}
                 />
               </TableCell>
-              <TableCell sx={{ fontWeight: 700, backgroundColor: '#E7EEFA' }}>Student Name</TableCell>
-              <TableCell sx={{ fontWeight: 700, backgroundColor: '#E7EEFA' }}>Register Number</TableCell>
-              <TableCell sx={{ fontWeight: 700, backgroundColor: '#E7EEFA' }}>Department</TableCell>
-              <TableCell sx={{ fontWeight: 700, backgroundColor: '#E7EEFA' }}>Course</TableCell>
-              <TableCell sx={{ fontWeight: 700, backgroundColor: '#E7EEFA' }}>Class</TableCell>
-              <TableCell sx={{ fontWeight: 700, backgroundColor: '#E7EEFA' }}>Section</TableCell>
-              <TableCell sx={{ fontWeight: 700, backgroundColor: '#E7EEFA', textAlign: 'center' }}>
-                Status
-              </TableCell>
+              <TableCell sx={{ fontWeight: 700, backgroundColor: '#F1F5F9', color: '#334155' }}>Student Name</TableCell>
+              <TableCell sx={{ fontWeight: 700, backgroundColor: '#F1F5F9', color: '#334155' }}>Register Number</TableCell>
+              <TableCell sx={{ fontWeight: 700, backgroundColor: '#F1F5F9', color: '#334155' }}>Department</TableCell>
+              <TableCell sx={{ fontWeight: 700, backgroundColor: '#F1F5F9', color: '#334155', textAlign: 'center' }}>Academic Year</TableCell>
+              <TableCell sx={{ fontWeight: 700, backgroundColor: '#F1F5F9', color: '#334155', textAlign: 'center' }}>CGPA</TableCell>
+              <TableCell sx={{ fontWeight: 700, backgroundColor: '#F1F5F9', color: '#334155', textAlign: 'center' }}>Status</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loadingStudents ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={28} />
-                  <Typography variant="body2" sx={{ color: '#7182A0', mt: 1 }}>
-                    Loading students...
+                  <Typography variant="body2" sx={{ color: '#64748B', mt: 1.5 }}>
+                    Loading students matching filters...
                   </Typography>
                 </TableCell>
               </TableRow>
             ) : displayedStudents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                  <Typography variant="body2" sx={{ color: '#7182A0' }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                  <Typography variant="body2" sx={{ color: '#64748B', fontWeight: 600 }}>
                     {showSelectedOnly
-                      ? 'No students currently selected.'
-                      : 'No students found matching the selected filters.'}
+                      ? 'No students selected yet.'
+                      : 'No students found matching current Department and Year filters.'}
                   </Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              displayedStudents.map((st) => {
-                const isAlreadyAssigned = alreadyAssignedSet.has(st.id);
-                const isSelected = selectedSet.has(st.id);
-                const isChecked = isAlreadyAssigned || isSelected;
+              displayedStudents.map((student) => {
+                const isSelected = selectedSet.has(student.id);
+                const isAlreadyAssigned = alreadyAssignedSet.has(student.id);
 
                 return (
                   <TableRow
-                    key={st.id}
+                    key={student.id}
                     hover={!isAlreadyAssigned}
-                    onClick={() => handleToggleStudent(st.id)}
+                    onClick={() => handleToggleStudent(student.id)}
                     sx={{
                       cursor: isAlreadyAssigned ? 'default' : 'pointer',
-                      backgroundColor: isAlreadyAssigned
-                        ? '#EDF2FF'
-                        : isSelected
-                        ? '#eff6ff'
+                      backgroundColor: isSelected
+                        ? 'rgba(14, 165, 233, 0.08)'
+                        : isAlreadyAssigned
+                        ? '#F8FAFC'
                         : 'inherit',
+                      '&:hover': {
+                        backgroundColor: isAlreadyAssigned
+                          ? '#F8FAFC'
+                          : isSelected
+                          ? 'rgba(14, 165, 233, 0.12)'
+                          : 'rgba(241, 245, 249, 0.6)',
+                      },
                     }}
                   >
                     <TableCell padding="checkbox">
                       <Checkbox
                         size="small"
-                        checked={isChecked}
+                        checked={isSelected || isAlreadyAssigned}
                         disabled={isAlreadyAssigned}
-                        icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
-                        checkedIcon={<CheckBoxIcon fontSize="small" />}
+                        onChange={() => handleToggleStudent(student.id)}
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </TableCell>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#14264B' }}>
-                          {st.name}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#7182A0' }}>
-                          {st.collegeEmail}
-                        </Typography>
-                      </Box>
+                    <TableCell sx={{ fontWeight: 600, color: '#1E293B' }}>
+                      {student.name}
                     </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={st.registerNumber}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontFamily: 'monospace', fontWeight: 600 }}
-                      />
+                    <TableCell sx={{ color: '#475569', fontFamily: 'monospace', fontSize: '0.825rem' }}>
+                      {student.registerNumber}
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ color: '#405678' }}>
-                        {st.department?.name || st.department?.code || '-'}
-                      </Typography>
+                    <TableCell sx={{ color: '#475569' }}>
+                      {student.department?.name || '—'}
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ color: '#405678' }}>
-                        {st.course?.code || st.course?.name || '-'}
-                      </Typography>
+                    <TableCell sx={{ textAlign: 'center', color: '#475569' }}>
+                      {student.year ? `Year ${student.year}` : '—'}
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ color: '#405678' }}>
-                        {st.class?.name || (st.class?.batchYear ? `Batch ${st.class.batchYear}` : '-')}
-                      </Typography>
+                    <TableCell sx={{ textAlign: 'center', color: '#475569', fontWeight: 600 }}>
+                      {student.cgpa !== undefined && student.cgpa !== null ? Number(student.cgpa).toFixed(2) : '—'}
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ color: '#405678' }}>
-                        {st.section?.name ? `Sec ${st.section.name}` : '-'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="center">
+                    <TableCell sx={{ textAlign: 'center' }}>
                       {isAlreadyAssigned ? (
                         <Chip
                           label="Already in Round"
                           size="small"
                           color="success"
                           variant="outlined"
-                          sx={{ fontWeight: 600 }}
-                        />
-                      ) : isSelected ? (
-                        <Chip
-                          label="Selected"
-                          size="small"
-                          color="primary"
-                          sx={{ fontWeight: 600 }}
+                          sx={{ fontSize: '0.72rem', height: 22 }}
                         />
                       ) : (
-                        <Chip label="Available" size="small" variant="outlined" />
+                        <Chip
+                          label={student.status || 'ACTIVE'}
+                          size="small"
+                          color={student.status === 'ACTIVE' ? 'primary' : 'default'}
+                          variant="outlined"
+                          sx={{ fontSize: '0.72rem', height: 22 }}
+                        />
                       )}
                     </TableCell>
                   </TableRow>

@@ -207,6 +207,7 @@ export interface QuestionAiClassificationDto {
 
 export interface QuestionDto {
   id: string;
+  questionId?: string; // Permanent unique question identifier (alias for id)
   companyId?: string | null;
   exactHash?: string | null;
   category: QuestionCategory;
@@ -242,6 +243,7 @@ export interface QuestionDto {
 
 export interface CreateQuestionDto {
   id?: string;
+  questionId?: string; // Permanent unique question identifier
   companyId?: string | null;
   exactHash?: string | null;
   category: QuestionCategory;

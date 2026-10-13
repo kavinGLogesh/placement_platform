@@ -69,10 +69,16 @@ export class AuthController {
         throw new AppError('Unauthorized', 401);
       }
       const { currentPassword, newPassword } = req.body;
-      if (!newPassword || typeof newPassword !== 'string' || !newPassword.trim()) {
+      if (!currentPassword || typeof currentPassword !== 'string' || currentPassword.length === 0) {
+        throw new AppError('Current password is required', 400);
+      }
+      if (!newPassword || typeof newPassword !== 'string' || newPassword.length === 0) {
         throw new AppError('New password is required', 400);
       }
-      await this.service.changePassword(req.user.sub, { currentPassword, newPassword: newPassword.trim() });
+      await this.service.changePassword(req.user.sub, {
+        currentPassword,
+        newPassword: newPassword.trim(),
+      });
       sendSuccess(res, 'Password changed successfully', null, 200);
     } catch (error) {
       next(error);

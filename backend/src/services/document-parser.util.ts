@@ -314,7 +314,7 @@ export function parseXlsxDocument(buffer: Buffer): { text: string; rawQuestions:
         normalizedKeys['figure'] ||
         normalizedKeys['figure_url'];
 
-      let imageUrl: string | null = imgVal ? String(imgVal).trim() : null;
+      const imageUrl: string | null = imgVal ? String(imgVal).trim() : null;
       let hasUnresolvedDiagram = false;
       let diagramReviewNote: string | null = null;
 
@@ -465,7 +465,7 @@ export function parseXmlDocument(buffer: Buffer): { text: string; rawQuestions: 
     const explanation = node.explanation || node.generalfeedback?.text || null;
 
     const xmlImgVal = node.image || node.imageUrl || node.diagram || node.figure || node['@_image'] || node['@_imageUrl'];
-    let imageUrl: string | null = xmlImgVal ? String(xmlImgVal).trim() : null;
+    const imageUrl: string | null = xmlImgVal ? String(xmlImgVal).trim() : null;
     let hasUnresolvedDiagram = false;
     let diagramReviewNote: string | null = null;
 

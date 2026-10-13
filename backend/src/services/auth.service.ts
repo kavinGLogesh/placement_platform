@@ -147,15 +147,17 @@ export class AuthService {
       throw new AppError('User not found', 404);
     }
 
-    if (dto.currentPassword) {
-      const isCurrentValid = await verifyPassword(dto.currentPassword, user.passwordHash);
-      if (!isCurrentValid) {
-        throw new AppError('Incorrect current password', 400);
-      }
+    if (!dto.currentPassword || typeof dto.currentPassword !== 'string' || !dto.currentPassword.trim()) {
+      throw new AppError('Current password is required', 400);
+    }
 
-      if (dto.newPassword === dto.currentPassword) {
-        throw new AppError('New password cannot be the same as current password', 400);
-      }
+    const isCurrentValid = await verifyPassword(dto.currentPassword, user.passwordHash);
+    if (!isCurrentValid) {
+      throw new AppError('Incorrect current password', 400);
+    }
+
+    if (dto.newPassword === dto.currentPassword) {
+      throw new AppError('New password cannot be the same as current password', 400);
     }
 
     // Password policy: min 8 chars, at least 1 uppercase, 1 lowercase, 1 digit, 1 special character

@@ -14,15 +14,21 @@ export const createApp = (): Express => {
   app.use(helmet());
 
   // Cross-Origin Resource Sharing
-  const configuredOrigins = env.CORS_ORIGIN === '*'
-    ? '*'
-    : env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+  const configuredOrigins =
+    env.CORS_ORIGIN === '*'
+      ? '*'
+      : env.CORS_ORIGIN.split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean);
 
   const defaultAllowedOrigins = [
+    'http://localhost:5000',
     'http://localhost:5173',
     'http://localhost:5174',
     'http://127.0.0.1:5173',
     'http://127.0.0.1:5174',
+    'https://5257cqxg-5000.inc1.devtunnels.ms/',
+    'https://5257cqxg-5173.inc1.devtunnels.ms/',
   ];
 
   app.use(

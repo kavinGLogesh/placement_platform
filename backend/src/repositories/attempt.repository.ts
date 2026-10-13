@@ -164,6 +164,10 @@ export class AttemptRepository {
     });
     if (r) {
       const viols = await this.getViolationsByAttempt(attemptId);
+      const violationCount = typeof (r as any).violationCount === 'number' && (r as any).violationCount > 0
+        ? Math.max((r as any).violationCount, viols.length)
+        : viols.length;
+
       return {
         id: r.id,
         studentId: r.studentId,
@@ -177,8 +181,9 @@ export class AttemptRepository {
         submittedAt: r.submittedAt,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
-        violationCount: viols.length,
+        violationCount,
         violations: viols,
+        terminationReason: (r as any).terminationReason ?? null,
       };
     }
     return null;
@@ -401,7 +406,8 @@ export class AttemptRepository {
   async saveResultTransaction(
     attemptId: string,
     resultData: Omit<AssessmentResultDto, 'id' | 'createdAt' | 'updatedAt'>,
-    finalStatus: AttemptStatus
+    finalStatus: AttemptStatus,
+    terminationReason?: string | null
   ): Promise<AssessmentResultDto> {
     const existingResult = await this.getResultByAttemptId(attemptId);
     if (existingResult) {
@@ -436,6 +442,9 @@ export class AttemptRepository {
         memAtt.status = finalStatus;
         memAtt.submittedAt = now;
         memAtt.updatedAt = now;
+        if (terminationReason !== undefined) {
+          memAtt.terminationReason = terminationReason;
+        }
       }
       return resDto;
     }
@@ -448,6 +457,7 @@ export class AttemptRepository {
           status: finalStatus,
           submittedAt: now,
           updatedAt: now,
+          ...(terminationReason !== undefined ? { terminationReason } : {}),
         },
       });
 
@@ -583,10 +593,15 @@ export class AttemptRepository {
     const nowTime = now.getTime();
 
     // Deduplication / Anti-Spam:
-    // If the same violationType occurred within 1000ms, or any violation within 500ms, return existing
+    // 1. If the exact same violationType occurred within 1000ms, ignore and return existing
+    // 2. If WINDOW_BLUR occurs right after TAB_SWITCH within 1000ms, suppress to avoid duplicate penalty
     const recentDuplicate = existing.find((v) => {
       const vTime = new Date(v.timestamp).getTime();
-      if (v.violationType === violationType && Math.abs(nowTime - vTime) < 1000) {
+      const diff = Math.abs(nowTime - vTime);
+      if (v.violationType === violationType && diff < 1000) {
+        return true;
+      }
+      if (violationType === 'WINDOW_BLUR' && v.violationType === 'TAB_SWITCH' && diff < 1000) {
         return true;
       }
       return false;
@@ -608,12 +623,59 @@ export class AttemptRepository {
     existing.push(violation);
     store.set(attemptId, existing);
 
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        await prisma.attemptViolation.create({
+          data: {
+            id: violation.id,
+            attemptId,
+            studentId,
+            violationType,
+            details: details ? details.substring(0, 255) : null,
+            timestamp: now,
+            createdAt: now,
+          },
+        });
+        await prisma.assessmentAttempt.update({
+          where: { id: attemptId },
+          data: {
+            violationCount: { increment: 1 },
+            updatedAt: now,
+          },
+        });
+      } catch (dbErr) {
+        console.warn('Failed to persist violation in Prisma MySQL:', dbErr);
+      }
+    }
+
     return violation;
   }
 
   async getViolationsByAttempt(attemptId: string): Promise<AttemptViolationDto[]> {
-    const store = process.env.NODE_ENV === 'test' ? this.memStore.violations : this.violationsStore;
-    return store.get(attemptId) || [];
+    if (process.env.NODE_ENV === 'test') {
+      return this.memStore.violations.get(attemptId) || [];
+    }
+
+    try {
+      const dbViols = await prisma.attemptViolation.findMany({
+        where: { attemptId },
+        orderBy: { timestamp: 'asc' },
+      });
+      if (dbViols.length > 0) {
+        return dbViols.map((v) => ({
+          id: v.id,
+          attemptId: v.attemptId,
+          studentId: v.studentId,
+          violationType: v.violationType as AttemptViolationType,
+          timestamp: v.timestamp.toISOString(),
+          details: v.details ?? undefined,
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed to load violations from Prisma, falling back to memory store:', err);
+    }
+
+    return this.violationsStore.get(attemptId) || [];
   }
 }
 

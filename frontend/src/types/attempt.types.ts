@@ -63,6 +63,36 @@ export interface AssessmentAttemptDto {
   answers?: AttemptAnswerDto[];
   violationCount?: number;
   violations?: AttemptViolationDto[];
+  terminationReason?: string | null;
+}
+
+export interface ResultQuestionOptionDto {
+  id: string;
+  optionText: string;
+  optionOrder: number;
+  isCorrect: boolean;
+}
+
+export interface ResultQuestionDetailDto {
+  questionId: string;
+  questionOrder: number;
+  questionText: string;
+  category: string;
+  topic: string;
+  difficulty: string;
+  questionType: string;
+  marks: number;
+  negativeMarks: number;
+  imageUrl?: string | null;
+  explanation?: string | null;
+  options: ResultQuestionOptionDto[];
+  selectedOptionIds?: string[] | null;
+  textAnswer?: string | null;
+  studentAnswerText?: string | null;
+  correctAnswerText?: string | null;
+  isCorrect: boolean;
+  isUnanswered: boolean;
+  marksAwarded: number;
 }
 
 export interface AssessmentResultDto {
@@ -89,6 +119,7 @@ export interface AssessmentResultDto {
     passingPercentage: number;
     company?: { id: string; name: string; code: string; logoUrl?: string | null } | null;
   };
+  questions?: ResultQuestionDetailDto[];
 }
 
 export type StudentTestStatus = 'AVAILABLE' | 'UPCOMING' | 'COMPLETED';
@@ -133,7 +164,11 @@ export type AttemptViolationType =
   | 'TAB_SWITCH'
   | 'WINDOW_BLUR'
   | 'FULLSCREEN_EXIT'
-  | 'SCREENSHOT_ATTEMPT';
+  | 'SCREENSHOT_ATTEMPT'
+  | 'CLIPBOARD_COPY'
+  | 'CLIPBOARD_CUT'
+  | 'CLIPBOARD_PASTE'
+  | 'RIGHT_CLICK';
 
 export interface AttemptViolationDto {
   id: string;
@@ -148,4 +183,11 @@ export interface RecordViolationDto {
   violationType: AttemptViolationType;
   details?: string;
   clientTimestamp?: string;
+}
+
+export interface RecordViolationResponse {
+  violation: AttemptViolationDto;
+  violationCount: number;
+  isTerminated?: boolean;
+  terminationReason?: string | null;
 }

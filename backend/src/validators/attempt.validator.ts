@@ -84,7 +84,16 @@ export const validateBatchSyncAnswers = (body: unknown): BatchSyncAnswersDto => 
   };
 };
 
-const VALID_VIOLATION_TYPES = ['TAB_SWITCH', 'WINDOW_BLUR', 'FULLSCREEN_EXIT', 'SCREENSHOT_ATTEMPT'] as const;
+const VALID_VIOLATION_TYPES = [
+  'TAB_SWITCH',
+  'WINDOW_BLUR',
+  'FULLSCREEN_EXIT',
+  'SCREENSHOT_ATTEMPT',
+  'CLIPBOARD_COPY',
+  'CLIPBOARD_CUT',
+  'CLIPBOARD_PASTE',
+  'RIGHT_CLICK',
+] as const;
 
 export const validateRecordViolation = (body: unknown): RecordViolationDto => {
   if (!body || typeof body !== 'object') {

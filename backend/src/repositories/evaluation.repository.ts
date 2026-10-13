@@ -51,7 +51,7 @@ export class EvaluationRepository {
   private isTest(): boolean {
     return (
       process.env.NODE_ENV === 'test' ||
-      !Boolean((prisma as any).gdRound) ||
+      !(prisma as any).gdRound ||
       typeof (prisma as any).gdRound?.findUnique !== 'function'
     );
   }

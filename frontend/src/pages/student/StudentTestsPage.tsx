@@ -13,6 +13,14 @@ import {
   Alert,
   CircularProgress,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Checkbox,
+  FormControlLabel,
+  Paper,
+  IconButton,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ScheduleIcon from '@mui/icons-material/Schedule';
@@ -22,6 +30,10 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import TimerIcon from '@mui/icons-material/Timer';
 import BusinessIcon from '@mui/icons-material/Business';
+import SecurityIcon from '@mui/icons-material/Security';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CloseIcon from '@mui/icons-material/Close';
+import SchoolIcon from '@mui/icons-material/School';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { attemptService } from '../../services/attempt.service.js';
 import { StudentAssessmentItemDto, StudentTestStatus } from '../../types/attempt.types.js';
@@ -45,6 +57,9 @@ export const StudentTestsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [selectedTestForExam, setSelectedTestForExam] = useState<StudentAssessmentItemDto | null>(null);
+  const [rulesAgreed, setRulesAgreed] = useState(true);
 
   useEffect(() => {
     setActiveTab(getTabFromPath());
@@ -80,12 +95,45 @@ export const StudentTestsPage: React.FC = () => {
     else navigate('/student/tests');
   };
 
+  const handleOpenConfirm = (test: StudentAssessmentItemDto) => {
+    setSelectedTestForExam(test);
+    setRulesAgreed(true);
+    setConfirmDialogOpen(true);
+  };
+
+  const handleCloseConfirm = () => {
+    if (startingId) return;
+    setConfirmDialogOpen(false);
+    setSelectedTestForExam(null);
+  };
+
+  const handleConfirmTakeExam = async () => {
+    if (!selectedTestForExam) return;
+    try {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        (document.documentElement as any).webkitRequestFullscreen().catch?.(() => {});
+      }
+    } catch {
+      // Browser will prompt in attempt page if blocked
+    }
+
+    if (selectedTestForExam.activeAttemptId) {
+      setConfirmDialogOpen(false);
+      navigate(`/student/attempt/${selectedTestForExam.activeAttemptId}`, { state: { autoRequestFullscreen: true } });
+      return;
+    }
+    await handleStartTest(selectedTestForExam.id);
+  };
+
   const handleStartTest = async (testId: string) => {
     setStartingId(testId);
     setError(null);
     try {
       const attempt = await attemptService.startAssessment(testId);
-      navigate(`/student/attempt/${attempt.id}`);
+      setConfirmDialogOpen(false);
+      navigate(`/student/attempt/${attempt.id}`, { state: { autoRequestFullscreen: true } });
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'response' in err
@@ -471,8 +519,15 @@ export const StudentTestsPage: React.FC = () => {
                       <Button
                         fullWidth
                         variant="contained"
-                        sx={{ bgcolor: '#b45309', '&:hover': { bgcolor: '#92400e' } }}
-                        onClick={() => navigate(`/student/attempt/${test.activeAttemptId}`)}
+                        startIcon={<PlayArrowIcon />}
+                        sx={{
+                          bgcolor: '#b45309',
+                          fontWeight: 700,
+                          textTransform: 'none',
+                          borderRadius: 2,
+                          '&:hover': { bgcolor: '#92400e' },
+                        }}
+                        onClick={() => handleOpenConfirm(test)}
                       >
                         Resume Assessment
                       </Button>
@@ -481,10 +536,16 @@ export const StudentTestsPage: React.FC = () => {
                         fullWidth
                         variant="contained"
                         color="primary"
-                        onClick={() => handleStartTest(test.id)}
+                        startIcon={<PlayArrowIcon />}
+                        onClick={() => handleOpenConfirm(test)}
                         disabled={startingId === test.id}
+                        sx={{
+                          fontWeight: 700,
+                          textTransform: 'none',
+                          borderRadius: 2,
+                        }}
                       >
-                        {startingId === test.id ? <CircularProgress size={20} color="inherit" /> : 'Start Assessment'}
+                        {startingId === test.id ? <CircularProgress size={20} color="inherit" /> : 'Attend Test'}
                       </Button>
                     ) : isCompleted ? (
                       <Button
@@ -497,11 +558,16 @@ export const StudentTestsPage: React.FC = () => {
                             navigate('/student/results');
                           }
                         }}
+                        sx={{
+                          fontWeight: 600,
+                          textTransform: 'none',
+                          borderRadius: 2,
+                        }}
                       >
                         View Scorecard
                       </Button>
                     ) : (
-                      <Button fullWidth variant="outlined" disabled>
+                      <Button fullWidth variant="outlined" disabled sx={{ textTransform: 'none', borderRadius: 2 }}>
                         Upcoming
                       </Button>
                     )}
@@ -512,6 +578,260 @@ export const StudentTestsPage: React.FC = () => {
           })}
         </Grid>
       )}
+
+      {/* Confirmation Dialog: Ready for Exam? */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={handleCloseConfirm}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            p: 1,
+            boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1, pt: 2, px: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: '12px',
+                  bgcolor: '#E0F2FE',
+                  color: '#0284C7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <SchoolIcon sx={{ fontSize: 26 }} />
+              </Box>
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F172A', lineHeight: 1.2 }}>
+                  Ready for Exam?
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 500 }}>
+                  Review guidelines and confirm to enter the assessment
+                </Typography>
+              </Box>
+            </Box>
+            <IconButton onClick={handleCloseConfirm} size="small" sx={{ color: '#94A3B8' }}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent sx={{ px: 3, py: 2 }}>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+
+          {selectedTestForExam && (
+            <>
+              {/* Assessment Overview Card */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.5,
+                  mb: 2.5,
+                  borderRadius: 2.5,
+                  bgcolor: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                }}
+              >
+                <Box sx={{ mb: 1.5 }}>
+                  {selectedTestForExam.company && (
+                    <Chip
+                      icon={<BusinessIcon sx={{ fontSize: '13px !important' }} />}
+                      label={`${selectedTestForExam.company.name} (${selectedTestForExam.company.code})`}
+                      size="small"
+                      sx={{
+                        mb: 0.75,
+                        fontWeight: 700,
+                        fontSize: '0.72rem',
+                        backgroundColor: '#E0F2FE',
+                        color: '#0284C7',
+                        border: '1px solid #BAE6FD',
+                        borderRadius: '4px',
+                      }}
+                    />
+                  )}
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F172A' }}>
+                    {selectedTestForExam.name}
+                  </Typography>
+                  {selectedTestForExam.description && (
+                    <Typography variant="body2" sx={{ color: '#64748B', mt: 0.5 }}>
+                      {selectedTestForExam.description}
+                    </Typography>
+                  )}
+                </Box>
+
+                <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ p: 1.25, borderRadius: 2, bgcolor: '#FFFFFF', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                      <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600, display: 'block' }}>
+                        Duration
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: '#0F172A', mt: 0.25 }}>
+                        {selectedTestForExam.duration} mins
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ p: 1.25, borderRadius: 2, bgcolor: '#FFFFFF', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                      <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600, display: 'block' }}>
+                        Questions
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: '#0F172A', mt: 0.25 }}>
+                        {selectedTestForExam.totalQuestions || 'Multiple'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ p: 1.25, borderRadius: 2, bgcolor: '#FFFFFF', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                      <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600, display: 'block' }}>
+                        Cut-off
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: '#16A34A', mt: 0.25 }}>
+                        {selectedTestForExam.passingPercentage}%
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ p: 1.25, borderRadius: 2, bgcolor: '#FFFFFF', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                      <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600, display: 'block' }}>
+                        Negative
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: selectedTestForExam.negativeMarking ? '#DC2626' : '#64748B', mt: 0.25 }}>
+                        {selectedTestForExam.negativeMarking ? 'Yes (-0.25)' : 'None'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* Instructions */}
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0F172A', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <SecurityIcon sx={{ fontSize: 18, color: '#0284C7' }} />
+                Examination Guidelines:
+              </Typography>
+
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  mb: 2.5,
+                  borderRadius: 2.5,
+                  bgcolor: '#F0F9FF',
+                  border: '1px solid #BAE6FD',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.25,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
+                  <TimerIcon sx={{ color: '#0284C7', fontSize: 18, mt: 0.2 }} />
+                  <Typography variant="body2" sx={{ color: '#0C4A6E', fontSize: '0.875rem' }}>
+                    <strong>Timer Starts Immediately:</strong> The exam countdown will start the moment you click <strong>Take Exam</strong> and cannot be paused.
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
+                  <SecurityIcon sx={{ color: '#0284C7', fontSize: 18, mt: 0.2 }} />
+                  <Typography variant="body2" sx={{ color: '#0C4A6E', fontSize: '0.875rem' }}>
+                    <strong>Secure Full-Screen Mode:</strong> The assessment runs in full-screen. Switching tabs, minimizing, or exiting full-screen is monitored and recorded.
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
+                  <CheckCircleOutlineIcon sx={{ color: '#0284C7', fontSize: 18, mt: 0.2 }} />
+                  <Typography variant="body2" sx={{ color: '#0C4A6E', fontSize: '0.875rem' }}>
+                    <strong>Continuous Auto-Save:</strong> All chosen answers and submitted code are safely synchronized with the server as you progress.
+                  </Typography>
+                </Box>
+              </Paper>
+
+              {/* Candidate Readiness Agreement */}
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  bgcolor: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={rulesAgreed}
+                      onChange={(e) => setRulesAgreed(e.target.checked)}
+                      sx={{ color: '#0284C7', '&.Mui-checked': { color: '#0284C7' } }}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#1E293B' }}>
+                      I have read all instructions and I am ready to take the exam.
+                    </Typography>
+                  }
+                />
+              </Box>
+            </>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1, gap: 1 }}>
+          <Button
+            variant="outlined"
+            onClick={handleCloseConfirm}
+            disabled={Boolean(startingId)}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 700,
+              color: '#64748B',
+              borderColor: '#CBD5E1',
+              px: 2.5,
+            }}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleConfirmTakeExam}
+            disabled={!rulesAgreed || Boolean(startingId)}
+            startIcon={
+              startingId ? <CircularProgress size={18} color="inherit" /> : <PlayArrowIcon />
+            }
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 800,
+              fontSize: '0.95rem',
+              px: 3.5,
+              py: 1,
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              boxShadow: '0 4px 14px rgba(2, 132, 199, 0.4)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #0369a1 0%, #075985 100%)',
+              },
+            }}
+          >
+            {startingId ? 'Launching Exam...' : 'Take Exam'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

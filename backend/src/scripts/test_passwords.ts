@@ -14,7 +14,9 @@ async function testUser(email: string, pass: string) {
 async function main() {
   await testUser('superadmin@placement.edu', 'SuperAdmin@123');
   await testUser('placementadmin@placement.edu', 'PlacementAdmin@123');
-  await testUser('student@placement.edu', 'Student@123');
+  await testUser('student002@example.edu', 'Student@123');
+  await testUser('student002@example.edu', 'Password@123');
+  await testUser('student002@example.edu', 'student123');
 }
 
 main().finally(() => prisma.$disconnect());

@@ -4,6 +4,7 @@ import {
   validateLoginInput,
   validateRefreshInput,
   validateLogoutInput,
+  validateChangePasswordInput,
 } from '../validators/auth.validator.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
@@ -23,5 +24,5 @@ authRouter.post('/logout', validateLogoutInput, authController.logout);
 authRouter.get('/me', authenticateToken, authController.me);
 
 // POST /api/auth/change-password
-authRouter.post('/change-password', authenticateToken, authController.changePassword);
+authRouter.post('/change-password', authenticateToken, validateChangePasswordInput, authController.changePassword);
 

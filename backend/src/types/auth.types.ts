@@ -47,7 +47,7 @@ export interface LogoutDto {
 }
 
 export interface ChangePasswordDto {
-  currentPassword?: string;
+  currentPassword: string;
   newPassword: string;
 }
 
