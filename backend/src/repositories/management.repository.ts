@@ -1002,9 +1002,9 @@ export class ManagementRepository {
   async createStudent(dto: CreateStudentDto): Promise<StudentDto> {
     const id = `stu-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const dept = await this.findDepartmentById(dto.departmentId);
-    const course = await this.findCourseById(dto.courseId);
-    const cls = await this.findClassById(dto.classId);
-    const sec = await this.findSectionById(dto.sectionId);
+    const course = dto.courseId ? await this.findCourseById(dto.courseId) : null;
+    const cls = dto.classId ? await this.findClassById(dto.classId) : null;
+    const sec = dto.sectionId ? await this.findSectionById(dto.sectionId) : null;
 
     const record: StudentDto = {
       id,
@@ -1015,9 +1015,9 @@ export class ManagementRepository {
       phone: dto.phone?.trim() || null,
       dob: dto.dob?.trim() || null,
       departmentId: dto.departmentId,
-      courseId: dto.courseId,
-      classId: dto.classId,
-      sectionId: dto.sectionId,
+      courseId: dto.courseId ?? null,
+      classId: dto.classId ?? null,
+      sectionId: dto.sectionId ?? null,
       year: dto.year,
       cgpa: dto.cgpa || null,
       status: dto.status || StudentStatus.ACTIVE,
@@ -1327,9 +1327,9 @@ export class ManagementRepository {
             phone: s.phone?.trim() || null,
             dob: s.dob?.trim() || null,
             departmentId: s.departmentId,
-            courseId: s.courseId,
-            classId: s.classId,
-            sectionId: s.sectionId,
+            courseId: s.courseId || null,
+            classId: s.classId || null,
+            sectionId: s.sectionId || null,
             year: s.year,
             cgpa: s.cgpa || null,
             status: s.status || StudentStatus.ACTIVE,

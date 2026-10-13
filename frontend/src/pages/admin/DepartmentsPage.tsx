@@ -23,7 +23,7 @@ import { AdminNavTabs } from '../../components/management/AdminNavTabs.js';
 import { DataTable, Column } from '../../components/management/DataTable.js';
 import { ConfirmDialog } from '../../components/management/ConfirmDialog.js';
 import { managementService } from '../../services/management.service.js';
-import { Department, College, Course } from '../../types/management.types.js';
+import { Department, College } from '../../types/management.types.js';
 import SchoolIcon from '@mui/icons-material/School';
 import GroupsIcon from '@mui/icons-material/Groups';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -32,7 +32,6 @@ import Paper from '@mui/material/Paper';
 export const DepartmentsPage: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [colleges, setColleges] = useState<College[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
   const [selectedDept, setSelectedDept] = useState<Department | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,14 +52,12 @@ export const DepartmentsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [deptList, collegeList, courseList] = await Promise.all([
+      const [deptList, collegeList] = await Promise.all([
         managementService.getDepartments(),
         managementService.getColleges(),
-        managementService.getCourses(),
       ]);
       setDepartments(deptList);
       setColleges(collegeList);
-      setCourses(courseList);
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to load departments';
       setError(msg);
@@ -155,67 +152,31 @@ export const DepartmentsPage: React.FC = () => {
   const columns: Column<Department>[] = [
     {
       id: 'name',
-      label: 'Department Name with Course',
+      label: 'Department',
       minWidth: 320,
-      render: (d) => {
-        const deptCourses =
-          d.courses && d.courses.length > 0
-            ? d.courses
-            : courses.filter((c) => c.departmentId === d.id);
-
-        return (
-          <Box sx={{ py: 1 }}>
-            <Box
-              onClick={() => setSelectedDept(d)}
-              sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 1,
-                mb: 0.8,
-                cursor: 'pointer',
-                '&:hover': { textDecoration: 'underline', color: '#1765B5' },
-              }}
-            >
-              <Chip
-                label={d.code}
-                size="small"
-                color="primary"
-                sx={{ fontWeight: 700, borderRadius: 1.5, height: 24, fontSize: '0.75rem' }}
-              />
-              <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#14264B' }}>
-                {d.name}
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, alignItems: 'center' }}>
-              <Typography variant="caption" sx={{ color: '#7182A0', fontWeight: 600 }}>
-                Course:
-              </Typography>
-              {deptCourses.length > 0 ? (
-                deptCourses.map((c) => (
-                  <Chip
-                    key={c.id}
-                    label={`${c.code} — ${c.name}`}
-                    size="small"
-                    variant="outlined"
-                    sx={{
-                      height: 22,
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      color: '#267D86',
-                      borderColor: '#93C5FD',
-                      bgcolor: '#F0F9FF',
-                    }}
-                  />
-                ))
-              ) : (
-                <Typography variant="caption" sx={{ color: '#94A3B8', fontStyle: 'italic' }}>
-                  No courses attached
-                </Typography>
-              )}
-            </Box>
-          </Box>
-        );
-      },
+      render: (d) => (
+        <Box
+          onClick={() => setSelectedDept(d)}
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 1,
+            py: 1,
+            cursor: 'pointer',
+            '&:hover': { textDecoration: 'underline', color: '#1765B5' },
+          }}
+        >
+          <Chip
+            label={d.code}
+            size="small"
+            color="primary"
+            sx={{ fontWeight: 700, borderRadius: 1.5, height: 24, fontSize: '0.75rem' }}
+          />
+          <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#14264B' }}>
+            {d.name}
+          </Typography>
+        </Box>
+      ),
     },
     {
       id: 'students',
@@ -410,7 +371,7 @@ export const DepartmentsPage: React.FC = () => {
         onClose={() => setDeleteTarget(null)}
       />
 
-      {/* Department Info Modal: Department Name with Course & Student Strength */}
+      {/* Department Info Modal: Department Name & Student Strength */}
       <Dialog
         open={!!selectedDept}
         onClose={() => setSelectedDept(null)}
@@ -460,7 +421,7 @@ export const DepartmentsPage: React.FC = () => {
             </Box>
 
             <DialogContent sx={{ p: 3 }}>
-              {/* 1. Department Name with Course */}
+              {/* 1. Department Name */}
               <Paper
                 elevation={0}
                 sx={{
@@ -472,45 +433,11 @@ export const DepartmentsPage: React.FC = () => {
                 }}
               >
                 <Typography variant="caption" fontWeight={700} sx={{ color: '#64748B', letterSpacing: 0.8, display: 'block', mb: 1 }}>
-                  1. DEPARTMENT NAME & COURSE
+                  1. DEPARTMENT
                 </Typography>
-                <Typography variant="h6" fontWeight={800} sx={{ color: '#14264B', mb: 1 }}>
+                <Typography variant="h6" fontWeight={800} sx={{ color: '#14264B' }}>
                   {selectedDept.name} ({selectedDept.code})
                 </Typography>
-
-                <Box sx={{ mt: 1.5 }}>
-                  <Typography variant="body2" fontWeight={600} sx={{ color: '#475569', mb: 1 }}>
-                    Enrolled Degree Courses:
-                  </Typography>
-                  {(() => {
-                    const deptCourses =
-                      selectedDept.courses && selectedDept.courses.length > 0
-                        ? selectedDept.courses
-                        : courses.filter((c) => c.departmentId === selectedDept.id);
-
-                    if (deptCourses.length === 0) {
-                      return (
-                        <Typography variant="body2" sx={{ color: '#94A3B8', fontStyle: 'italic' }}>
-                          No degree courses assigned to this department yet.
-                        </Typography>
-                      );
-                    }
-
-                    return (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {deptCourses.map((c) => (
-                          <Chip
-                            key={c.id}
-                            label={`${c.code} — ${c.name}`}
-                            color="primary"
-                            variant="outlined"
-                            sx={{ fontWeight: 600, bgcolor: '#EFF6FF', borderColor: '#BFDBFE' }}
-                          />
-                        ))}
-                      </Box>
-                    );
-                  })()}
-                </Box>
               </Paper>
 
               {/* 2. Student Strength */}

@@ -163,9 +163,9 @@ export interface StudentDto {
   phone?: string | null;
   dob?: string | null;
   departmentId: string;
-  courseId: string;
-  classId: string;
-  sectionId: string;
+  courseId: string | null;
+  classId: string | null;
+  sectionId: string | null;
   year: number;
   cgpa?: number | null;
   status: StudentStatus;
@@ -186,9 +186,9 @@ export interface CreateStudentDto {
   dob?: string;
   password?: string;
   departmentId: string;
-  courseId: string;
-  classId: string;
-  sectionId: string;
+  courseId?: string | null;
+  classId?: string | null;
+  sectionId?: string | null;
   year: number;
   cgpa?: number;
   status?: StudentStatus;
@@ -205,9 +205,9 @@ export interface UpdateStudentDto {
   dob?: string;
   password?: string;
   departmentId?: string;
-  courseId?: string;
-  classId?: string;
-  sectionId?: string;
+  courseId?: string | null;
+  classId?: string | null;
+  sectionId?: string | null;
   year?: number;
   cgpa?: number;
   status?: StudentStatus;
@@ -383,4 +383,3 @@ export interface StudentImportHistoryRecord {
   detailsJson?: string | null;
   createdAt: Date | string;
 }
-

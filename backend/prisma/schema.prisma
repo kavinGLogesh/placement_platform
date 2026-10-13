@@ -180,9 +180,9 @@ model Student {
   phone          String?
   dob            String?
   departmentId   String
-  courseId       String
-  classId        String
-  sectionId      String
+  courseId       String?
+  classId        String?
+  sectionId      String?
   year           Int
   cgpa           Float?
   status         StudentStatus  @default(ACTIVE)
@@ -191,9 +191,9 @@ model Student {
 
   user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   department     Department     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  course         Course         @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  class          Class          @relation(fields: [classId], references: [id], onDelete: Restrict)
-  section        Section        @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  course         Course?        @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  class          Class?         @relation(fields: [classId], references: [id], onDelete: Restrict)
+  section        Section?       @relation(fields: [sectionId], references: [id], onDelete: Restrict)
   questionUsages QuestionUsage[]
   assessmentAssignments AssessmentAssignment[]
   attempts       AssessmentAttempt[]

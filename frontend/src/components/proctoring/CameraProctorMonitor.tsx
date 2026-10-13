@@ -8,6 +8,7 @@ import {
   IconButton,
   Tooltip,
   Button,
+  useMediaQuery,
 } from '@mui/material';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
 import SecurityIcon from '@mui/icons-material/Security';
@@ -38,6 +39,7 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
+  const isMobile = useMediaQuery('(max-width:600px)');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [headPose, setHeadPose] = useState<HeadPoseStatus>('CENTER');
@@ -51,6 +53,10 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
 
   const HOLD_THRESHOLD_MS = 2000; // Continuous 2.0s turned left or right triggers warning
   const COOLDOWN_MS = 3500; // 3.5s cooldown after a strike before another can trigger
+
+  useEffect(() => {
+    if (isMobile) setIsMinimized(true);
+  }, [isMobile]);
 
   // Play a brief warning sound on violation
   const playWarningChime = useCallback(() => {
@@ -353,11 +359,12 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
         elevation={6}
         sx={{
           position: 'fixed',
-          bottom: 24,
-          right: 24,
+          bottom: { xs: 96, sm: 24 },
+          right: { xs: 8, sm: 24 },
           zIndex: 9999,
-          maxWidth: 360,
-          p: 2,
+          width: { xs: 'calc(100% - 16px)', sm: 'auto' },
+          maxWidth: { xs: 340, sm: 360 },
+          p: { xs: 1.25, sm: 2 },
           borderRadius: 3,
           border: '2px solid #EF4444',
           bgcolor: '#FEF2F2',
@@ -394,17 +401,18 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
         elevation={6}
         sx={{
           position: 'fixed',
-          bottom: 24,
-          right: 24,
+          top: { xs: 8, sm: 'auto' },
+          bottom: { xs: 'auto', sm: 24 },
+          right: { xs: 8, sm: 24 },
           zIndex: 9999,
-          p: 1.25,
-          px: 2,
+          p: { xs: 0.5, sm: 1.25 },
+          px: { xs: 0.75, sm: 2 },
           borderRadius: 6,
           bgcolor: '#0F172A',
           color: '#ffffff',
           display: 'flex',
           alignItems: 'center',
-          gap: 1.5,
+          gap: { xs: 0.5, sm: 1.5 },
           border: `2px solid ${getStatusColor()}`,
           boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
         }}
@@ -424,14 +432,14 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
           }}
         />
         <Typography variant="caption" fontWeight={700}>
-          {getStatusLabel()}
+          {isMobile ? 'Camera on' : getStatusLabel()}
         </Typography>
         <Chip
-          label={`Strikes: ${violationCount}/${maxViolations}`}
+          label={isMobile ? `${violationCount}/${maxViolations}` : `Strikes: ${violationCount}/${maxViolations}`}
           size="small"
           sx={{
-            height: 20,
-            fontSize: '0.68rem',
+            height: { xs: 18, sm: 20 },
+            fontSize: { xs: '0.62rem', sm: '0.68rem' },
             fontWeight: 800,
             bgcolor: violationCount >= 2 ? '#DC2626' : violationCount === 1 ? '#D97706' : '#334155',
             color: '#fff',
@@ -452,10 +460,10 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
       elevation={8}
       sx={{
         position: 'fixed',
-        bottom: 24,
-        right: 24,
+        bottom: { xs: 96, sm: 24 },
+        right: { xs: 8, sm: 24 },
         zIndex: 9999,
-        width: 240,
+        width: { xs: 200, sm: 240 },
         borderRadius: 3,
         overflow: 'hidden',
         bgcolor: '#0F172A',

@@ -1050,21 +1050,28 @@ export const StudentAttemptPage: React.FC = () => {
         square
         elevation={0}
         sx={{
-          py: 1.5,
-          px: { xs: 2, md: 4 },
+          py: { xs: 1, md: 1.5 },
+          px: { xs: 1.25, md: 4 },
           bgcolor: '#ffffff',
           borderBottom: '1px solid #DCE6F5',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: { xs: 'wrap', md: 'nowrap' },
+          gap: { xs: 1, md: 2 },
+          pt: { xs: 5.5, md: 1.5 },
           position: 'sticky',
           top: 0,
           zIndex: 1100,
         }}
       >
         {/* Assessment Name */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="h6" fontWeight={800} sx={{ color: '#14264B' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 2 }, minWidth: 0 }}>
+          <Typography
+            variant="h6"
+            fontWeight={800}
+            sx={{ color: '#14264B', fontSize: { xs: '0.95rem', sm: '1.25rem' }, overflowWrap: 'anywhere' }}
+          >
             {attempt?.assessment?.name || 'Examination'}
           </Typography>
           <Chip
@@ -1076,7 +1083,16 @@ export const StudentAttemptPage: React.FC = () => {
         </Box>
 
         {/* Sync Status & Timer & Submit */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, md: 3 } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: { xs: 'space-between', md: 'flex-end' },
+            flexWrap: 'wrap',
+            gap: { xs: 0.75, md: 3 },
+            width: { xs: '100%', md: 'auto' },
+          }}
+        >
           {/* Sync Status Indicator */}
           <Chip
             size="small"
@@ -1175,7 +1191,7 @@ export const StudentAttemptPage: React.FC = () => {
             color={isFullscreen ? 'inherit' : 'warning'}
             startIcon={isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
             onClick={enterFullscreen}
-            sx={{ fontWeight: 700, fontSize: '0.75rem', px: 1.5 }}
+            sx={{ fontWeight: 700, fontSize: '0.75rem', px: { xs: 0.75, sm: 1.5 }, minWidth: 0 }}
           >
             {isFullscreen ? 'Full-Screen Active' : 'Return to Full-Screen'}
           </Button>
@@ -1186,7 +1202,7 @@ export const StudentAttemptPage: React.FC = () => {
             color="error"
             size="small"
             onClick={() => setSubmitDialogOpen(true)}
-            sx={{ fontWeight: 700, px: 2 }}
+            sx={{ fontWeight: 700, px: { xs: 1, sm: 2 }, minWidth: 0 }}
           >
             Submit Test
           </Button>
@@ -1194,9 +1210,19 @@ export const StudentAttemptPage: React.FC = () => {
       </Paper>
 
       {/* 2. Main Examination Canvas */}
-      <Box sx={{ flexGrow: 1, display: 'flex', p: { xs: 2, md: 3 }, gap: 3, overflow: 'hidden' }}>
+      <Box
+        sx={{
+          flexGrow: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: { xs: 'column', lg: 'row' },
+          p: { xs: 1, sm: 2, md: 3 },
+          gap: { xs: 1.5, md: 3 },
+          overflow: { xs: 'visible', lg: 'hidden' },
+        }}
+      >
         {/* Left / Center: Active Question Area */}
-        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {error && (
             <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
               {error}
@@ -1204,7 +1230,15 @@ export const StudentAttemptPage: React.FC = () => {
           )}
 
           {currentQuestion && currentQuestion.category === 'CODING' ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                flexGrow: 1,
+                minWidth: 0,
+                overflow: { xs: 'visible', md: 'hidden' },
+              }}
+            >
               <MonacoCodingWorkspace
                 attemptId={attemptId!}
                 questionId={currentQuestion.questionId || currentQuestion.id}
@@ -1217,14 +1251,19 @@ export const StudentAttemptPage: React.FC = () => {
               />
               <Box
                 sx={{
-                  mt: 1.5,
-                  p: 1.5,
+                  mt: { xs: 1, sm: 1.5 },
+                  p: { xs: 1, sm: 1.5 },
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  gap: 1,
                   bgcolor: '#ffffff',
                   border: '1px solid #DCE6F5',
                   borderRadius: 2,
+                  position: { xs: 'sticky', sm: 'static' },
+                  bottom: 0,
+                  zIndex: 10000,
                 }}
               >
                 <Button
@@ -1233,16 +1272,18 @@ export const StudentAttemptPage: React.FC = () => {
                   startIcon={currentAnswer?.isMarkedForReview ? <BookmarkIcon /> : <BookmarkBorderIcon />}
                   onClick={handleToggleReview}
                   size="small"
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
                 >
                   {currentAnswer?.isMarkedForReview ? 'Marked for Review' : 'Mark for Review'}
                 </Button>
 
-                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
                   <Button
                     variant="outlined"
                     startIcon={<NavigateBeforeIcon />}
                     disabled={currentIndex === 0}
                     onClick={() => goToQuestion(currentIndex - 1)}
+                    sx={{ flex: 1 }}
                   >
                     Previous
                   </Button>
@@ -1251,6 +1292,7 @@ export const StudentAttemptPage: React.FC = () => {
                     endIcon={<NavigateNextIcon />}
                     disabled={currentIndex === questions.length - 1}
                     onClick={() => goToQuestion(currentIndex + 1)}
+                    sx={{ flex: 1 }}
                   >
                     Next
                   </Button>
@@ -1264,6 +1306,7 @@ export const StudentAttemptPage: React.FC = () => {
               onCut={(e) => e.preventDefault()}
               sx={{
                 flexGrow: 1,
+                minWidth: 0,
                 display: 'flex',
                 flexDirection: 'column',
                 bgcolor: '#ffffff',
@@ -1313,7 +1356,7 @@ export const StudentAttemptPage: React.FC = () => {
               </Box>
 
               {/* Question Content & Options */}
-              <CardContent sx={{ flexGrow: 1, p: { xs: 2.5, md: 4 }, overflowY: 'auto' }}>
+              <CardContent sx={{ flexGrow: 1, p: { xs: 1.5, sm: 2.5, md: 4 }, overflowY: 'auto', overflowWrap: 'anywhere' }}>
                 <Box sx={{ mb: 4 }}>
                   <QuestionContentRenderer
                     content={currentQuestion.questionText}
@@ -1432,18 +1475,23 @@ export const StudentAttemptPage: React.FC = () => {
               {/* Bottom Action Controls */}
               <Box
                 sx={{
-                  p: 2,
-                  px: 3,
+                  p: { xs: 1, sm: 2 },
+                  px: { xs: 1, sm: 3 },
                   borderTop: '1px solid #DCE6F5',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexDirection: { xs: 'column', sm: 'row' },
                   flexWrap: 'wrap',
-                  gap: 1.5,
+                  gap: { xs: 1, sm: 1.5 },
                   bgcolor: '#EDF2FF',
+                  position: { xs: 'sticky', sm: 'static' },
+                  bottom: 0,
+                  zIndex: 10000,
+                  boxShadow: { xs: '0 -4px 12px rgba(20, 38, 75, 0.12)', sm: 'none' },
                 }}
               >
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 0.75, width: { xs: '100%', sm: 'auto' } }}>
                   <Button
                     variant="outlined"
                     color={currentAnswer?.isMarkedForReview ? 'secondary' : 'inherit'}
@@ -1452,6 +1500,7 @@ export const StudentAttemptPage: React.FC = () => {
                     }
                     onClick={handleToggleReview}
                     size="small"
+                    sx={{ flex: { xs: 1, sm: 'initial' }, minWidth: 0, whiteSpace: 'nowrap' }}
                   >
                     {currentAnswer?.isMarkedForReview ? 'Marked for Review' : 'Mark for Review'}
                   </Button>
@@ -1463,17 +1512,19 @@ export const StudentAttemptPage: React.FC = () => {
                     onClick={handleClearSelection}
                     size="small"
                     disabled={!currentAnswer?.selectedOptionIds?.length && !currentAnswer?.textAnswer}
+                    sx={{ flex: { xs: 1, sm: 'initial' }, minWidth: 0, whiteSpace: 'nowrap' }}
                   >
                     Clear Choice
                   </Button>
                 </Box>
 
-                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
                   <Button
                     variant="outlined"
                     startIcon={<NavigateBeforeIcon />}
                     disabled={currentIndex === 0}
                     onClick={() => goToQuestion(currentIndex - 1)}
+                    sx={{ flex: 1, minWidth: 0 }}
                   >
                     Previous
                   </Button>
@@ -1483,6 +1534,7 @@ export const StudentAttemptPage: React.FC = () => {
                     endIcon={<NavigateNextIcon />}
                     disabled={currentIndex === questions.length - 1}
                     onClick={() => goToQuestion(currentIndex + 1)}
+                    sx={{ flex: 1, minWidth: 0 }}
                   >
                     Save & Next
                   </Button>

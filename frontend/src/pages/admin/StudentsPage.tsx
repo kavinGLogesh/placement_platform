@@ -219,9 +219,9 @@ export const StudentsPage: React.FC = () => {
         dob: st.dob || '',
         password: '',
         departmentId: st.departmentId,
-        courseId: st.courseId,
-        classId: st.classId,
-        sectionId: st.sectionId,
+        courseId: st.courseId || '',
+        classId: st.classId || '',
+        sectionId: st.sectionId || '',
         year: st.year,
         cgpa: st.cgpa || 8.0,
         status: st.status,
@@ -277,10 +277,16 @@ export const StudentsPage: React.FC = () => {
         await managementService.updateStudent(editingStudent.id, updatePayload);
       } else {
         const created = await managementService.createStudent({
-          ...studentForm,
+          registerNumber: studentForm.registerNumber,
+          name: studentForm.name,
+          collegeEmail: studentForm.collegeEmail,
+          phone: studentForm.phone,
+          dob: studentForm.dob,
+          password: studentForm.password,
+          departmentId: studentForm.departmentId,
           year: Number(studentForm.year),
           cgpa: studentForm.cgpa ? Number(studentForm.cgpa) : undefined,
-          password: studentForm.password ? studentForm.password.trim() : undefined,
+          status: studentForm.status,
         });
         if (created.temporaryPassword) {
           setCredentialModalData({
@@ -459,23 +465,10 @@ export const StudentsPage: React.FC = () => {
     },
     {
       id: 'department',
-      label: 'Dept & Course',
+      label: 'Department',
       minWidth: 160,
       render: (s) => (
-        <div>
-          <Chip label={s.department?.code || '—'} size="small" sx={{ mr: 0.5, fontWeight: 600 }} />
-          <Chip label={s.course?.code || '—'} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
-        </div>
-      ),
-    },
-    {
-      id: 'class',
-      label: 'Class & Section',
-      minWidth: 140,
-      render: (s) => (
-        <Typography variant="body2" color="text.secondary">
-          {s.class?.name ? `${s.class.name} / Sec ${s.section?.name || ''}` : '—'}
-        </Typography>
+        <Chip label={s.department?.code || '—'} size="small" sx={{ fontWeight: 600 }} />
       ),
     },
     {

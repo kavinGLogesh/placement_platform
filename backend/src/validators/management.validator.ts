@@ -104,17 +104,21 @@ export const validateSectionInput = (req: Request, _res: Response, next: NextFun
 };
 
 export const validateStudentInput = (req: Request, _res: Response, next: NextFunction): void => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  for (const field of ['courseId', 'classId', 'sectionId'] as const) {
+    if (typeof body[field] === 'string' && !body[field].trim()) {
+      delete body[field];
+    }
+  }
+
   const {
     registerNumber,
     name,
     collegeEmail,
     departmentId,
-    courseId,
-    classId,
-    sectionId,
     year,
     cgpa,
-  } = req.body || {};
+  } = body;
 
   if (!registerNumber || typeof registerNumber !== 'string' || !registerNumber.trim()) {
     return next(new AppError('Register Number is required', 400));
@@ -127,15 +131,6 @@ export const validateStudentInput = (req: Request, _res: Response, next: NextFun
   }
   if (!departmentId || typeof departmentId !== 'string' || !departmentId.trim()) {
     return next(new AppError('Department ID is required', 400));
-  }
-  if (courseId !== undefined && (typeof courseId !== 'string' || !courseId.trim())) {
-    return next(new AppError('Invalid Course ID', 400));
-  }
-  if (classId !== undefined && (typeof classId !== 'string' || !classId.trim())) {
-    return next(new AppError('Invalid Class ID', 400));
-  }
-  if (sectionId !== undefined && (typeof sectionId !== 'string' || !sectionId.trim())) {
-    return next(new AppError('Invalid Section ID', 400));
   }
   if (!year || typeof year !== 'number' || year < 1 || year > 6) {
     return next(new AppError('Year must be between 1 and 6', 400));

@@ -279,6 +279,45 @@ describe('Phase 3 — Institutional Hierarchy CRUD & Relationships', () => {
 });
 
 describe('Phase 3 — Student Management & Server-side Operations', () => {
+  it('creates a student without course, class, or section assignments', async () => {
+    const departmentRes = await fetch(`${baseUrl}/departments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${superAdminToken}`,
+      },
+      body: JSON.stringify({
+        collegeId: 'col-001',
+        code: 'NO_COURSE_TEST',
+        name: 'No Course Test Department',
+      }),
+    });
+    assert.equal(departmentRes.status, 201);
+    const departmentBody = await departmentRes.json();
+
+    const res = await fetch(`${baseUrl}/students`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${superAdminToken}`,
+      },
+      body: JSON.stringify({
+        registerNumber: '2026NOC001',
+        name: 'Student Without Class',
+        collegeEmail: 'student.without.class@placement.edu',
+        departmentId: departmentBody.data.id,
+        year: 1,
+      }),
+    });
+
+    assert.equal(res.status, 201);
+    const body = await res.json();
+    assert.equal(body.success, true);
+    assert.equal(body.data.courseId, null);
+    assert.equal(body.data.classId, null);
+    assert.equal(body.data.sectionId, null);
+  });
+
   it('7. Create Student with valid hierarchy', async () => {
     const res = await fetch(`${baseUrl}/students`, {
       method: 'POST',
