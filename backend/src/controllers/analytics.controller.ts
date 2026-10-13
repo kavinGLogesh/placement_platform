@@ -34,10 +34,40 @@ export class AnalyticsController {
   };
 
   // GET /api/analytics
-  getAdminOverview = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getAdminOverview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const summary = await this.service.getAdminOverview();
+      const filters: ResultsFilterQuery = {
+        departmentId: req.query.departmentId ? String(req.query.departmentId) : undefined,
+        courseId: req.query.courseId ? String(req.query.courseId) : undefined,
+        classId: req.query.classId ? String(req.query.classId) : undefined,
+        sectionId: req.query.sectionId ? String(req.query.sectionId) : undefined,
+        academicYear: req.query.academicYear ? parseInt(String(req.query.academicYear), 10) : undefined,
+        assessmentId: req.query.assessmentId ? String(req.query.assessmentId) : undefined,
+        category: req.query.category ? String(req.query.category) : undefined,
+        companyId: req.query.companyId ? String(req.query.companyId) : undefined,
+        status: req.query.status ? String(req.query.status) : undefined,
+        resultStatus: req.query.resultStatus ? String(req.query.resultStatus) : undefined,
+        isPassed:
+          req.query.isPassed !== undefined
+            ? String(req.query.isPassed).toLowerCase() === 'true'
+            : undefined,
+        startDate: req.query.startDate ? String(req.query.startDate) : undefined,
+        endDate: req.query.endDate ? String(req.query.endDate) : undefined,
+      };
+
+      const summary = await this.service.getAdminOverview(filters);
       sendSuccess(res, 'Admin analytics summary retrieved successfully', summary);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  // GET /api/analytics/assessment-summary?assessmentId=...
+  getAssessmentSummary = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const assessmentId = String(req.query.assessmentId || req.params.id || '');
+      const summary = await this.service.getAssessmentWiseSummary(assessmentId);
+      sendSuccess(res, 'Assessment-wise summary retrieved successfully', summary);
     } catch (err) {
       next(err);
     }

@@ -179,6 +179,8 @@ export interface AssessmentQuestionDto {
   difficulty?: QuestionDifficulty;
   questionType?: QuestionType;
   imageUrl?: string | null;
+  explanation?: string | null;
+  correctAnswer?: string | null;
   randomizedOptions?: RandomizedOptionDto[];
   createdAt: Date;
 }
@@ -243,6 +245,19 @@ export interface QuestionShortageDetail {
   questionType: QuestionType | 'ANY';
   required: number;
   available: number;
+  ineligibleDueToRotation?: number;
+  missing: number;
+  topicBreakdown?: TopicAvailabilityBreakdown[];
+}
+
+export interface TopicAvailabilityBreakdown {
+  topic: string;
+  difficulty: QuestionDifficulty | 'ANY';
+  category: QuestionCategory;
+  component: AssessmentComponent;
+  required: number;
+  eligible: number;
+  ineligibleDueToRotation: number;
   missing: number;
 }
 
@@ -252,7 +267,23 @@ export interface QuestionShortageErrorPayload {
   required: number;
   available: number;
   missing: number;
+  ineligibleDueToRotation?: number;
   shortages: QuestionShortageDetail[];
+  topicBreakdown?: TopicAvailabilityBreakdown[];
+  suggestions?: string[];
+}
+
+export interface QuestionAvailabilityValidationDto {
+  assessmentId: string;
+  isSufficient: boolean;
+  totalRequired: number;
+  totalEligible: number;
+  totalMissing: number;
+  totalIneligibleDueToRotation: number;
+  rotationCooldownRule: number; // 5
+  shortages: QuestionShortageDetail[];
+  topicBreakdown: TopicAvailabilityBreakdown[];
+  suggestions: string[];
 }
 
 export interface PaperGenerationResult {

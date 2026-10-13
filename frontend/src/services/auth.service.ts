@@ -58,20 +58,13 @@ export const authService = {
   },
 
   /**
-   * Changes password for authenticated user (e.g. from Account page or on first login)
+   * Changes password for authenticated user with current password verification
    */
-  changePassword: async (currentPasswordOrNew: string, maybeNewPassword?: string): Promise<void> => {
-    let currentPassword: string | undefined;
-    let newPassword = currentPasswordOrNew;
-
-    if (maybeNewPassword !== undefined) {
-      currentPassword = currentPasswordOrNew;
-      newPassword = maybeNewPassword;
-    }
-
+  changePassword: async (currentPassword: string, newPassword: string, confirmPassword?: string): Promise<void> => {
     await apiClient.post('/auth/change-password', {
-      currentPassword: currentPassword || undefined,
+      currentPassword,
       newPassword,
+      ...(confirmPassword ? { confirmPassword } : {}),
     });
   },
 };

@@ -260,14 +260,19 @@ export class QuestionController {
         throw new AppError('Question diagram not found', 404);
       }
 
+      const stat = fs.statSync(filePath);
       const ext = path.extname(filename).toLowerCase().replace('.', '');
       let contentType = 'image/png';
       if (ext === 'jpg' || ext === 'jpeg') contentType = 'image/jpeg';
       else if (ext === 'webp') contentType = 'image/webp';
+      else if (ext === 'svg') contentType = 'image/svg+xml';
+      else if (ext === 'gif') contentType = 'image/gif';
 
       res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Length', stat.size.toString());
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Content-Security-Policy', "default-src 'none'");
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'private, max-age=86400');
 
       const stream = fs.createReadStream(filePath);

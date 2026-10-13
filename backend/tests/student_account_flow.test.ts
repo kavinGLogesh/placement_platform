@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { createApp } from '../src/app.js';
 import { managementRepository } from '../src/repositories/management.repository.js';
+import { disconnectPrisma } from '../src/config/prisma.config.js';
 
 let server: http.Server;
 let baseUrl: string;
@@ -52,6 +53,7 @@ after(async () => {
   await new Promise<void>((resolve) => {
     server.close(() => resolve());
   });
+  await disconnectPrisma();
 });
 
 describe('Student Account Creation & First Login Flow', () => {
@@ -162,7 +164,81 @@ describe('Student Account Creation & First Login Flow', () => {
     studentAccessToken = body.data.accessToken;
   });
 
-  it('5. First-login: Setting identical password to temporary password is rejected (HTTP 400)', async () => {
+  it('4a. Student with temporary password is NOT blocked from student portal or dashboard', async () => {
+    const portalRes = await fetch(`${baseUrl}/student/portal`, {
+      headers: { Authorization: `Bearer ${studentAccessToken}` },
+    });
+    assert.strictEqual(portalRes.status, 200, 'Student with temporary password must be able to access student portal');
+
+    const profileRes = await fetch(`${baseUrl}/student/profile`, {
+      headers: { Authorization: `Bearer ${studentAccessToken}` },
+    });
+    assert.strictEqual(profileRes.status, 200, 'Student with temporary password must be able to view profile');
+  });
+
+  it('4b. Student cannot change or reset another student password (IDOR prevention HTTP 403)', async () => {
+    const res = await fetch(`${baseUrl}/students/stu-001/reset-password`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${studentAccessToken}` },
+    });
+    assert.strictEqual(res.status, 403, 'Student must be forbidden from administrative password reset endpoint');
+  });
+
+  it('4c. Password change: Missing current password is rejected (HTTP 400)', async () => {
+    const res = await fetch(`${baseUrl}/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${studentAccessToken}`,
+      },
+      body: JSON.stringify({
+        newPassword: 'Karthik#Secure2026!',
+      }),
+    });
+
+    assert.strictEqual(res.status, 400);
+    const body = await res.json();
+    assert.match(body.message, /current password/i);
+  });
+
+  it('4d. Password change: Incorrect current password is rejected (HTTP 400)', async () => {
+    const res = await fetch(`${baseUrl}/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${studentAccessToken}`,
+      },
+      body: JSON.stringify({
+        currentPassword: 'WrongPassword@999',
+        newPassword: 'Karthik#Secure2026!',
+      }),
+    });
+
+    assert.strictEqual(res.status, 400);
+    const body = await res.json();
+    assert.match(body.message, /incorrect current password/i);
+  });
+
+  it('4e. Password change: Confirm password mismatch is rejected (HTTP 400)', async () => {
+    const res = await fetch(`${baseUrl}/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${studentAccessToken}`,
+      },
+      body: JSON.stringify({
+        currentPassword: tempPassword,
+        newPassword: 'Karthik#Secure2026!',
+        confirmPassword: 'DifferentPassword@2026!',
+      }),
+    });
+
+    assert.strictEqual(res.status, 400);
+    const body = await res.json();
+    assert.match(body.message, /do not match/i);
+  });
+
+  it('5. Setting identical password to temporary/current password is rejected (HTTP 400)', async () => {
     const res = await fetch(`${baseUrl}/auth/change-password`, {
       method: 'POST',
       headers: {
@@ -309,5 +385,25 @@ describe('Student Account Creation & First Login Flow', () => {
       body: JSON.stringify({ currentPassword: 'any', newPassword: 'any' }),
     });
     assert.strictEqual(res.status, 401);
+  });
+
+  it('15. Existing Admin and Super Admin authentication remains fully operational', async () => {
+    const superRes = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'superadmin@placement.edu', password: 'SuperAdmin@123' }),
+    });
+    assert.strictEqual(superRes.status, 200);
+    const superBody = await superRes.json();
+    assert.strictEqual(superBody.data.user.role, 'SUPER_ADMIN');
+
+    const adminRes = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'placementadmin@placement.edu', password: 'PlacementAdmin@123' }),
+    });
+    assert.strictEqual(adminRes.status, 200);
+    const adminBody = await adminRes.json();
+    assert.strictEqual(adminBody.data.user.role, 'PLACEMENT_ADMIN');
   });
 });

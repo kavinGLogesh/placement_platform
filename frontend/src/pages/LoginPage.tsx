@@ -134,6 +134,15 @@ export const LoginPage: React.FC = () => {
     }
   }, [activeRole]);
 
+  useEffect(() => {
+    const expiredMsg = sessionStorage.getItem('auth_expired_message');
+    const params = new URLSearchParams(location.search);
+    if (params.get('expired') || expiredMsg) {
+      setErrorMessage(expiredMsg || 'Your session has expired. Please log in again.');
+      sessionStorage.removeItem('auth_expired_message');
+    }
+  }, [location.search]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim() || !password) {
@@ -177,9 +186,7 @@ export const LoginPage: React.FC = () => {
       }
 
       // Successful verified login: route to appropriate dashboard
-      if (loggedInUser.role === 'STUDENT' && loggedInUser.mustChangePassword) {
-        navigate('/student/change-password', { replace: true });
-      } else if (from && from !== '/') {
+      if (from && from !== '/') {
         navigate(from, { replace: true });
       } else {
         navigate(ROLE_CONFIGS[activeRole].dashboardPath, { replace: true });

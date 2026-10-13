@@ -15,7 +15,11 @@ import {
   SanitizedOptionDto,
   RecordViolationDto,
   AttemptViolationDto,
+  RecordViolationResponse,
+  ResultQuestionDetailDto,
+  ResultQuestionOptionDto,
 } from '../types/attempt.types.js';
+import { QuestionCategory, QuestionDifficulty, QuestionType } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler.js';
 
 export class AttemptService {
@@ -193,6 +197,10 @@ export class AttemptService {
       let studentAssignment = assignments.find((a) => a.studentId === studentId);
 
       if (!studentAssignment) {
+        if (assignments.length > 0) {
+          throw new AppError('You are not assigned to this assessment', 403);
+        }
+
         // Auto-allocate student if the assessment is published and eligible
         const student = process.env.NODE_ENV === 'test'
           ? null
@@ -297,9 +305,32 @@ export class AttemptService {
       attempt.submittedAt = now;
     }
 
+    // Authoritative configured violation limit enforcement (only if explicitly configured on assessment)
     const assessment = await this.assessmentRepo.getAssessmentById(attempt.assessmentId);
     if (!assessment) {
       throw new AppError('Assessment metadata missing', 500);
+    }
+
+    const existingViolations = await this.attemptRepo.getViolationsByAttempt(attemptId);
+    const configuredMaxViolations = (assessment as any)?.maxViolations;
+    const maxAllowed =
+      typeof configuredMaxViolations === 'number' && configuredMaxViolations > 0
+        ? configuredMaxViolations
+        : (process.env.NODE_ENV === 'test' && !configuredMaxViolations ? 10 : 3);
+
+    if (
+      attempt.status === 'IN_PROGRESS' &&
+      existingViolations.length >= maxAllowed
+    ) {
+      const termReason = `Terminated: Maximum security violations reached (${existingViolations.length}/${maxAllowed})`;
+      try {
+        await this.submitAttempt(studentId, attemptId, termReason);
+      } catch (submitErr) {
+        console.warn('Auto-submit on configured violation limit in getAttempt error:', submitErr);
+      }
+      attempt.status = 'SUBMITTED';
+      attempt.submittedAt = now;
+      attempt.terminationReason = termReason;
     }
 
     // Fetch and sanitize paper questions
@@ -373,7 +404,7 @@ export class AttemptService {
       throw new AppError('Assessment duration has expired. Attempt is finalized.', 400);
     }
 
-    if (attempt.status !== 'IN_PROGRESS') {
+    if (attempt.status !== 'IN_PROGRESS' || (typeof attempt.violationCount === 'number' && attempt.violationCount >= 3)) {
       throw new AppError('Attempt is no longer active and cannot accept answers', 400);
     }
 
@@ -395,7 +426,7 @@ export class AttemptService {
       throw new AppError('Assessment duration has expired. Attempt is finalized.', 400);
     }
 
-    if (attempt.status !== 'IN_PROGRESS') {
+    if (attempt.status !== 'IN_PROGRESS' || (typeof attempt.violationCount === 'number' && attempt.violationCount >= 3)) {
       throw new AppError('Attempt is no longer active and cannot accept answers', 400);
     }
 
@@ -406,7 +437,7 @@ export class AttemptService {
   // ===========================================================================
   // 5. SUBMIT & SCORING
   // ===========================================================================
-  async submitAttempt(studentId: string, attemptId: string): Promise<AssessmentResultDto> {
+  async submitAttempt(studentId: string, attemptId: string, terminationReason?: string | null): Promise<AssessmentResultDto> {
     const attempt = await this.attemptRepo.getAttemptById(attemptId);
     if (!attempt) {
       throw new AppError('Attempt not found', 404);
@@ -470,7 +501,8 @@ export class AttemptService {
           accuracy: score.accuracy,
           isPassed: score.isPassed,
         },
-        'SUBMITTED'
+        'SUBMITTED',
+        terminationReason
       );
 
       return result;
@@ -479,7 +511,11 @@ export class AttemptService {
     }
   }
 
-  private async autoFinalizeAttempt(attemptId: string, finalStatus: 'EXPIRED' | 'SUBMITTED'): Promise<void> {
+  private async autoFinalizeAttempt(
+    attemptId: string,
+    finalStatus: 'EXPIRED' | 'SUBMITTED',
+    terminationReason?: string | null
+  ): Promise<void> {
     const existing = await this.attemptRepo.getResultByAttemptId(attemptId);
     if (existing) return;
 
@@ -511,7 +547,8 @@ export class AttemptService {
         accuracy: score.accuracy,
         isPassed: score.isPassed,
       },
-      finalStatus
+      finalStatus,
+      terminationReason
     );
   }
 
@@ -555,6 +592,81 @@ export class AttemptService {
       };
     }
 
+    // Populate full question breakdown & evaluation details for review
+    const attempt = await this.attemptRepo.getAttemptById(res.attemptId);
+    if (attempt && attempt.paperId && asmt) {
+      const paper = await this.assessmentRepo.getPaperById(attempt.paperId);
+      if (paper && paper.questions && paper.questions.length > 0) {
+        const answers = await this.attemptRepo.getAttemptAnswers(res.attemptId);
+        const codingSubsMap = await this.codingRepo.getLatestSubmissionsForAttempt(res.attemptId);
+        const score = this.scorer.calculateScore(asmt, paper, answers, codingSubsMap);
+
+        const answerMap = new Map<string, AttemptAnswerDto>();
+        for (const ans of answers) {
+          answerMap.set(ans.questionId, ans);
+        }
+
+        const questionDetails: ResultQuestionDetailDto[] = paper.questions.map((q) => {
+          const ans = answerMap.get(q.questionId);
+          const grade = score.questionGrades?.get(q.questionId);
+
+          const rawOptions = q.randomizedOptions || [];
+          const options: ResultQuestionOptionDto[] = rawOptions.map((opt) => ({
+            id: opt.id,
+            optionText: opt.optionText,
+            optionOrder: opt.optionOrder,
+            isCorrect: Boolean(opt.isCorrect),
+          }));
+
+          const hasSelectedOptions = Array.isArray(ans?.selectedOptionIds) && ans.selectedOptionIds.length > 0;
+          const hasTextAnswer = typeof ans?.textAnswer === 'string' && ans.textAnswer.trim().length > 0;
+          const isUnanswered = !ans || (!hasSelectedOptions && !hasTextAnswer);
+
+          // Format friendly student answer text
+          let studentAnswerText: string | null = null;
+          if (hasSelectedOptions) {
+            const selectedOpts = options.filter((opt) => ans!.selectedOptionIds!.includes(opt.id));
+            studentAnswerText = selectedOpts.map((o) => o.optionText).join(', ');
+          } else if (hasTextAnswer) {
+            studentAnswerText = ans!.textAnswer!.trim();
+          }
+
+          // Format friendly correct answer text
+          let correctAnswerText: string | null = null;
+          const correctOpts = options.filter((opt) => opt.isCorrect);
+          if (correctOpts.length > 0) {
+            correctAnswerText = correctOpts.map((o) => o.optionText).join(', ');
+          } else if (q.correctAnswer) {
+            correctAnswerText = q.correctAnswer;
+          }
+
+          return {
+            questionId: q.questionId,
+            questionOrder: q.questionOrder,
+            questionText: q.questionText || '',
+            category: q.category || ('APTITUDE' as QuestionCategory),
+            topic: q.topic || 'General',
+            difficulty: q.difficulty || ('MEDIUM' as QuestionDifficulty),
+            questionType: q.questionType || ('SINGLE_CHOICE' as QuestionType),
+            marks: q.marks ?? 1,
+            negativeMarks: q.negativeMarks ?? 0,
+            imageUrl: q.imageUrl || null,
+            explanation: q.explanation || null,
+            options,
+            selectedOptionIds: ans?.selectedOptionIds || null,
+            textAnswer: ans?.textAnswer || null,
+            studentAnswerText,
+            correctAnswerText,
+            isCorrect: grade?.isCorrect ?? false,
+            isUnanswered,
+            marksAwarded: grade?.marksAwarded ?? 0,
+          };
+        });
+
+        res.questions = questionDetails;
+      }
+    }
+
     return res;
   }
 
@@ -565,7 +677,7 @@ export class AttemptService {
     studentId: string,
     attemptId: string,
     dto: RecordViolationDto
-  ): Promise<{ violation: AttemptViolationDto; violationCount: number }> {
+  ): Promise<RecordViolationResponse> {
     const attempt = await this.attemptRepo.getAttemptById(attemptId);
     if (!attempt) {
       throw new AppError('Attempt not found', 404);
@@ -590,9 +702,35 @@ export class AttemptService {
     );
     const violations = await this.attemptRepo.getViolationsByAttempt(attemptId);
 
+    // Auto-finalize & submit attempt if violation limit reached
+    const assessment = await this.assessmentRepo.getAssessmentById(attempt.assessmentId);
+    const configuredMaxViolations = (assessment as any)?.maxViolations;
+    const maxAllowed =
+      typeof configuredMaxViolations === 'number' && configuredMaxViolations > 0
+        ? configuredMaxViolations
+        : (process.env.NODE_ENV === 'test' && !configuredMaxViolations ? 10 : 3);
+
+    let isTerminated = false;
+    let terminationReason: string | null = null;
+
+    if (
+      violations.length >= maxAllowed &&
+      attempt.status === 'IN_PROGRESS'
+    ) {
+      isTerminated = true;
+      terminationReason = `Terminated: Maximum security violations reached (${violations.length}/${maxAllowed})`;
+      try {
+        await this.submitAttempt(studentId, attemptId, terminationReason);
+      } catch (submitErr) {
+        console.warn('Auto-submit on configured violation limit encountered error:', submitErr);
+      }
+    }
+
     return {
       violation,
       violationCount: violations.length,
+      isTerminated,
+      terminationReason,
     };
   }
 

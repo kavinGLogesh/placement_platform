@@ -48,7 +48,6 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import { useAuth } from '../../hooks/useAuth.js';
 import { evaluationService } from '../../services/evaluation.service.js';
-import { managementService } from '../../services/management.service.js';
 import { StudentSelector } from '../../components/evaluation/StudentSelector.js';
 import {
   InterviewRoundDto,
@@ -69,10 +68,6 @@ export const AdminInterviewsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
 
-  // Hierarchy Data
-  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
-  const [courses, setCourses] = useState<Array<{ id: string; name: string }>>([]);
-
   // Create Interview Round Dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -82,9 +77,6 @@ export const AdminInterviewsPage: React.FC = () => {
   const [newScheduledDate, setNewScheduledDate] = useState('');
   const [newDuration, setNewDuration] = useState(45);
   const [newEvaluatorId, setNewEvaluatorId] = useState('');
-  const [selectedDeptId, setSelectedDeptId] = useState('');
-  const [selectedCourseId, setSelectedCourseId] = useState('');
-  const [selectedBatchYear, setSelectedBatchYear] = useState('');
   const [criteria, setCriteria] = useState<CriterionConfig[]>([...DEFAULT_INTERVIEW_CRITERIA]);
   const [createSelectedStudentIds, setCreateSelectedStudentIds] = useState<string[]>([]);
 
@@ -126,22 +118,6 @@ export const AdminInterviewsPage: React.FC = () => {
     fetchRounds();
   }, [fetchRounds]);
 
-  // Load hierarchy
-  useEffect(() => {
-    const loadHierarchy = async () => {
-      try {
-        const [deptRes, courseRes] = await Promise.all([
-          managementService.getDepartments(),
-          managementService.getCourses(),
-        ]);
-        setDepartments(deptRes || []);
-        setCourses(courseRes || []);
-      } catch (e) {
-        console.error('Failed to load hierarchy for Interview targeting', e);
-      }
-    };
-    loadHierarchy();
-  }, []);
 
   const refreshSelectedRound = async (roundId: string) => {
     try {
@@ -166,9 +142,6 @@ export const AdminInterviewsPage: React.FC = () => {
     setNewScheduledDate(dateStr);
     setNewDuration(45);
     setNewEvaluatorId('');
-    setSelectedDeptId('');
-    setSelectedCourseId('');
-    setSelectedBatchYear('');
     setCriteria(DEFAULT_INTERVIEW_CRITERIA.map((c) => ({ ...c })));
     setCreateSelectedStudentIds([]);
     setCreateOpen(true);
@@ -208,9 +181,6 @@ export const AdminInterviewsPage: React.FC = () => {
         scheduledDate: new Date(newScheduledDate).toISOString(),
         durationMinutes: Number(newDuration),
         evaluatorId: newEvaluatorId.trim() || undefined,
-        departmentId: selectedDeptId || undefined,
-        courseId: selectedCourseId || undefined,
-        batchYear: selectedBatchYear ? Number(selectedBatchYear) : undefined,
         studentIds: createSelectedStudentIds.length > 0 ? createSelectedStudentIds : undefined,
         criteria,
       });
@@ -872,67 +842,16 @@ export const AdminInterviewsPage: React.FC = () => {
               placeholder="Specific questions to cover, technical domains, or guidelines..."
             />
 
-            <Divider>
-              <Chip label="Target Audience / Batch" size="small" />
-            </Divider>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  select
-                  label="Department"
-                  fullWidth
-                  value={selectedDeptId}
-                  onChange={(e) => setSelectedDeptId(e.target.value)}
-                >
-                  <MenuItem value="">All Departments</MenuItem>
-                  {departments.map((d) => (
-                    <MenuItem key={d.id} value={d.id}>
-                      {d.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  select
-                  label="Course"
-                  fullWidth
-                  value={selectedCourseId}
-                  onChange={(e) => setSelectedCourseId(e.target.value)}
-                >
-                  <MenuItem value="">All Courses</MenuItem>
-                  {courses.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>
-                      {c.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Batch Year"
-                  type="number"
-                  fullWidth
-                  value={selectedBatchYear}
-                  onChange={(e) => setSelectedBatchYear(e.target.value)}
-                  placeholder="e.g. 2026"
-                />
-              </Grid>
-            </Grid>
-
             {/* Candidate Selection for Interview Round */}
             <Divider>
-              <Chip label="Candidate Selection (Optional Direct Assignment)" size="small" />
+              <Chip label="Candidate Selection (Direct Participant Assignment)" size="small" />
             </Divider>
 
             <StudentSelector
-              initialDepartmentId={selectedDeptId || undefined}
-              initialCourseId={selectedCourseId || undefined}
               selectedStudentIds={createSelectedStudentIds}
               onSelectionChange={setCreateSelectedStudentIds}
               title="Select Candidates for Interview Round"
-              helperText="Filter by Department → Course → Class → Section. Multi-select across different sections/classes to assign candidates directly upon round creation."
+              helperText="Filter by Department and Academic Year. Multi-select students to assign candidates directly upon round creation."
             />
 
             <Divider>
@@ -1036,13 +955,11 @@ export const AdminInterviewsPage: React.FC = () => {
         <DialogContent dividers>
           {selectedRound && (
             <StudentSelector
-              initialDepartmentId={selectedRound.departmentId || undefined}
-              initialCourseId={selectedRound.courseId || undefined}
               selectedStudentIds={selectedStudentIds}
               onSelectionChange={setSelectedStudentIds}
               alreadyAssignedStudentIds={(selectedRound.participants || []).map((p) => p.studentId)}
               title={`Target Candidates for "${selectedRound.title}"`}
-              helperText="Filter by Department → Course → Class → Section. Previously assigned candidates appear selected and locked to prevent duplicates."
+              helperText="Filter by Department and Academic Year. Previously assigned candidates appear selected and locked to prevent duplicates."
             />
           )}
         </DialogContent>

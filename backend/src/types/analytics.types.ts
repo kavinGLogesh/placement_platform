@@ -6,8 +6,16 @@ export interface ResultsFilterQuery {
   limit?: number;
   search?: string;
   departmentId?: string;
+  courseId?: string;
+  classId?: string;
+  sectionId?: string;
+  academicYear?: number;
   assessmentId?: string;
+  category?: string;
+  companyId?: string;
   isPassed?: boolean;
+  status?: string; // AttemptStatus: IN_PROGRESS | SUBMITTED | EXPIRED
+  resultStatus?: string; // 'ALL' | 'PASSED' | 'FAILED' | 'PENDING' | 'NOT_APPEARED'
   startDate?: string;
   endDate?: string;
   sortBy?: 'createdAt' | 'percentage' | 'obtainedMarks' | 'accuracy' | 'studentName';
@@ -25,6 +33,12 @@ export interface ResultListItemDto {
   departmentId?: string;
   departmentName?: string;
   departmentCode?: string;
+  courseId?: string;
+  courseCode?: string;
+  classId?: string;
+  className?: string;
+  sectionId?: string;
+  sectionName?: string;
   totalMarks: number;
   obtainedMarks: number;
   percentage: number;
@@ -35,6 +49,9 @@ export interface ResultListItemDto {
   unansweredCount: number;
   submittedAt: string | null;
   createdAt: string;
+  attemptStatus?: string;
+  timeTakenMinutes?: number | null;
+  startTime?: string | null;
   violationCount?: number;
   violations?: AttemptViolationDto[];
 }
@@ -51,18 +68,32 @@ export interface PaginatedResultsDto {
   };
 }
 
+export interface ScoreDistributionBucketDto {
+  range: string;
+  label: string;
+  count: number;
+  percentage: number;
+}
+
 export interface AdminAnalyticsSummaryDto {
   totalStudents: number;
   activeStudents: number;
+  appearedStudents: number;
+  notAppearedStudents: number;
+  startedIncompleteCount: number;
   totalAssessments: number;
   activeAssessments: number;
   completedAssessments: number;
   totalAttempts: number;
   averageScore: number;
+  highestScore: number;
+  lowestScore: number;
   passPercentage: number;
+  failPercentage: number;
   overallParticipationRate: number;
   passedCount: number;
   failedCount: number;
+  scoreDistribution: ScoreDistributionBucketDto[];
   recentResults: ResultListItemDto[];
 }
 
@@ -72,10 +103,38 @@ export interface DepartmentAnalyticsDto {
   departmentCode: string;
   totalStudents: number;
   participatingStudents: number;
+  notAppeared: number;
+  completedAssessments: number;
   participationRate: number;
   averageScore: number;
+  highestScore: number;
+  lowestScore: number;
   passPercentage: number;
+  failPercentage: number;
   averageAccuracy: number;
+}
+
+export interface AssessmentWiseSummaryDto {
+  assessmentId: string;
+  assessmentName: string;
+  category: string;
+  status: string;
+  durationMinutes: number;
+  totalMarks: number;
+  passingPercentage: number;
+  eligibleScope: string;
+  totalEligibleStudents: number;
+  appearedStudents: number;
+  notAppearedStudents: number;
+  startedIncompleteCount: number;
+  completedAssessments: number;
+  passedCount: number;
+  failedCount: number;
+  averageScore: number;
+  highestScore: number;
+  lowestScore: number;
+  passPercentage: number;
+  failPercentage: number;
 }
 
 export interface TopicPerformanceDto {

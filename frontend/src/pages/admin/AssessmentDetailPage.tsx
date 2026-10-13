@@ -34,6 +34,9 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import QuizIcon from '@mui/icons-material/Quiz';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { AdminNavTabs } from '../../components/management/AdminNavTabs.js';
 import { assessmentService } from '../../services/assessment.service.js';
 import { QuestionContentRenderer } from '../../components/common/QuestionContentRenderer.js';
@@ -56,8 +59,10 @@ export const AssessmentDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Shortage payload state
+  // Shortage payload & validation states
   const [shortageError, setShortageError] = useState<QuestionShortageErrorPayload | null>(null);
+  const [validatingAvailability, setValidatingAvailability] = useState(false);
+  const [availabilitySuccess, setAvailabilitySuccess] = useState<string | null>(null);
 
   // Active Main Tab (0: Overview & Sections, 1: Generated Papers, 2: Student Assignments)
   const [mainTab, setMainTab] = useState(0);
@@ -113,6 +118,52 @@ export const AssessmentDetailPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Validate Question Availability & 5-Assessment Rotation Eligibility
+  const handleValidateAvailability = async () => {
+    if (!id) return;
+    try {
+      setValidatingAvailability(true);
+      setShortageError(null);
+      setError(null);
+      setAvailabilitySuccess(null);
+
+      const val = await assessmentService.validateQuestionAvailability(id);
+      if (val.isSufficient) {
+        setAvailabilitySuccess(
+          `Question Availability Verified: All ${val.totalRequired} required questions are fully satisfied by ${val.totalEligible} eligible approved questions in Question Bank! Rotation rule cooldown satisfied.`
+        );
+      } else {
+        setShortageError({
+          message: `Insufficient eligible questions in Question Bank. Required: ${val.totalRequired}, Available: ${val.totalEligible}, Missing: ${val.totalMissing}`,
+          error: 'INSUFFICIENT_QUESTIONS',
+          required: val.totalRequired,
+          available: val.totalEligible,
+          missing: val.totalMissing,
+          ineligibleDueToRotation: val.totalIneligibleDueToRotation,
+          shortages: val.shortages,
+          topicBreakdown: val.topicBreakdown,
+          suggestions: val.suggestions,
+        });
+      }
+    } catch (err: unknown) {
+      const errObj = err as {
+        message?: string;
+        response?: { data?: { error?: { details?: QuestionShortageErrorPayload }; message?: string } };
+        data?: { error?: { details?: QuestionShortageErrorPayload }; message?: string };
+        details?: QuestionShortageErrorPayload;
+      };
+      const resp = errObj?.response?.data || errObj?.data;
+      const shortage = errObj?.details || resp?.error?.details;
+      if (shortage?.error === 'INSUFFICIENT_QUESTIONS') {
+        setShortageError(shortage);
+      } else {
+        setError(resp?.message || errObj?.message || 'Failed to validate question availability');
+      }
+    } finally {
+      setValidatingAvailability(false);
+    }
+  };
 
   // Generate Papers
   const handleGeneratePapers = async () => {
@@ -321,6 +372,22 @@ export const AssessmentDetailPage: React.FC = () => {
         {/* Action Toolbar */}
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
+            variant="outlined"
+            startIcon={validatingAvailability ? <CircularProgress size={16} /> : <FactCheckIcon />}
+            onClick={handleValidateAvailability}
+            disabled={validatingAvailability || generating}
+            sx={{
+              borderColor: '#0284c7',
+              color: '#0284c7',
+              fontWeight: 600,
+              textTransform: 'none',
+              '&:hover': { bgcolor: '#f0f9ff', borderColor: '#0369a1' },
+            }}
+          >
+            Validate Question Availability
+          </Button>
+
+          <Button
             variant="contained"
             color="primary"
             startIcon={generating ? <CircularProgress size={16} /> : <PlayArrowIcon />}
@@ -392,81 +459,222 @@ export const AssessmentDetailPage: React.FC = () => {
         </Alert>
       )}
 
-      {/* INSUFFICIENT QUESTIONS SHORTAGE ALERT (CRITICAL PHASE 5 SPEC) */}
+      {availabilitySuccess && (
+        <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setAvailabilitySuccess(null)}>
+          {availabilitySuccess}
+        </Alert>
+      )}
+
+      {/* INSUFFICIENT QUESTIONS SHORTAGE ALERT (CRITICAL SPEC) */}
       {shortageError && (
         <Paper
           sx={{
             p: 3,
             mb: 4,
             borderRadius: 2,
-            border: '1px solid rgba(239, 68, 68, 0.4)',
-            background: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid #f87171',
+            background: '#fff5f5',
+            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.08)',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-            <ErrorOutlineIcon sx={{ color: 'error.main', fontSize: 28 }} />
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#fca5a5' }}>
-              Paper Generation Failed — Insufficient Eligible Questions
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <ErrorOutlineIcon sx={{ color: '#dc2626', fontSize: 30 }} />
+              <div>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#991b1b' }}>
+                  Insufficient Questions Available — Generation Blocked
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#b91c1c', fontWeight: 600 }}>
+                  Safe Generation Protocol: Assessment generation is strictly blocked until all required approved questions are eligible.
+                </Typography>
+              </div>
+            </Box>
+            <Chip
+              label="GENERATION BLOCKED"
+              size="small"
+              sx={{ bgcolor: '#dc2626', color: '#ffffff', fontWeight: 800, fontSize: '0.72rem' }}
+            />
           </Box>
 
-          <Typography variant="body2" sx={{ color: 'text.primary', mb: 2 }}>
+          <Typography variant="body2" sx={{ color: '#475569', mb: 2.5 }}>
             The Question Selection Engine strictly enforces that all required questions exist in the Question Bank before generation.
+            No AI replacement questions are fabricated, and questions used within the <strong>5-Assessment Rotation Rule cooldown</strong> cannot be reused until 5 subsequent assessments in this rotation scope have been generated.
           </Typography>
 
-          <Box
-            sx={{
-              display: 'flex',
-              gap: 3,
-              p: 2,
-              borderRadius: 1.5,
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-              mb: 2.5,
-            }}
-          >
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>Required Questions</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: '#14264B' }}>{shortageError.required}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>Available Questions</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: '#0284c7' }}>{shortageError.available}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>Missing Deficit</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: '#dc2626' }}>{shortageError.missing}</Typography>
-            </Box>
-          </Box>
+          {/* 4 Executive Metric Cards */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={6} sm={3}>
+              <Paper elevation={0} sx={{ p: 2, borderRadius: 1.5, background: '#ffffff', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 700 }}>Required Questions</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#1E293B', my: 0.5 }}>{shortageError.required}</Typography>
+                <Typography variant="caption" sx={{ color: '#94A3B8' }}>Configured Target</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Paper elevation={0} sx={{ p: 2, borderRadius: 1.5, background: '#ffffff', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                <Typography variant="caption" sx={{ color: '#0284c7', fontWeight: 700 }}>Eligible Questions</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#0284c7', my: 0.5 }}>{shortageError.available}</Typography>
+                <Typography variant="caption" sx={{ color: '#94A3B8' }}>Approved & Rotation Free</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Paper elevation={0} sx={{ p: 2, borderRadius: 1.5, background: '#ffffff', border: '1px solid #fecaca', textAlign: 'center' }}>
+                <Typography variant="caption" sx={{ color: '#dc2626', fontWeight: 700 }}>Missing Deficit</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#dc2626', my: 0.5 }}>{shortageError.missing}</Typography>
+                <Typography variant="caption" sx={{ color: '#ef4444' }}>Shortage to Resolve</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Paper elevation={0} sx={{ p: 2, borderRadius: 1.5, background: '#ffffff', border: '1px solid #fed7aa', textAlign: 'center' }}>
+                <Typography variant="caption" sx={{ color: '#c2410c', fontWeight: 700 }}>Rotation Cooldown</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#ea580c', my: 0.5 }}>{shortageError.ineligibleDueToRotation ?? 0}</Typography>
+                <Typography variant="caption" sx={{ color: '#94A3B8' }}>Locked (Last 5 Tests)</Typography>
+              </Paper>
+            </Grid>
+          </Grid>
 
-          <TableContainer component={Paper} elevation={0} sx={{ background: '#ffffff', border: '1px solid #fee2e2', borderRadius: 2 }}>
+          {/* Section Deficit Breakdown Table */}
+          <TableContainer component={Paper} elevation={0} sx={{ background: '#ffffff', border: '1px solid #fee2e2', borderRadius: 2, mb: 3 }}>
             <Table size="small">
-              <TableHead>
+              <TableHead sx={{ bgcolor: '#fff1f2' }}>
                 <TableRow>
-                  <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>Section</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>Component</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>Difficulty</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', fontWeight: 600 }}>Configured Topics</TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>Required</TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 600 }}>Available</TableCell>
-                  <TableCell align="right" sx={{ color: 'error.main', fontWeight: 700 }}>Missing</TableCell>
+                  <TableCell sx={{ color: '#991b1b', fontWeight: 700 }}>Section Name</TableCell>
+                  <TableCell sx={{ color: '#991b1b', fontWeight: 700 }}>Component</TableCell>
+                  <TableCell sx={{ color: '#991b1b', fontWeight: 700 }}>Difficulty</TableCell>
+                  <TableCell sx={{ color: '#991b1b', fontWeight: 700 }}>Configured Topics</TableCell>
+                  <TableCell align="right" sx={{ color: '#991b1b', fontWeight: 700 }}>Required</TableCell>
+                  <TableCell align="right" sx={{ color: '#991b1b', fontWeight: 700 }}>Eligible</TableCell>
+                  <TableCell align="right" sx={{ color: '#c2410c', fontWeight: 700 }}>Rotation Locked</TableCell>
+                  <TableCell align="right" sx={{ color: '#dc2626', fontWeight: 800 }}>Missing</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {shortageError.shortages.map((s, idx) => (
-                  <TableRow key={idx}>
+                  <TableRow key={idx} hover>
                     <TableCell sx={{ fontWeight: 600 }}>{s.sectionName}</TableCell>
                     <TableCell>{COMPONENT_LABELS[s.component]}</TableCell>
-                    <TableCell>{s.difficulty}</TableCell>
-                    <TableCell>{s.topics.join(', ')}</TableCell>
-                    <TableCell align="right">{s.required}</TableCell>
-                    <TableCell align="right">{s.available}</TableCell>
-                    <TableCell align="right" sx={{ color: 'error.light', fontWeight: 700 }}>{s.missing}</TableCell>
+                    <TableCell>
+                      <Chip label={s.difficulty} size="small" variant="outlined" sx={{ fontWeight: 700, height: 20, fontSize: '0.68rem' }} />
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 260 }}>{s.topics.join(', ')}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>{s.required}</TableCell>
+                    <TableCell align="right" sx={{ color: '#0284c7', fontWeight: 600 }}>{s.available}</TableCell>
+                    <TableCell align="right" sx={{ color: '#c2410c', fontWeight: 600 }}>{s.ineligibleDueToRotation ?? 0}</TableCell>
+                    <TableCell align="right" sx={{ color: '#dc2626', fontWeight: 800 }}>+{s.missing}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </TableContainer>
+
+          {/* Topic & Difficulty Breakdown */}
+          {shortageError.topicBreakdown && shortageError.topicBreakdown.length > 0 && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1E293B', mb: 1 }}>
+                Topic & Difficulty Availability Breakdown:
+              </Typography>
+              <Grid container spacing={1.5}>
+                {shortageError.topicBreakdown.map((tb, idx) => (
+                  <Grid item xs={12} sm={6} md={4} key={idx}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 1.5,
+                        background: tb.missing > 0 ? '#fff1f2' : '#f0fdf4',
+                        border: `1px solid ${tb.missing > 0 ? '#fecaca' : '#bbf7d0'}`,
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: '#1E293B' }}>
+                          {tb.topic}
+                        </Typography>
+                        <Chip
+                          label={tb.difficulty}
+                          size="small"
+                          sx={{
+                            fontSize: '0.65rem',
+                            height: 18,
+                            bgcolor: tb.missing > 0 ? '#fca5a5' : '#86efac',
+                            fontWeight: 700,
+                          }}
+                        />
+                      </Box>
+                      <Typography variant="caption" sx={{ color: '#64748B', display: 'block' }}>
+                        Required: <strong>{tb.required}</strong> • Eligible: <strong>{tb.eligible}</strong> • Rotation Locked: <strong>{tb.ineligibleDueToRotation}</strong>
+                      </Typography>
+                      {tb.missing > 0 && (
+                        <Typography variant="caption" sx={{ color: '#dc2626', fontWeight: 700, display: 'block', mt: 0.5 }}>
+                          Shortage: {tb.missing} question(s) needed
+                        </Typography>
+                      )}
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          )}
+
+          {/* Actionable Suggestions & Quick Resolutions */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              background: '#ffffff',
+              border: '1px solid #fed7aa',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <LightbulbOutlinedIcon sx={{ color: '#ea580c', fontSize: 20 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#9a3412' }}>
+                Recommended Administrator Actions to Resolve Deficit:
+              </Typography>
+            </Box>
+            <Box component="ul" sx={{ pl: 2.5, m: 0, mb: 2, color: '#475569', fontSize: '0.85rem' }}>
+              {(shortageError.suggestions || [
+                'Upload additional questions matching the deficient topics and difficulty levels.',
+                'Approve pending or draft questions in the Question Bank.',
+                'Modify assessment requirements or adjust the questions count per section.',
+              ]).map((sugg, idx) => (
+                <li key={idx} style={{ marginBottom: '4px' }}>
+                  {sugg}
+                </li>
+              ))}
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
+                onClick={() => navigate('/admin/questions')}
+                sx={{
+                  bgcolor: '#ea580c',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: '#c2410c' },
+                }}
+              >
+                Go to Question Bank
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setMainTab(0)}
+                sx={{
+                  borderColor: '#cbd5e1',
+                  color: '#475569',
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: '#f8fafc' },
+                }}
+              >
+                Modify Assessment Sections
+              </Button>
+            </Box>
+          </Paper>
         </Paper>
       )}
 

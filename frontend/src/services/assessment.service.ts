@@ -8,6 +8,7 @@ import {
   CreateAssignmentDto,
   AssessmentQueryFilters,
   PaperGenerationResult,
+  QuestionAvailabilityValidationDto,
 } from '../types/assessment.types.js';
 import { PaginatedResult } from '../types/management.types.js';
 
@@ -42,6 +43,11 @@ export const assessmentService = {
 
   async deleteAssessment(id: string): Promise<void> {
     await apiClient.delete(`/assessments/${id}`);
+  },
+
+  async validateQuestionAvailability(id: string): Promise<QuestionAvailabilityValidationDto> {
+    const res = await apiClient.get<ApiResponse<QuestionAvailabilityValidationDto>>(`/assessments/${id}/validate-availability`);
+    return res.data.data;
   },
 
   async generatePapers(id: string): Promise<PaperGenerationResult> {

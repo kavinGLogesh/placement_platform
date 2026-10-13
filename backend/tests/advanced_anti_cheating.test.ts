@@ -3,6 +3,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { createApp } from '../src/app.js';
+import { prisma } from '../src/config/prisma.config.js';
 
 import { generateAccessToken } from '../src/utils/jwt.util.js';
 import { Role } from '../src/types/auth.types.js';
@@ -315,7 +316,29 @@ describe('Phase 10: Advanced Anti-Cheating Controls', () => {
     assert.match(body.message, /violationType must be one of/i);
   });
 
-  it('10. Admin Results list returns violationCount and violation details for placement admins', async () => {
+  it('10. Records a CLIPBOARD_COPY violation when student attempts copy/cut outside code editor (HTTP 201)', async () => {
+    await new Promise((r) => setTimeout(r, 1100));
+
+    const res = await fetch(`${baseUrl}/student/attempts/${testAttemptId}/violations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${studentToken}`,
+      },
+      body: JSON.stringify({
+        violationType: 'CLIPBOARD_COPY',
+        details: 'Unauthorized copy attempt on question text',
+      }),
+    });
+
+    assert.equal(res.status, 201);
+    const body = await res.json();
+    assert.equal(body.success, true);
+    assert.equal(body.data.violation.violationType, 'CLIPBOARD_COPY');
+    assert.equal(body.data.violationCount, 5);
+  });
+
+  it('11. Admin Results list returns violationCount and violation details for placement admins', async () => {
     // Submit the attempt
     await fetch(`${baseUrl}/student/attempts/${testAttemptId}/submit`, {
       method: 'POST',
@@ -335,7 +358,16 @@ describe('Phase 10: Advanced Anti-Cheating Controls', () => {
 
     const candidateResult = body.data.items.find((item: any) => item.attemptId === testAttemptId);
     assert.ok(candidateResult, 'Candidate result should exist in results list');
-    assert.equal(candidateResult.violationCount, 4);
-    assert.equal(candidateResult.violations.length, 4);
+    assert.equal(candidateResult.violationCount, 5);
+    assert.equal(candidateResult.violations.length, 5);
+  });
+
+  after(async () => {
+    if (server) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+    await prisma.$disconnect();
   });
 });
+
+

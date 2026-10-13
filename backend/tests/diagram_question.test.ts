@@ -1,14 +1,11 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { QuestionSegmenter } from '../src/services/question-segmenter.util.js';
 
 let server: http.Server;
 let baseUrl: string;
-let superAdminToken: string;
 let placementAdminToken: string;
 let studentToken: string;
 let uploadedImageUrl: string;
@@ -43,14 +40,6 @@ before(async () => {
     });
   });
 
-  // 1. Super Admin Token
-  const adminRes = await fetch(`${baseUrl}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'superadmin@placement.edu', password: 'SuperAdmin@123' }),
-  });
-  const adminJson = await adminRes.json();
-  superAdminToken = adminJson.data.accessToken;
 
   // 2. Placement Admin Token
   const placementRes = await fetch(`${baseUrl}/auth/login`, {

@@ -309,162 +309,12 @@ export const AdminDashboardPage: React.FC = () => {
         </Alert>
       )}
 
-      {/* Key Performance Indicators */}
-      <Box sx={{ mb: 3.5 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Box>
-            <Typography variant="subtitle1" fontWeight={700} color="#14264B">
-              Real-Time Placement Performance Metrics
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Authoritative indicators aggregated across all test attempts and departmental cohorts
-            </Typography>
-          </Box>
-          <Button
-            size="small"
-            endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
-            onClick={() => navigate('/admin/analytics')}
-            sx={{ fontWeight: 600, fontSize: '0.8rem' }}
-          >
-            Analytics Hub
-          </Button>
-        </Box>
-
-        {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 5, bgcolor: '#ffffff', borderRadius: '8px', border: '1px solid #DCE6F5' }}>
-            <CircularProgress size={28} />
-          </Box>
-        ) : (
-          <Grid container spacing={2}>
-            {/* Card 1: Registered Candidates */}
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  p: 2.25,
-                  bgcolor: '#ffffff',
-                  border: '1px solid #DCE6F5',
-                  borderRadius: '8px',
-                }}
-              >
-                <Typography variant="caption" sx={{ color: '#7182A0', fontWeight: 600, letterSpacing: '0.04em' }}>
-                  REGISTERED CANDIDATES
-                </Typography>
-                <Typography variant="h5" fontWeight={700} sx={{ color: '#14264B', my: 0.5 }}>
-                  {overview?.totalStudents || 0}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <Chip
-                    label={`${overview?.activeStudents || 0} Active`}
-                    size="small"
-                    sx={{ height: 20, fontSize: '0.7rem', bgcolor: '#E7EEFA', color: '#405678', fontWeight: 600, borderRadius: '4px' }}
-                  />
-                  <Typography variant="caption" color="text.secondary">
-                    across all departments
-                  </Typography>
-                </Box>
-              </Card>
-            </Grid>
-
-            {/* Card 2: Attendance Rate (Cleaned of duplicate text) */}
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  p: 2.25,
-                  bgcolor: '#ffffff',
-                  border: '1px solid #DCE6F5',
-                  borderRadius: '8px',
-                }}
-              >
-                <Typography variant="caption" sx={{ color: '#7182A0', fontWeight: 600, letterSpacing: '0.04em' }}>
-                  ASSESSMENT ATTENDANCE
-                </Typography>
-                <Typography variant="h5" fontWeight={700} sx={{ color: '#1765B5', my: 0.5 }}>
-                  {overview?.activeStudents || 0} <Typography component="span" variant="body2" sx={{ color: '#7182A0' }}>/ {overview?.totalStudents || 0}</Typography>
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Appeared for at least 1 placement evaluation
-                </Typography>
-              </Card>
-            </Grid>
-
-            {/* Card 3: Assessment Outcomes */}
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  p: 2.25,
-                  bgcolor: '#ffffff',
-                  border: '1px solid #DCE6F5',
-                  borderRadius: '8px',
-                }}
-              >
-                <Typography variant="caption" sx={{ color: '#7182A0', fontWeight: 600, letterSpacing: '0.04em' }}>
-                  QUALIFICATION OUTCOMES
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', my: 0.5 }}>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: '#047857', fontWeight: 700 }}>
-                      Passed:
-                    </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ color: '#047857' }}>
-                      {overview?.passedCount ?? 0}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ height: 32, width: '1px', bgcolor: '#DCE6F5' }} />
-                  <Box>
-                    <Typography variant="caption" sx={{ color: '#b91c1c', fontWeight: 700 }}>
-                      Needs Prep:
-                    </Typography>
-                    <Typography variant="h6" fontWeight={700} sx={{ color: '#b91c1c' }}>
-                      {overview?.failedCount ?? 0}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Typography variant="caption" color="text.secondary">
-                  {((overview?.passedCount ?? 0) + (overview?.failedCount ?? 0))} evaluated submissions
-                </Typography>
-              </Card>
-            </Grid>
-
-            {/* Card 4: Pass Percentage */}
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  p: 2.25,
-                  bgcolor: '#ffffff',
-                  border: '1px solid #DCE6F5',
-                  borderRadius: '8px',
-                }}
-              >
-                <Typography variant="caption" sx={{ color: '#7182A0', fontWeight: 600, letterSpacing: '0.04em' }}>
-                  OVERALL PASS RATE
-                </Typography>
-                <Typography variant="h5" fontWeight={700} sx={{ color: '#b45309', my: 0.5 }}>
-                  {overview?.passPercentage || 0}%
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(100, overview?.passPercentage || 0)}
-                  sx={{ height: 5, borderRadius: '3px', my: 0.75, bgcolor: '#E7EEFA', '& .MuiLinearProgress-bar': { bgcolor: '#b45309' } }}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  Candidates meeting cut-off criteria
-                </Typography>
-              </Card>
-            </Grid>
-          </Grid>
-        )}
-      </Box>
-
       {/* Placement Pipeline Funnel */}
       {funnelData && (
         <Card
           elevation={0}
           sx={{
-            mb: 3.5,
+            mb: 3,
             p: 2.5,
             bgcolor: '#ffffff',
             border: '1px solid #DCE6F5',
@@ -559,7 +409,11 @@ export const AdminDashboardPage: React.FC = () => {
           </Button>
         </Box>
 
-        {overview?.recentResults && overview.recentResults.length > 0 ? (
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : overview?.recentResults && overview.recentResults.length > 0 ? (
           <TableContainer>
             <Table size="small">
               <TableHead sx={{ bgcolor: '#EDF2FF' }}>

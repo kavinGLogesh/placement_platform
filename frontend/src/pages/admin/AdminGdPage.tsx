@@ -91,9 +91,6 @@ export const AdminGdPage: React.FC = () => {
   const [newScheduledDate, setNewScheduledDate] = useState('');
   const [newDuration, setNewDuration] = useState(30);
   const [newEvaluatorId, setNewEvaluatorId] = useState('');
-  const [selectedDeptId, setSelectedDeptId] = useState('');
-  const [selectedCourseId, setSelectedCourseId] = useState('');
-  const [selectedBatchYear, setSelectedBatchYear] = useState('');
   const [criteria, setCriteria] = useState<CriterionConfig[]>([...DEFAULT_GD_CRITERIA]);
   const [createSelectedStudentIds, setCreateSelectedStudentIds] = useState<string[]>([]);
 
@@ -236,9 +233,6 @@ export const AdminGdPage: React.FC = () => {
     setNewScheduledDate(dateStr);
     setNewDuration(30);
     setNewEvaluatorId('');
-    setSelectedDeptId('');
-    setSelectedCourseId('');
-    setSelectedBatchYear('');
     setCriteria(DEFAULT_GD_CRITERIA.map((c) => ({ ...c })));
     setCreateSelectedStudentIds([]);
     setCreateOpen(true);
@@ -278,9 +272,6 @@ export const AdminGdPage: React.FC = () => {
         scheduledDate: new Date(newScheduledDate).toISOString(),
         durationMinutes: Number(newDuration),
         evaluatorId: newEvaluatorId.trim() || undefined,
-        departmentId: selectedDeptId || undefined,
-        courseId: selectedCourseId || undefined,
-        batchYear: selectedBatchYear ? Number(selectedBatchYear) : undefined,
         studentIds: createSelectedStudentIds.length > 0 ? createSelectedStudentIds : undefined,
         criteria,
       });
@@ -1547,13 +1538,11 @@ export const AdminGdPage: React.FC = () => {
           </DialogTitle>
           <DialogContent dividers>
             <StudentSelector
-              initialDepartmentId={selectedRound.departmentId || undefined}
-              initialCourseId={selectedRound.courseId || undefined}
               selectedStudentIds={selectedStudentIds}
               onSelectionChange={setSelectedStudentIds}
               alreadyAssignedStudentIds={(selectedRound.participants || []).map((p) => p.studentId)}
               title={`Target Students for "${selectedRound.title}"`}
-              helperText="Filter by Department → Course → Class → Section. Multi-select across classes/sections to assign students directly to this GD Round."
+              helperText="Filter by Department and Academic Year. Multi-select students to assign them directly to this GD Round."
             />
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>
@@ -1899,67 +1888,16 @@ export const AdminGdPage: React.FC = () => {
               </Grid>
             </Grid>
 
-            <Divider>
-              <Chip label="Target Audience / Batch (Optional Default)" size="small" />
-            </Divider>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  select
-                  label="Department"
-                  fullWidth
-                  value={selectedDeptId}
-                  onChange={(e) => setSelectedDeptId(e.target.value)}
-                >
-                  <MenuItem value="">All Departments</MenuItem>
-                  {departments.map((d) => (
-                    <MenuItem key={d.id} value={d.id}>
-                      {d.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  select
-                  label="Course"
-                  fullWidth
-                  value={selectedCourseId}
-                  onChange={(e) => setSelectedCourseId(e.target.value)}
-                >
-                  <MenuItem value="">All Courses</MenuItem>
-                  {courses.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>
-                      {c.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Batch Year"
-                  type="number"
-                  fullWidth
-                  value={selectedBatchYear}
-                  onChange={(e) => setSelectedBatchYear(e.target.value)}
-                  placeholder="e.g. 2026"
-                />
-              </Grid>
-            </Grid>
-
             {/* Student Selection for GD Round */}
             <Divider>
-              <Chip label="Student Selection (Optional Direct Assignment)" size="small" />
+              <Chip label="Student Selection (Direct Participant Assignment)" size="small" />
             </Divider>
 
             <StudentSelector
-              initialDepartmentId={selectedDeptId || undefined}
-              initialCourseId={selectedCourseId || undefined}
               selectedStudentIds={createSelectedStudentIds}
               onSelectionChange={setCreateSelectedStudentIds}
               title="Select Students for GD Round"
-              helperText="Filter by Department → Course → Class → Section. Multi-select across different sections/classes to assign students directly upon round creation."
+              helperText="Filter by Department and Academic Year. Multi-select students to assign them directly upon round creation."
             />
 
             <Divider>

@@ -76,6 +76,16 @@ export class AssessmentController {
     }
   };
 
+  validateQuestionAvailability = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const validation = await this.service.validateQuestionAvailability(id);
+      sendSuccess(res, 'Question availability and rotation eligibility validated successfully', validation);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   generatePapers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id);

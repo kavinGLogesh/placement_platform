@@ -16,9 +16,11 @@
 The **College Placement Assessment Platform** is designed to support institutions, students, and recruiters in conducting skill assessments, coding challenges, student performance tracking, and placement workflow automation.
 
 ### Current Implementation Scope: Phase 1
+
 Phase 1 focuses exclusively on establishing a **production-grade foundation and architecture**:
-- Robust, decoupled multi-tier architecture (Frontend, Backend REST API, MySQL Database, Docker 
-Infrastructure)
+
+- Robust, decoupled multi-tier architecture (Frontend, Backend REST API, MySQL Database, Docker
+  Infrastructure)
 - Strictly typed interfaces across all boundaries
 - Server state caching and declarative loading/error management via TanStack React Query
 - Secure Express setup with Helmet, CORS, centralized error handling, and structured request logging
@@ -30,12 +32,12 @@ Infrastructure)
 
 ## 2. Technology Stack
 
-| Layer | Technology | Key Libraries / Frameworks |
-| :--- | :--- | :--- |
-| **Frontend** | React 18, TypeScript, Vite | Material UI v6, Emotion, React Router v7, TanStack React Query v5, Axios |
-| **Backend** | Node.js, Express.js, TypeScript | Helmet, CORS, Dotenv, tsx, ESLint, Prettier |
-| **Database** | MySQL 8.x | Prisma ORM v5.x |
-| **Infrastructure** | Docker, Docker Compose | Multi-stage Alpine builds, Bridge network, Named volumes |
+| Layer              | Technology                      | Key Libraries / Frameworks                                               |
+| :----------------- | :------------------------------ | :----------------------------------------------------------------------- |
+| **Frontend**       | React 18, TypeScript, Vite      | Material UI v6, Emotion, React Router v7, TanStack React Query v5, Axios |
+| **Backend**        | Node.js, Express.js, TypeScript | Helmet, CORS, Dotenv, tsx, ESLint, Prettier                              |
+| **Database**       | MySQL 8.x                       | Prisma ORM v5.x                                                          |
+| **Infrastructure** | Docker, Docker Compose          | Multi-stage Alpine builds, Bridge network, Named volumes                 |
 
 ---
 
@@ -111,6 +113,7 @@ college-placement-platform/
 ## 4. Environment Configuration
 
 1. Copy `.env.example` in root (or directly configure in `backend/.env` and `frontend/.env`):
+
    ```bash
    cp .env.example .env
    ```
@@ -124,21 +127,23 @@ college-placement-platform/
    | `DB_HOST` | MySQL Server Host | `localhost` |
    | `DB_PORT` | MySQL Server Port | `3306` |
    | `DB_USER` | MySQL Username | `root` |
-   | `DB_PASSWORD` | MySQL User Password | *Set in .env* |
+   | `DB_PASSWORD` | MySQL User Password | _Set in .env_ |
    | `DB_NAME` | MySQL Database Name | `college_placement_db` |
    | `DATABASE_URL` | Prisma Connection String (`mysql://USER:PWD@HOST:PORT/DB`) | Configured via env |
-   | `VITE_API_BASE_URL` | Base REST API URL for Frontend | `http://localhost:5000/api` |
+   | `VITE_API_BASE_URL` | Base REST API URL for Frontend | `/api` |
 
 ---
 
 ## 5. Local Installation & Development
 
 ### Prerequisites
+
 - Node.js (v20.x or higher)
 - npm (v9.x or higher)
 - MySQL 8.x (running locally or via Docker)
 
 ### Step 1: Install Backend Dependencies & Generate Prisma Client
+
 ```bash
 cd backend
 npm install
@@ -146,6 +151,7 @@ npm run prisma:generate
 ```
 
 ### Step 2: Install Frontend Dependencies
+
 ```ba
 cd frontend
 npm install
@@ -156,19 +162,23 @@ npm install
 ## 6. Running the Services Locally
 
 ### Start Backend API Server
+
 ```bash
 cd backend
 npm run dev
 ```
-* Backend runs at: `http://localhost:5000`
-* Health Check Endpoint: `http://localhost:5000/api/health`
+
+- Backend runs at: `http://localhost:5000`
+- Health Check Endpoint: `http://localhost:5000/api/health`
 
 ### Start Frontend Application
+
 ```bash
 cd frontendsh
 npm run dev
 ```
-* Frontend runs at: `http://localhost:5173`
+
+- Frontend runs at: `http://localhost:5173`
 
 ---
 
@@ -194,15 +204,15 @@ docker compose down
 
 Run the following commands to validate Phase 1 code quality and functionality:
 
-| Scope | Check | Command |
-| :--- | :--- | :--- |
-| **Backend** | TypeScript Type Check | `cd backend && npm run typecheck` |
-| **Backend** | ESLint Code Analysis | `cd backend && npm run lint` |
-| **Backend** | Production TypeScript Build | `cd backend && npm run build` |
-| **Backend** | Database Connectivity Check | `cd backend && npm run db:check` |
-| **Frontend** | TypeScript Type Check | `cd frontend && npm run typecheck` |
-| **Frontend** | ESLint Code Analysis | `cd frontend && npm run lint` |
-| **Frontend** | Production Bundle Build | `cd frontend && npm run build` |
+| Scope           | Check                        | Command                                 |
+| :-------------- | :--------------------------- | :-------------------------------------- |
+| **Backend**     | TypeScript Type Check        | `cd backend && npm run typecheck`       |
+| **Backend**     | ESLint Code Analysis         | `cd backend && npm run lint`            |
+| **Backend**     | Production TypeScript Build  | `cd backend && npm run build`           |
+| **Backend**     | Database Connectivity Check  | `cd backend && npm run db:check`        |
+| **Frontend**    | TypeScript Type Check        | `cd frontend && npm run typecheck`      |
+| **Frontend**    | ESLint Code Analysis         | `cd frontend && npm run lint`           |
+| **Frontend**    | Production Bundle Build      | `cd frontend && npm run build`          |
 | **Integration** | Health Endpoint Verification | `curl http://localhost:5000/api/health` |
 
 ---
@@ -210,9 +220,11 @@ Run the following commands to validate Phase 1 code quality and functionality:
 ## 9. API Specification (Phase 1)
 
 ### `GET /api/health`
+
 Checks API operational status.
 
 **Response (`200 OK`)**:
+
 ```json
 {
   "success": true,
@@ -221,9 +233,11 @@ Checks API operational status.
 ```
 
 ### `GET /api/health/db` (Optional Diagnostics)
+
 Checks MySQL connection via Prisma.
 
 **Response (`200 OK`)**:
+
 ```json
 {
   "success": true,

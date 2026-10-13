@@ -252,11 +252,11 @@ export class QuestionRepository {
       createdBy: { select: { id: true, email: true } },
       _count: { select: { usages: true } },
     };
-    if (Boolean((prisma as any).company)) {
+    if ((prisma as any).company) {
       inc.company = { select: { id: true, name: true, code: true } };
       inc.companyQuestions = true;
     }
-    if (Boolean((prisma as any).questionAiClassification)) {
+    if ((prisma as any).questionAiClassification) {
       inc.aiClassification = true;
     }
     return inc;
@@ -266,7 +266,7 @@ export class QuestionRepository {
   // 1. CREATE QUESTION WITH OPTIONS
   // ===========================================================================
   async createQuestion(payload: CreateQuestionDto, createdById?: string): Promise<QuestionDto> {
-    const id = `q-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const id = payload.questionId || payload.id || `q-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date();
 
     const optionsData: QuestionOptionDto[] = (payload.options || []).map((opt, idx) => ({
@@ -293,6 +293,7 @@ export class QuestionRepository {
       await this.memStore.initialize();
       const memoryRecord: QuestionDto = {
         id,
+        questionId: id,
         companyId: payload.companyId || null,
         exactHash,
         category: payload.category,
@@ -356,6 +357,7 @@ export class QuestionRepository {
 
     const created = await prisma.question.create({
       data: {
+        id,
         companyId: payload.companyId || undefined,
         exactHash,
         category: payload.category,
@@ -391,7 +393,10 @@ export class QuestionRepository {
       include: this.questionInclude as any,
     });
 
-    return created as unknown as QuestionDto;
+    return {
+      ...(created as any),
+      questionId: created.id,
+    } as QuestionDto;
   }
 
   // ===========================================================================
@@ -532,7 +537,10 @@ export class QuestionRepository {
     const totalPages = Math.ceil(totalCount / limit) || 1;
 
     return {
-      data: items as unknown as QuestionDto[],
+      data: items.map((item: any) => ({
+        ...item,
+        questionId: item.id,
+      })) as QuestionDto[],
       pagination: {
         page,
         limit,
@@ -558,7 +566,11 @@ export class QuestionRepository {
       include: this.questionInclude as any,
     });
 
-    return (question as unknown as QuestionDto) || null;
+    if (!question) return null;
+    return {
+      ...(question as any),
+      questionId: question.id,
+    } as QuestionDto;
   }
 
   async findQuestionsByTopic(category: QuestionCategory, topic: string): Promise<QuestionDto[]> {
@@ -573,7 +585,7 @@ export class QuestionRepository {
     const topicInclude: any = {
       options: { orderBy: { optionOrder: 'asc' } },
     };
-    if (Boolean((prisma as any).company)) {
+    if ((prisma as any).company) {
       topicInclude.companyQuestions = true;
     }
 
@@ -587,7 +599,10 @@ export class QuestionRepository {
       take: 100,
     });
 
-    return questions as unknown as QuestionDto[];
+    return questions.map((q: any) => ({
+      ...q,
+      questionId: q.id,
+    })) as QuestionDto[];
   }
 
 
@@ -597,14 +612,20 @@ export class QuestionRepository {
   async findQuestionById(id: string): Promise<QuestionDto | null> {
     if (process.env.NODE_ENV === 'test') {
       await this.memStore.initialize();
-      return this.memStore.questions.get(id) || null;
+      const match = this.memStore.questions.get(id);
+      if (match && !match.questionId) match.questionId = match.id;
+      return match || null;
     }
 
     const item = await prisma.question.findUnique({
       where: { id },
       include: this.questionInclude as any,
     });
-    return (item as unknown as QuestionDto) || null;
+    if (!item) return null;
+    return {
+      ...(item as any),
+      questionId: item.id,
+    } as QuestionDto;
   }
 
   // ===========================================================================

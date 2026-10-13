@@ -15,6 +15,7 @@ import {
   Alert,
   Chip,
   FormControl,
+  FormHelperText,
   InputLabel,
   Select,
   Grid,
@@ -100,6 +101,8 @@ export const StudentsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [showStudentPassword, setShowStudentPassword] = useState(false);
+  const [departmentError, setDepartmentError] = useState<string | null>(null);
+  const [studentDialogError, setStudentDialogError] = useState<string | null>(null);
   const [studentForm, setStudentForm] = useState<CreateStudentInput>({
     registerNumber: '',
     name: '',
@@ -204,6 +207,8 @@ export const StudentsPage: React.FC = () => {
 
   const handleOpenStudentDialog = (st?: Student) => {
     setShowStudentPassword(false);
+    setDepartmentError(null);
+    setStudentDialogError(null);
     if (st) {
       setEditingStudent(st);
       setStudentForm({
@@ -222,11 +227,6 @@ export const StudentsPage: React.FC = () => {
         status: st.status,
       });
     } else {
-      const defaultDept = departments[0];
-      const defaultCourse = courses.find((c) => c.departmentId === defaultDept?.id);
-      const defaultClass = classes.find((cl) => cl.courseId === defaultCourse?.id);
-      const defaultSection = sections.find((s) => s.classId === defaultClass?.id);
-
       setEditingStudent(null);
       setStudentForm({
         registerNumber: '',
@@ -235,11 +235,11 @@ export const StudentsPage: React.FC = () => {
         phone: '',
         dob: '',
         password: '',
-        departmentId: defaultDept?.id || '',
-        courseId: defaultCourse?.id || '',
-        classId: defaultClass?.id || '',
-        sectionId: defaultSection?.id || '',
-        year: defaultClass?.currentYear || 1,
+        departmentId: '',
+        courseId: '',
+        classId: '',
+        sectionId: '',
+        year: 1,
         cgpa: 8.0,
         status: 'ACTIVE',
       });
@@ -249,7 +249,15 @@ export const StudentsPage: React.FC = () => {
 
   const handleSaveStudent = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!studentForm.departmentId) {
+      setDepartmentError('Please select a department');
+      return;
+    }
+
     setSaving(true);
+    setDepartmentError(null);
+    setStudentDialogError(null);
     setError(null);
     try {
       if (editingStudent) {
@@ -292,6 +300,7 @@ export const StudentsPage: React.FC = () => {
       fetchStudents();
     } catch (err: unknown) {
       const msg = err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : 'Failed to save student';
+      setStudentDialogError(msg);
       setError(msg);
     } finally {
       setSaving(false);
@@ -635,7 +644,7 @@ export const StudentsPage: React.FC = () => {
         </Box>
       </Box>
 
-      {/* 5-Tab Navigation System */}
+      {/* 3-Tab Navigation System */}
       <Paper
         elevation={0}
         sx={{
@@ -649,14 +658,6 @@ export const StudentsPage: React.FC = () => {
         <Tabs
           value={activeTab}
           onChange={(_e, newTab) => {
-            if (newTab === 1) {
-              handleOpenStudentDialog();
-              return;
-            }
-            if (newTab === 2) {
-              setAiImportDialogOpen(true);
-              return;
-            }
             setActiveTab(newTab);
           }}
           sx={{
@@ -685,16 +686,6 @@ export const StudentsPage: React.FC = () => {
             label={`All Students (${totalCount})`}
           />
           <Tab
-            icon={<AddIcon sx={{ fontSize: 18 }} />}
-            iconPosition="start"
-            label="Add Student"
-          />
-          <Tab
-            icon={<AutoAwesomeIcon sx={{ fontSize: 18, color: '#0284c7' }} />}
-            iconPosition="start"
-            label="AI Import Students"
-          />
-          <Tab
             icon={<HistoryIcon sx={{ fontSize: 18 }} />}
             iconPosition="start"
             label="Import History"
@@ -713,15 +704,15 @@ export const StudentsPage: React.FC = () => {
         </Alert>
       )}
 
-      {/* TAB 3: IMPORT HISTORY */}
-      {activeTab === 3 && (
+      {/* TAB 1: IMPORT HISTORY */}
+      {activeTab === 1 && (
         <Box sx={{ mb: 4 }}>
           <StudentImportHistoryTab />
         </Box>
       )}
 
-      {/* TAB 4: STUDENT ACCOUNTS */}
-      {activeTab === 4 && (
+      {/* TAB 2: STUDENT ACCOUNTS */}
+      {activeTab === 2 && (
         <Box sx={{ mb: 4 }}>
           <StudentAccountsTab students={students} onRefresh={fetchStudents} />
         </Box>
@@ -767,7 +758,7 @@ export const StudentsPage: React.FC = () => {
                 <MenuItem value="">All Departments</MenuItem>
                 {departments.map((d) => (
                   <MenuItem key={d.id} value={d.id}>
-                    {d.code} - {d.name}
+                    {d.name}
                   </MenuItem>
                 ))}
               </Select>
@@ -909,6 +900,11 @@ export const StudentsPage: React.FC = () => {
             {editingStudent ? 'Edit Student Details' : 'Register New Student'}
           </DialogTitle>
           <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
+            {studentDialogError && (
+              <Alert severity="error" onClose={() => setStudentDialogError(null)}>
+                {studentDialogError}
+              </Alert>
+            )}
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <TextField
@@ -943,6 +939,49 @@ export const StudentsPage: React.FC = () => {
                   onChange={(e) => setStudentForm({ ...studentForm, collegeEmail: e.target.value.toLowerCase() })}
                   placeholder="logesh@college.edu"
                 />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth required error={!!departmentError}>
+                  <InputLabel id="student-form-dept-label">Department *</InputLabel>
+                  <Select
+                    labelId="student-form-dept-label"
+                    id="student-form-dept-select"
+                    label="Department *"
+                    value={studentForm.departmentId}
+                    onChange={(e) => {
+                      const selectedDeptId = e.target.value as string;
+                      const matchingCourse = courses.find((c) => c.departmentId === selectedDeptId);
+                      const matchingClass = classes.find((cl) => cl.courseId === matchingCourse?.id);
+                      const matchingSection = sections.find((s) => s.classId === matchingClass?.id);
+                      setStudentForm({
+                        ...studentForm,
+                        departmentId: selectedDeptId,
+                        courseId: matchingCourse?.id || '',
+                        classId: matchingClass?.id || '',
+                        sectionId: matchingSection?.id || '',
+                        year: matchingClass?.currentYear || studentForm.year || 1,
+                      });
+                      if (selectedDeptId) {
+                        setDepartmentError(null);
+                      }
+                      if (studentDialogError) {
+                        setStudentDialogError(null);
+                      }
+                    }}
+                  >
+                    <MenuItem value="" disabled>
+                      <em>Select Department</em>
+                    </MenuItem>
+                    {departments.map((d) => (
+                      <MenuItem key={d.id} value={d.id}>
+                        {d.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {departmentError && (
+                    <FormHelperText error>{departmentError}</FormHelperText>
+                  )}
+                </FormControl>
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField

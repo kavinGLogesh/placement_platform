@@ -395,11 +395,28 @@ export class ManagementRepository {
       if (collegeId) {
         list = list.filter((d) => d.collegeId === collegeId);
       }
-      return list;
+      const uniqueMap = new Map<string, DepartmentDto>();
+      for (const d of list) {
+        const key = d.name.trim().toLowerCase();
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, d);
+        }
+      }
+      return Array.from(uniqueMap.values());
+    }
+
+    let targetCollegeId = collegeId;
+    if (!targetCollegeId) {
+      const primaryCollege = await prisma.college.findFirst({
+        orderBy: { createdAt: 'desc' },
+      });
+      if (primaryCollege) {
+        targetCollegeId = primaryCollege.id;
+      }
     }
 
     const list = await prisma.department.findMany({
-      where: collegeId ? { collegeId } : undefined,
+      where: targetCollegeId ? { collegeId: targetCollegeId } : undefined,
       include: {
         college: { select: { id: true, code: true, name: true } },
         courses: { select: { id: true, code: true, name: true } },
@@ -407,7 +424,19 @@ export class ManagementRepository {
       },
       orderBy: { name: 'asc' },
     });
-    return list as DepartmentDto[];
+
+    // Guarantee strict uniqueness by canonical department name
+    const seenNames = new Set<string>();
+    const uniqueList: DepartmentDto[] = [];
+    for (const d of list) {
+      const normalized = d.name.trim().toLowerCase();
+      if (!seenNames.has(normalized)) {
+        seenNames.add(normalized);
+        uniqueList.push(d as DepartmentDto);
+      }
+    }
+
+    return uniqueList;
   }
 
   async findDepartmentById(id: string): Promise<DepartmentDto | null> {

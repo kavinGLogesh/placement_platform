@@ -20,6 +20,22 @@ export const validateCollegeInput = (req: Request, _res: Response, next: NextFun
   next();
 };
 
+export const validateCollegeUpdateInput = (req: Request, _res: Response, next: NextFunction): void => {
+  const { code, name, contactEmail } = req.body || {};
+
+  if (code !== undefined && (typeof code !== 'string' || !code.trim())) {
+    return next(new AppError('College code cannot be empty', 400));
+  }
+  if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
+    return next(new AppError('College name cannot be empty', 400));
+  }
+  if (contactEmail && !EMAIL_REGEX.test(contactEmail.trim())) {
+    return next(new AppError('Invalid contact email format', 400));
+  }
+
+  next();
+};
+
 export const validateDepartmentInput = (req: Request, _res: Response, next: NextFunction): void => {
   const { collegeId, code, name } = req.body || {};
 
@@ -109,8 +125,8 @@ export const validateStudentInput = (req: Request, _res: Response, next: NextFun
   if (!collegeEmail || typeof collegeEmail !== 'string' || !EMAIL_REGEX.test(collegeEmail.trim())) {
     return next(new AppError('Valid College Email is required', 400));
   }
-  if (departmentId !== undefined && (typeof departmentId !== 'string' || !departmentId.trim())) {
-    return next(new AppError('Invalid Department ID', 400));
+  if (!departmentId || typeof departmentId !== 'string' || !departmentId.trim()) {
+    return next(new AppError('Department ID is required', 400));
   }
   if (courseId !== undefined && (typeof courseId !== 'string' || !courseId.trim())) {
     return next(new AppError('Invalid Course ID', 400));

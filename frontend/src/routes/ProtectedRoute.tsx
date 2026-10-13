@@ -26,16 +26,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Enforce first-time password change for students with temporary credentials
-  if (user.role === 'STUDENT' && user.mustChangePassword) {
-    if (location.pathname !== '/student/change-password') {
-      return <Navigate to="/student/change-password" replace />;
-    }
-  } else if (user.role === 'STUDENT' && !user.mustChangePassword) {
-    if (location.pathname === '/student/change-password') {
-      return <Navigate to="/student/dashboard" replace />;
-    }
+  // Redirect legacy password change route to Student Profile & Settings
+  if (user.role === 'STUDENT' && location.pathname === '/student/change-password') {
+    return <Navigate to="/student/profile" replace />;
   }
+
 
   if (allowedRoles && allowedRoles.length > 0) {
     const hasRole = allowedRoles.includes(user.role);

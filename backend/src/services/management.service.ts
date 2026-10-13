@@ -62,10 +62,15 @@ export class ManagementService {
   async updateCollege(id: string, dto: UpdateCollegeDto): Promise<CollegeDto> {
     await this.getCollegeById(id);
     if (dto.code) {
-      const existing = await this.repo.findCollegeByCode(dto.code);
-      if (existing && existing.id !== id) {
-        throw new AppError(`College with code "${dto.code.toUpperCase()}" already exists`, 409);
+      const trimmedCode = dto.code.trim().toUpperCase();
+      if (!trimmedCode) {
+        throw new AppError('College code cannot be empty', 400);
       }
+      const existing = await this.repo.findCollegeByCode(trimmedCode);
+      if (existing && existing.id !== id) {
+        throw new AppError(`College with code "${trimmedCode}" already exists`, 409);
+      }
+      dto.code = trimmedCode;
     }
     const updated = await this.repo.updateCollege(id, dto);
     if (!updated) throw new AppError('Failed to update college', 500);

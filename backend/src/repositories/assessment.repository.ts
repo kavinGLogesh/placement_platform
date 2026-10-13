@@ -99,12 +99,84 @@ export class AssessmentRepository {
     this.generationLocks.delete(assessmentId);
   }
 
+  private scopeGenerationLocks = new Set<string>();
+
+  acquireScopeGenerationLock(scopeKey: string): boolean {
+    if (this.scopeGenerationLocks.has(scopeKey)) {
+      return false;
+    }
+    this.scopeGenerationLocks.add(scopeKey);
+    return true;
+  }
+
+  releaseScopeGenerationLock(scopeKey: string): void {
+    this.scopeGenerationLocks.delete(scopeKey);
+  }
+
+  /**
+   * Returns IDs of the N most recent successfully generated assessments in the rotation scope
+   */
+  async getRecentGeneratedAssessmentsInScope(
+    companyId?: string | null,
+    excludeAssessmentId?: string,
+    limit: number = 5
+  ): Promise<string[]> {
+    if (process.env.NODE_ENV === 'test') {
+      await this.memStore.initialize();
+      const all = Array.from(this.memStore.assessments.values());
+      const filtered = all
+        .filter((a) => {
+          if (excludeAssessmentId && a.id === excludeAssessmentId) return false;
+          // Matching rotation scope: company assessment vs general assessment
+          if (companyId) {
+            if (a.companyId !== companyId) return false;
+          } else {
+            if (a.companyId) return false;
+          }
+          // Must have generated papers
+          const papers = this.memStore.papers.get(a.id);
+          return papers && papers.length > 0;
+        })
+        .sort((a, b) => {
+          const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+          const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+          if (timeB !== timeA) return timeB - timeA;
+          return (b.id || '').localeCompare(a.id || '');
+        });
+
+      return filtered.slice(0, limit).map((a) => a.id);
+    }
+
+    const whereClause: Record<string, unknown> = {
+      papers: { some: {} },
+    };
+
+    if (excludeAssessmentId) {
+      whereClause.id = { not: excludeAssessmentId };
+    }
+
+    if (companyId) {
+      whereClause.companyId = companyId;
+    } else {
+      whereClause.companyId = null;
+    }
+
+    const recent = await prisma.assessment.findMany({
+      where: whereClause,
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+      select: { id: true },
+    });
+
+    return recent.map((r) => r.id);
+  }
+
   // ===========================================================================
   // 1. CREATE ASSESSMENT WITH SECTIONS
   // ===========================================================================
   async createAssessment(payload: CreateAssessmentDto, createdById?: string): Promise<AssessmentDto> {
-    const id = `asmt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const now = new Date();
+    const id = (payload as any).id || (payload as any).assessmentId || `asmt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const now = (payload as any).createdAt ? new Date((payload as any).createdAt) : new Date();
 
     const totalQuestions = (payload.sections || []).reduce((acc, s) => acc + s.questionsCount, 0);
     const totalMarks = (payload.sections || []).reduce(
@@ -859,6 +931,8 @@ export class AssessmentRepository {
           difficulty: q.question.difficulty,
           questionType: q.question.questionType,
           imageUrl: (q.question as any).imageUrl || null,
+          explanation: (q.question as any).explanation || null,
+          correctAnswer: (q.question as any).correctAnswer || null,
           randomizedOptions: randomizedOptions || q.question.options.map((opt) => ({
             id: opt.id,
             optionText: opt.optionText,
@@ -884,6 +958,7 @@ export class AssessmentRepository {
       const existing = this.memStore.assessments.get(assessmentId);
       if (existing) {
         existing.papersCount = papers.length;
+        existing.updatedAt = new Date();
         this.memStore.assessments.set(assessmentId, existing);
       }
 

@@ -22,8 +22,19 @@ export class AnalyticsService {
     return this.analyticsRepo.getPaginatedResults(query);
   }
 
-  async getAdminOverview(): Promise<AdminAnalyticsSummaryDto> {
-    return this.analyticsRepo.getAdminOverviewMetrics();
+  async getAdminOverview(filters?: ResultsFilterQuery): Promise<AdminAnalyticsSummaryDto> {
+    return this.analyticsRepo.getAdminOverviewMetrics(filters);
+  }
+
+  async getAssessmentWiseSummary(assessmentId: string): Promise<any> {
+    if (!assessmentId) {
+      throw new AppError('Assessment ID is required', 400);
+    }
+    const summary = await this.analyticsRepo.getAssessmentWiseSummary(assessmentId);
+    if (!summary) {
+      throw new AppError('Assessment record not found', 404);
+    }
+    return summary;
   }
 
   async getDepartmentAnalytics(filters?: {

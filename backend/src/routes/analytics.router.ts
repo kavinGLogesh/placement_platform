@@ -16,6 +16,8 @@ analyticsRouter.use(authenticateToken);
 analyticsRouter.use(requireRole(Role.SUPER_ADMIN, Role.PLACEMENT_ADMIN));
 
 analyticsRouter.get('/', analyticsController.getAdminOverview);
+analyticsRouter.get('/assessment-summary', analyticsController.getAssessmentSummary);
+analyticsRouter.get('/assessments/:id/summary', analyticsController.getAssessmentSummary);
 analyticsRouter.get('/departments', analyticsController.getDepartmentAnalytics);
 analyticsRouter.get('/topics', analyticsController.getTopicAnalytics);
 analyticsRouter.get('/funnel', analyticsController.getPlacementFunnel);

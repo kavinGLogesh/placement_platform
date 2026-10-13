@@ -454,6 +454,127 @@ export class ReportService {
         break;
       }
 
+      case 'overall':
+      case 'overall-results': {
+        const report = await this.repo.getAssessmentResultReport(
+          { ...filters, sortBy: 'percentage', sortOrder: 'desc' },
+          true
+        );
+        const columns: ExportColumnDef[] = [
+          { header: 'Rank', key: 'rank', width: 8 },
+          { header: 'Register No', key: 'registerNumber', width: 14 },
+          { header: 'Candidate Name', key: 'studentName', width: 22 },
+          { header: 'Department', key: 'departmentCode', width: 10 },
+          { header: 'Assessment Title', key: 'assessmentTitle', width: 26 },
+          { header: 'Total Marks', key: 'totalMarks', width: 10 },
+          { header: 'Obtained', key: 'obtainedMarks', width: 10 },
+          { header: 'Percentage', key: 'percentage', width: 12 },
+          { header: 'Accuracy %', key: 'accuracy', width: 12 },
+          { header: 'Result', key: 'resultText', width: 12 },
+          { header: 'Attempt Date', key: 'submittedAt', width: 18 },
+        ];
+        payload = {
+          institutionName: 'Career OS — College Placement Assessment Platform',
+          reportTitle: 'Overall Candidate Assessment & Merit Registry Report',
+          reportDate: new Date().toLocaleString(),
+          generatedBy: userEmail,
+          appliedFilters: filters,
+          summaryMetrics: {
+            'Total Candidates': report.summary.totalAppeared,
+            'Total Passed': report.summary.totalPassed,
+            'Pass Rate': `${report.summary.passRate}%`,
+            'Highest Score': `${report.summary.highestScore}%`,
+            'Average Score': `${report.summary.averageScore}%`,
+          },
+          columns,
+          data: report.rows.map((r, idx) => ({
+            ...r,
+            rank: `#${idx + 1}`,
+            resultText: r.isPassed ? 'PASSED' : 'FAILED',
+          })),
+        };
+        break;
+      }
+
+      case 'pass-fail':
+      case 'pass-and-fail': {
+        const report = await this.repo.getAssessmentResultReport(filters, true);
+        const columns: ExportColumnDef[] = [
+          { header: 'Register No', key: 'registerNumber', width: 14 },
+          { header: 'Student Name', key: 'studentName', width: 22 },
+          { header: 'Department', key: 'departmentCode', width: 10 },
+          { header: 'Assessment Title', key: 'assessmentTitle', width: 24 },
+          { header: 'Score Obtained', key: 'obtainedMarks', width: 12 },
+          { header: 'Maximum Marks', key: 'totalMarks', width: 12 },
+          { header: 'Score Percentage', key: 'percentage', width: 14 },
+          { header: 'Qualification Result', key: 'resultStatus', width: 16 },
+          { header: 'Submission Date', key: 'submittedAt', width: 18 },
+        ];
+        payload = {
+          institutionName: 'Career OS — College Placement Assessment Platform',
+          reportTitle: 'Assessment Pass & Fail Evaluation Qualification Report',
+          reportDate: new Date().toLocaleString(),
+          generatedBy: userEmail,
+          appliedFilters: filters,
+          summaryMetrics: {
+            'Total Evaluated': report.summary.totalAppeared,
+            'Passed Candidates': report.summary.totalPassed,
+            'Failed Candidates': Math.max(0, report.summary.totalAppeared - report.summary.totalPassed),
+            'Pass Percentage': `${report.summary.passRate}%`,
+            'Fail Percentage': `${(100 - (Number(report.summary.passRate) || 0)).toFixed(2)}%`,
+          },
+          columns,
+          data: report.rows.map((r) => ({
+            ...r,
+            resultStatus: r.isPassed ? 'PASSED' : 'FAILED',
+          })),
+        };
+        break;
+      }
+
+      case 'appeared-not-appeared':
+      case 'appeared-and-not-appeared': {
+        // Build appeared and not appeared roster
+        const studentReport = await this.repo.getStudentPerformanceReport(filters, true);
+        const columns: ExportColumnDef[] = [
+          { header: 'Register No', key: 'registerNumber', width: 14 },
+          { header: 'Student Name', key: 'studentName', width: 22 },
+          { header: 'Department', key: 'departmentCode', width: 10 },
+          { header: 'Course', key: 'courseCode', width: 10 },
+          { header: 'Class', key: 'className', width: 14 },
+          { header: 'Section', key: 'sectionName', width: 8 },
+          { header: 'Participation Status', key: 'participationStatus', width: 18 },
+          { header: 'Completed Tests', key: 'assessmentsCompleted', width: 14 },
+          { header: 'Average Score %', key: 'averagePercentage', width: 14 },
+          { header: 'Last Active Date', key: 'lastAssessmentDate', width: 18 },
+        ];
+        const appearedCount = studentReport.rows.filter((s) => s.assessmentsCompleted > 0).length;
+        const notAppearedCount = studentReport.rows.length - appearedCount;
+        payload = {
+          institutionName: 'Career OS — College Placement Assessment Platform',
+          reportTitle: 'Candidate Participation Audit: Appeared vs Not-Appeared',
+          reportDate: new Date().toLocaleString(),
+          generatedBy: userEmail,
+          appliedFilters: filters,
+          summaryMetrics: {
+            'Total Enrolled Students': studentReport.summary.totalStudents,
+            'Appeared Students': appearedCount,
+            'Not Appeared Students': notAppearedCount,
+            'Overall Participation Rate': `${
+              studentReport.summary.totalStudents > 0
+                ? ((appearedCount / studentReport.summary.totalStudents) * 100).toFixed(2)
+                : 0
+            }%`,
+          },
+          columns,
+          data: studentReport.rows.map((s) => ({
+            ...s,
+            participationStatus: s.assessmentsCompleted > 0 ? 'APPEARED' : 'NOT APPEARED',
+          })),
+        };
+        break;
+      }
+
       default:
         throw new AppError(`Unknown report type: ${reportType}`, 400);
     }

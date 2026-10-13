@@ -42,10 +42,12 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import { managementService } from '../../services/management.service.js';
 import { authService } from '../../services/auth.service.js';
 import { StudentFullProfile } from '../../types/management.types.js';
+import { useAuth } from '../../hooks/useAuth.js';
 
 export const StudentProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, updatePasswordCompleted } = useAuth();
 
   const [editPhoneOpen, setEditPhoneOpen] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -53,8 +55,10 @@ export const StudentProfilePage: React.FC = () => {
 
   // Change Password state
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -62,41 +66,62 @@ export const StudentProfilePage: React.FC = () => {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
   // Password validation rules
+  const hasCurrentPassword = currentPassword.trim().length > 0;
   const hasMinLength = newPassword.length >= 8;
   const hasUpperCase = /[A-Z]/.test(newPassword);
   const hasLowerCase = /[a-z]/.test(newPassword);
   const hasNumber = /\d/.test(newPassword);
   const hasSpecialChar = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword);
+  const isDifferentFromCurrent = Boolean(newPassword && currentPassword && newPassword !== currentPassword);
   const passwordsMatch = Boolean(newPassword && confirmPassword && newPassword === confirmPassword);
+
   const isPasswordValid =
+    hasCurrentPassword &&
     hasMinLength &&
     hasUpperCase &&
     hasLowerCase &&
     hasNumber &&
     hasSpecialChar &&
+    isDifferentFromCurrent &&
     passwordsMatch;
 
   const satisfiedCount = [
+    hasCurrentPassword,
     hasMinLength,
     hasUpperCase,
     hasLowerCase,
     hasNumber,
     hasSpecialChar,
+    isDifferentFromCurrent,
     passwordsMatch,
   ].filter(Boolean).length;
 
   const handleChangePassword = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!hasCurrentPassword) {
+      setPasswordError('Please provide your current account password.');
+      return;
+    }
+    if (!isDifferentFromCurrent) {
+      setPasswordError('New password cannot be identical to your current password.');
+      return;
+    }
+    if (!passwordsMatch) {
+      setPasswordError('New password and confirm password do not match.');
+      return;
+    }
     if (!isPasswordValid) {
-      setPasswordError('Please fulfill all password criteria before saving.');
+      setPasswordError('Please fulfill all password security criteria before saving.');
       return;
     }
 
     try {
       setPasswordLoading(true);
       setPasswordError(null);
-      await authService.changePassword(newPassword);
-      setPasswordSuccess('Password successfully updated in the database!');
+      await authService.changePassword(currentPassword, newPassword, confirmPassword);
+      setPasswordSuccess('Password successfully updated! Your account security settings are up to date.');
+      updatePasswordCompleted();
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => {
@@ -121,9 +146,11 @@ export const StudentProfilePage: React.FC = () => {
   const handleClosePasswordDialog = () => {
     if (passwordLoading) return;
     setChangePasswordOpen(false);
+    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
     setPasswordError(null);
+    setShowCurrentPassword(false);
     setShowNewPassword(false);
     setShowConfirmPassword(false);
   };
@@ -757,11 +784,24 @@ export const StudentProfilePage: React.FC = () => {
               <SecurityIcon sx={{ fontSize: 26 }} />
             </Box>
             <Box>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#14264B' }}>
-                Account Security & Credentials
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#14264B' }}>
+                  Account Security & Credentials
+                </Typography>
+                {user?.mustChangePassword && (
+                  <Chip
+                    label="Temporary Password Active"
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    sx={{ height: 22, fontSize: '0.72rem', fontWeight: 600 }}
+                  />
+                )}
+              </Box>
               <Typography variant="body2" sx={{ color: '#526584' }}>
-                Keep your student account secure. You can update your password at any time.
+                {user?.mustChangePassword
+                  ? 'Your account was initialized with a temporary password. You can set a permanent password here at your convenience.'
+                  : 'Keep your student account secure. You can update your password at any time.'}
               </Typography>
             </Box>
           </Box>
@@ -873,6 +913,35 @@ export const StudentProfilePage: React.FC = () => {
           )}
 
           <Box component="form" onSubmit={handleChangePassword} noValidate>
+            {/* Current Password */}
+            <TextField
+              fullWidth
+              label="Current Password"
+              type={showCurrentPassword ? 'text' : 'password'}
+              value={currentPassword}
+              onChange={(e) => {
+                setCurrentPassword(e.target.value);
+                if (passwordError) setPasswordError(null);
+              }}
+              placeholder="Enter current password (or temporary credentials)"
+              size="small"
+              sx={{ mb: 2 }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      edge="end"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      size="small"
+                      aria-label="toggle current password visibility"
+                    >
+                      {showCurrentPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+
             {/* New Password */}
             <TextField
               fullWidth
@@ -883,7 +952,7 @@ export const StudentProfilePage: React.FC = () => {
                 setNewPassword(e.target.value);
                 if (passwordError) setPasswordError(null);
               }}
-              placeholder="Enter new password"
+              placeholder="Enter new permanent password"
               size="small"
               sx={{ mb: 2 }}
               InputProps={{
@@ -905,7 +974,7 @@ export const StudentProfilePage: React.FC = () => {
             {/* Confirm Password */}
             <TextField
               fullWidth
-              label="Confirm Password"
+              label="Confirm New Password"
               type={showConfirmPassword ? 'text' : 'password'}
               value={confirmPassword}
               onChange={(e) => {
@@ -946,39 +1015,41 @@ export const StudentProfilePage: React.FC = () => {
             >
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                 <Typography variant="caption" fontWeight={700} sx={{ color: '#475569' }}>
-                  PASSWORD REQUIREMENTS ({satisfiedCount}/6)
+                  PASSWORD SECURITY REQUIREMENTS ({satisfiedCount}/8)
                 </Typography>
                 <Typography
                   variant="caption"
                   fontWeight={700}
                   sx={{
                     color:
-                      satisfiedCount === 6
+                      satisfiedCount === 8
                         ? '#16a34a'
-                        : satisfiedCount >= 4
+                        : satisfiedCount >= 5
                         ? '#d97706'
                         : '#dc2626',
                   }}
                 >
-                  {satisfiedCount === 6 ? 'All Criteria Met' : satisfiedCount >= 4 ? 'Good Progress' : 'Incomplete'}
+                  {satisfiedCount === 8 ? 'All Criteria Met' : satisfiedCount >= 5 ? 'Good Progress' : 'Incomplete'}
                 </Typography>
               </Box>
 
               <LinearProgress
                 variant="determinate"
-                value={(satisfiedCount / 6) * 100}
-                color={satisfiedCount === 6 ? 'success' : satisfiedCount >= 4 ? 'warning' : 'error'}
+                value={(satisfiedCount / 8) * 100}
+                color={satisfiedCount === 8 ? 'success' : satisfiedCount >= 5 ? 'warning' : 'error'}
                 sx={{ height: 6, borderRadius: 3, mb: 1.5 }}
               />
 
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
                 {[
+                  { label: 'Current password entered', met: hasCurrentPassword },
                   { label: 'At least 8 characters', met: hasMinLength },
                   { label: 'One uppercase letter (A-Z)', met: hasUpperCase },
                   { label: 'One lowercase letter (a-z)', met: hasLowerCase },
                   { label: 'One number (0-9)', met: hasNumber },
                   { label: 'One special symbol (!@#$...)', met: hasSpecialChar },
-                  { label: 'Passwords match', met: passwordsMatch },
+                  { label: 'Different from current password', met: isDifferentFromCurrent },
+                  { label: 'Confirm passwords match', met: passwordsMatch },
                 ].map((req) => (
                   <Box key={req.label} sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
                     {req.met ? (
