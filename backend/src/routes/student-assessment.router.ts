@@ -6,6 +6,7 @@ import { authenticateToken, requireRole } from '../middleware/auth.middleware.js
 import { Role } from '../types/auth.types.js';
 import { attemptController, resolveStudentId } from '../controllers/attempt.controller.js';
 import { analyticsController } from '../controllers/analytics.controller.js';
+import { academicController } from '../controllers/academic.controller.js';
 import { managementService } from '../services/management.service.js';
 import { sendSuccess } from '../utils/response.util.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -80,17 +81,11 @@ studentAssessmentRouter.get('/profile', async (req, res, next) => {
   try {
     const studentId = await resolveStudentId(req);
     const student = await managementService.getStudentById(studentId);
+    const studentSkills = await managementService.getStudentSkills(studentId);
 
     const profileData = {
       ...student,
-      skills: [
-        { name: 'Data Structures & Algorithms', category: 'TECHNICAL', level: 'ADVANCED', verified: true },
-        { name: 'Python Programming', category: 'TECHNICAL', level: 'ADVANCED', verified: true },
-        { name: 'SQL & Database Design', category: 'TECHNICAL', level: 'INTERMEDIATE', verified: true },
-        { name: 'Quantitative Aptitude', category: 'APTITUDE', level: 'PROFICIENT', verified: true },
-        { name: 'Logical Reasoning', category: 'APTITUDE', level: 'PROFICIENT', verified: true },
-        { name: 'Verbal Communication', category: 'COMMUNICATION', level: 'INTERMEDIATE', verified: true },
-      ],
+      skills: studentSkills,
       certifications: [
         { title: 'AWS Certified Cloud Practitioner', issuer: 'Amazon Web Services', issueDate: '2025-11-15', credentialId: 'AWS-CCP-984122', verified: true },
         { title: 'Problem Solving (Advanced)', issuer: 'HackerRank', issueDate: '2026-02-10', credentialId: 'HR-PSA-449102', verified: true },
@@ -215,6 +210,51 @@ studentAssessmentRouter.put('/profile', async (req, res, next) => {
   }
 });
 
+// Student Skills Self-Management
+studentAssessmentRouter.get('/skills', async (req, res, next) => {
+  try {
+    const studentId = await resolveStudentId(req);
+    const skills = await managementService.getStudentSkills(studentId);
+    sendSuccess(res, 'Student skills retrieved successfully', skills);
+  } catch (err) {
+    next(err);
+  }
+});
+
+studentAssessmentRouter.post('/skills', async (req, res, next) => {
+  try {
+    const studentId = await resolveStudentId(req);
+    const { name, category, level } = req.body;
+    const created = await managementService.addStudentSkill(studentId, { name, category, level });
+    sendSuccess(res, 'Skill added successfully', created, 201);
+  } catch (err) {
+    next(err);
+  }
+});
+
+studentAssessmentRouter.put('/skills/:skillId', async (req, res, next) => {
+  try {
+    const studentId = await resolveStudentId(req);
+    const { skillId } = req.params;
+    const { name, category, level } = req.body;
+    const updated = await managementService.updateStudentSkill(studentId, skillId, { name, category, level });
+    sendSuccess(res, 'Skill updated successfully', updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+studentAssessmentRouter.delete('/skills/:skillId', async (req, res, next) => {
+  try {
+    const studentId = await resolveStudentId(req);
+    const { skillId } = req.params;
+    await managementService.removeStudentSkill(studentId, skillId);
+    sendSuccess(res, 'Skill removed successfully', { success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Phase 8: Student Dashboard & Performance
 studentAssessmentRouter.get('/dashboard', analyticsController.getStudentDashboard);
 studentAssessmentRouter.get('/performance', analyticsController.getStudentPerformance);
@@ -247,3 +287,12 @@ studentAssessmentRouter.post('/attempts/:attemptId/submit', attemptController.su
 // 4. Student Results
 studentAssessmentRouter.get('/results', attemptController.getStudentResults);
 studentAssessmentRouter.get('/results/:id', attemptController.getResultDetail);
+
+// 5. Student Academic Records & Marksheet Access
+studentAssessmentRouter.get('/academic-records', academicController.getOwnAcademicRecord);
+studentAssessmentRouter.get('/academic-records/documents/:docType', academicController.downloadOwnMarksheet);
+
+// 6. Student Personal Email Management & Verification
+studentAssessmentRouter.put('/personal-email', academicController.studentRequestPersonalEmail);
+studentAssessmentRouter.post('/personal-email/verify', academicController.studentVerifyPersonalEmail);
+studentAssessmentRouter.post('/personal-email/resend-code', academicController.studentResendPersonalEmailCode);

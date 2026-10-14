@@ -179,6 +179,10 @@ model Student {
   collegeEmail   String         @unique
   phone          String?
   dob            String?
+  personalEmail  String?        @unique
+  isPersonalEmailVerified Boolean @default(false)
+  personalEmailVerificationToken String?
+  personalEmailVerificationExpiry DateTime?
   departmentId   String
   courseId       String
   classId        String
@@ -203,6 +207,10 @@ model Student {
   interviewParticipations InterviewParticipant[]
   attendanceEmailLogs     AttendanceEmailLog[]
   attemptViolations       AttemptViolation[]
+  academicRecord          StudentAcademicRecord?
+  auditLogs               StudentAuditLog[]
+  skills                  StudentSkill[]
+  driveRegistrations      DriveRegistration[]
 
   @@index([departmentId])
   @@index([courseId])
@@ -213,6 +221,7 @@ model Student {
   @@index([name])
   @@index([registerNumber])
   @@index([collegeEmail])
+  @@index([personalEmail])
   @@map("students")
 }
 
@@ -264,6 +273,7 @@ model Company {
   questions        Question[]
   companyQuestions CompanyQuestion[]
   duplicateCandidates QuestionDuplicateCandidate[]
+  placementDrives     PlacementDrive[]
 
   @@map("companies")
 }
@@ -1104,3 +1114,183 @@ model StudentImportHistory {
 
   @@map("student_import_history")
 }
+
+// =============================================================================
+// PHASE 10: STUDENT ACADEMIC RECORDS & AUDIT LOGS
+// =============================================================================
+
+model StudentAcademicRecord {
+  id                   String   @id @default(uuid())
+  studentId            String   @unique
+
+  // 10th Standard Records
+  tenthBoard           String?  // e.g. "CBSE", "State Board", "ICSE"
+  tenthPassingYear     Int?     // e.g. 2020
+  tenthTotalMarks      Float?   // e.g. 500
+  tenthObtainedMarks   Float?   // e.g. 465
+  tenthPercentage      Float?   // e.g. 93.0
+  tenthMarksheetPath   String?
+  tenthMarksheetName   String?
+  tenthMarksheetMime   String?
+
+  // 12th Standard / Diploma Records
+  twelfthBoard         String?  // e.g. "CBSE", "State Board"
+  twelfthPassingYear   Int?     // e.g. 2022
+  twelfthTotalMarks    Float?   // e.g. 600
+  twelfthObtainedMarks Float?   // e.g. 558
+  twelfthPercentage    Float?   // e.g. 93.0
+  twelfthMarksheetPath String?
+  twelfthMarksheetName String?
+  twelfthMarksheetMime String?
+
+  // Degree Details & Status
+  degreeLevel          String?  @default("UG") // e.g. "UG", "PG"
+  studyStatus          String?  @default("STUDYING") // e.g. "STUDYING", "COMPLETED"
+  currentSemester      Int?     @default(1)    // e.g. 1 through 8
+  ugDegree             String?  // e.g. "B.E.", "B.Tech", "B.Sc", "M.Tech", "MCA"
+  ugBranch             String?  // e.g. "Computer Science and Engineering"
+  currentCgpa          Float?   // e.g. 8.45
+  overallPercentage    Float?   // e.g. 84.5
+  activeBacklogs       Int      @default(0)
+  historyOfBacklogs    Int      @default(0)
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  student              Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  semesters            StudentSemesterRecord[]
+
+  @@index([studentId])
+  @@map("student_academic_records")
+}
+
+model StudentSemesterRecord {
+  id               String   @id @default(uuid())
+  academicRecordId String
+  semesterNumber   Int      // 1 through 8
+  sgpa             Float?   // e.g. 8.5
+  cgpa             Float?   // e.g. 8.4
+  totalCredits     Float?   // e.g. 24
+  creditsEarned    Float?   // e.g. 24
+  backlogsCount    Int      @default(0)
+  marksheetPath    String?
+  marksheetName    String?
+  marksheetMime    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  academicRecord   StudentAcademicRecord @relation(fields: [academicRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([academicRecordId, semesterNumber])
+  @@index([academicRecordId])
+  @@map("student_semester_records")
+}
+
+model StudentAuditLog {
+  id           String   @id @default(uuid())
+  studentId    String
+  performedBy  String   // admin email or user ID
+  action       String   // e.g. "PERSONAL_EMAIL_UPDATED", "ACADEMIC_RECORD_UPDATED", "MARKSHEET_UPLOADED"
+  fieldChanged String?
+  oldValue     String?  @db.Text
+  newValue     String?  @db.Text
+  details      String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([performedBy])
+  @@map("student_audit_logs")
+}
+
+// =============================================================================
+// PHASE 11: STUDENT SKILLS & ADMIN PLACEMENT DRIVES MODULE
+// =============================================================================
+
+model StudentSkill {
+  id        String   @id @default(uuid())
+  studentId String
+  name      String
+  category  String   @default("TECHNICAL") // TECHNICAL, APTITUDE, COMMUNICATION, DOMAIN
+  level     String   @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, PROFICIENT, ADVANCED
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, name])
+  @@index([studentId])
+  @@map("student_skills")
+}
+
+enum DriveStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum SelectionStage {
+  REGISTERED
+  ASSESSMENT_SHORTLISTED
+  TECHNICAL_ROUND
+  HR_ROUND
+  SELECTED
+  REJECTED
+  OPTED_OUT
+}
+
+model PlacementDrive {
+  id                   String              @id @default(uuid())
+  companyId            String?
+  companyName          String
+  jobRole              String
+  jobDescription       String?             @db.Text
+  location             String?
+  packageDetails       String?
+  vacancies            Int?                @default(1)
+  driveDate            DateTime
+  registrationDeadline DateTime
+  status               DriveStatus         @default(UPCOMING)
+  minTenthPercentage   Float?
+  minTwelfthPercentage Float?
+  minCgpa              Float?
+  maxActiveBacklogs    Int?                @default(0)
+  eligibleDepartments  Json?               // e.g. ["dept-001", "dept-002"] or ["CSE", "ECE"]
+  eligibleBatchYears   Json?               // e.g. [2026, 2027]
+  requiredSkills       Json?               // e.g. [{"name":"Python","minLevel":"INTERMEDIATE"}]
+  selectionProcess     Json?               // e.g. ["Aptitude Test","Technical Interview","HR Round"]
+  createdById          String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  company              Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  registrations        DriveRegistration[]
+
+  @@index([status])
+  @@index([driveDate])
+  @@map("placement_drives")
+}
+
+model DriveRegistration {
+  id           String         @id @default(uuid())
+  driveId      String
+  studentId    String
+  registeredBy String         // admin email
+  currentStage SelectionStage @default(REGISTERED)
+  stageRemarks String?        @db.Text
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  drive        PlacementDrive @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  student      Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([driveId, studentId])
+  @@index([driveId])
+  @@index([studentId])
+  @@index([currentStage])
+  @@map("drive_registrations")
+}
+

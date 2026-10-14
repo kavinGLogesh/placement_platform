@@ -49,10 +49,12 @@ import CheckIcon from '@mui/icons-material/Check';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import HistoryIcon from '@mui/icons-material/History';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import SchoolIcon from '@mui/icons-material/School';
 import InputAdornment from '@mui/material/InputAdornment';
 import { DataTable, Column } from '../../components/management/DataTable.js';
 import { ConfirmDialog } from '../../components/management/ConfirmDialog.js';
 import { AiStudentImportDialog } from '../../components/management/AiStudentImportDialog.js';
+import { AcademicBulkImportDialog } from '../../components/admin/AcademicBulkImportDialog.js';
 import { StudentImportHistoryTab } from '../../components/management/StudentImportHistoryTab.js';
 import { StudentAccountsTab } from '../../components/management/StudentAccountsTab.js';
 import { managementService } from '../../services/management.service.js';
@@ -107,6 +109,7 @@ export const StudentsPage: React.FC = () => {
     registerNumber: '',
     name: '',
     collegeEmail: '',
+    personalEmail: '',
     phone: '',
     dob: '',
     password: '',
@@ -122,6 +125,7 @@ export const StudentsPage: React.FC = () => {
   // Navigation Tabs State (0 = All Students, 1 = Add Student, 2 = AI Import, 3 = History, 4 = Accounts)
   const [activeTab, setActiveTab] = useState<number>(0);
   const [aiImportDialogOpen, setAiImportDialogOpen] = useState<boolean>(false);
+  const [academicImportDialogOpen, setAcademicImportDialogOpen] = useState<boolean>(false);
 
   // Delete State
   const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
@@ -215,6 +219,7 @@ export const StudentsPage: React.FC = () => {
         registerNumber: st.registerNumber,
         name: st.name,
         collegeEmail: st.collegeEmail,
+        personalEmail: st.personalEmail || '',
         phone: st.phone || '',
         dob: st.dob || '',
         password: '',
@@ -232,6 +237,7 @@ export const StudentsPage: React.FC = () => {
         registerNumber: '',
         name: '',
         collegeEmail: '',
+        personalEmail: '',
         phone: '',
         dob: '',
         password: '',
@@ -263,6 +269,7 @@ export const StudentsPage: React.FC = () => {
       if (editingStudent) {
         const updatePayload: UpdateStudentInput = {
           name: studentForm.name,
+          personalEmail: studentForm.personalEmail ? studentForm.personalEmail.trim() : undefined,
           phone: studentForm.phone,
           dob: studentForm.dob,
           departmentId: studentForm.departmentId,
@@ -278,6 +285,7 @@ export const StudentsPage: React.FC = () => {
       } else {
         const created = await managementService.createStudent({
           ...studentForm,
+          personalEmail: studentForm.personalEmail ? studentForm.personalEmail.trim() : undefined,
           year: Number(studentForm.year),
           cgpa: studentForm.cgpa ? Number(studentForm.cgpa) : undefined,
           password: studentForm.password ? studentForm.password.trim() : undefined,
@@ -622,6 +630,27 @@ export const StudentsPage: React.FC = () => {
           <Button
             variant="outlined"
             size="small"
+            startIcon={<SchoolIcon fontSize="small" />}
+            onClick={() => setAcademicImportDialogOpen(true)}
+            sx={{
+              color: '#0284c7',
+              borderColor: '#bae6fd',
+              bgcolor: '#f0f9ff',
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              py: 0.9,
+              px: 1.8,
+              '&:hover': { borderColor: '#0284c7', bgcolor: '#e0f2fe' },
+            }}
+          >
+            Academic Excel Import
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
             startIcon={<UploadFileIcon fontSize="small" />}
             onClick={() => {
               setImportResult(null);
@@ -938,8 +967,22 @@ export const StudentsPage: React.FC = () => {
                   value={studentForm.collegeEmail}
                   onChange={(e) => setStudentForm({ ...studentForm, collegeEmail: e.target.value.toLowerCase() })}
                   placeholder="logesh@college.edu"
+                  helperText={editingStudent ? 'Sole login ID (immutable)' : 'Primary login ID for the candidate (sole login identifier)'}
                 />
               </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Personal Email Address"
+                  type="email"
+                  fullWidth
+                  value={studentForm.personalEmail || ''}
+                  onChange={(e) => setStudentForm({ ...studentForm, personalEmail: e.target.value.toLowerCase() })}
+                  placeholder="logesh.personal@gmail.com"
+                  helperText="Candidate personal contact only (cannot be used for login)"
+                />
+              </Grid>
+
+              {/* Hierarchy: Department, Course, Class, Section */}
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth required error={!!departmentError}>
                   <InputLabel id="student-form-dept-label">Department *</InputLabel>
@@ -974,7 +1017,7 @@ export const StudentsPage: React.FC = () => {
                     </MenuItem>
                     {departments.map((d) => (
                       <MenuItem key={d.id} value={d.id}>
-                        {d.name}
+                        {d.name} ({d.code})
                       </MenuItem>
                     ))}
                   </Select>
@@ -983,15 +1026,140 @@ export const StudentsPage: React.FC = () => {
                   )}
                 </FormControl>
               </Grid>
+
               <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel id="student-form-course-label">Course</InputLabel>
+                  <Select
+                    labelId="student-form-course-label"
+                    id="student-form-course-select"
+                    label="Course"
+                    value={studentForm.courseId || ''}
+                    onChange={(e) => {
+                      const selCourseId = e.target.value as string;
+                      const matchingClass = classes.find((cl) => cl.courseId === selCourseId);
+                      const matchingSection = sections.find((s) => s.classId === matchingClass?.id);
+                      setStudentForm({
+                        ...studentForm,
+                        courseId: selCourseId,
+                        classId: matchingClass?.id || '',
+                        sectionId: matchingSection?.id || '',
+                        year: matchingClass?.currentYear || studentForm.year,
+                      });
+                    }}
+                  >
+                    <MenuItem value="">
+                      <em>Select Course</em>
+                    </MenuItem>
+                    {courses
+                      .filter((c) => !studentForm.departmentId || c.departmentId === studentForm.departmentId)
+                      .map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                          {c.name} ({c.code})
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel id="student-form-class-label">Class</InputLabel>
+                  <Select
+                    labelId="student-form-class-label"
+                    id="student-form-class-select"
+                    label="Class"
+                    value={studentForm.classId || ''}
+                    onChange={(e) => {
+                      const selClassId = e.target.value as string;
+                      const matchingClass = classes.find((cl) => cl.id === selClassId);
+                      const matchingSection = sections.find((s) => s.classId === selClassId);
+                      setStudentForm({
+                        ...studentForm,
+                        classId: selClassId,
+                        sectionId: matchingSection?.id || '',
+                        year: matchingClass?.currentYear || studentForm.year,
+                      });
+                    }}
+                  >
+                    <MenuItem value="">
+                      <em>Select Class</em>
+                    </MenuItem>
+                    {classes
+                      .filter((cl) => !studentForm.courseId || cl.courseId === studentForm.courseId)
+                      .map((cl) => (
+                        <MenuItem key={cl.id} value={cl.id}>
+                          {cl.name} (Year {cl.currentYear}, Batch {cl.batchYear})
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel id="student-form-sec-label">Section</InputLabel>
+                  <Select
+                    labelId="student-form-sec-label"
+                    id="student-form-sec-select"
+                    label="Section"
+                    value={studentForm.sectionId || ''}
+                    onChange={(e) => {
+                      setStudentForm({
+                        ...studentForm,
+                        sectionId: e.target.value as string,
+                      });
+                    }}
+                  >
+                    <MenuItem value="">
+                      <em>Select Section</em>
+                    </MenuItem>
+                    {sections
+                      .filter((s) => !studentForm.classId || s.classId === studentForm.classId)
+                      .map((s) => (
+                        <MenuItem key={s.id} value={s.id}>
+                          Section {s.name}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Metrics: Year, CGPA, Phone */}
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  label="Current Year"
+                  type="number"
+                  required
+                  fullWidth
+                  inputProps={{ min: 1, max: 6 }}
+                  value={studentForm.year}
+                  onChange={(e) => setStudentForm({ ...studentForm, year: Number(e.target.value) })}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  label="Current CGPA"
+                  type="number"
+                  fullWidth
+                  inputProps={{ min: 0, max: 10, step: 0.01 }}
+                  value={studentForm.cgpa ?? ''}
+                  onChange={(e) => setStudentForm({ ...studentForm, cgpa: Number(e.target.value) })}
+                  helperText="0.00 to 10.00 scale"
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
                 <TextField
                   label="Contact Phone"
                   fullWidth
-                  value={studentForm.phone}
+                  value={studentForm.phone || ''}
                   onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })}
                   placeholder="+91 9876543210"
                 />
               </Grid>
+
               <Grid item xs={12} sm={6}>
                 <TextField
                   label="Date of Birth (DOB)"
@@ -1001,6 +1169,22 @@ export const StudentsPage: React.FC = () => {
                   placeholder="DD-MM-YYYY (e.g. 15-08-2005)"
                   helperText="Student date of birth (optional)"
                 />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  select
+                  label="Account Status"
+                  required
+                  fullWidth
+                  value={studentForm.status}
+                  onChange={(e) => setStudentForm({ ...studentForm, status: e.target.value as StudentStatus })}
+                >
+                  <MenuItem value="ACTIVE">ACTIVE</MenuItem>
+                  <MenuItem value="PLACED">PLACED</MenuItem>
+                  <MenuItem value="INACTIVE">INACTIVE</MenuItem>
+                  <MenuItem value="BLOCKED">BLOCKED</MenuItem>
+                </TextField>
               </Grid>
 
               <Grid item xs={12}>
@@ -1031,46 +1215,6 @@ export const StudentsPage: React.FC = () => {
                     ),
                   }}
                 />
-              </Grid>
-
-              {/* Student Academic & Status Metrics */}
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Current Year"
-                  type="number"
-                  required
-                  fullWidth
-                  inputProps={{ min: 1, max: 6 }}
-                  value={studentForm.year}
-                  onChange={(e) => setStudentForm({ ...studentForm, year: Number(e.target.value) })}
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Current CGPA"
-                  type="number"
-                  fullWidth
-                  inputProps={{ min: 0, max: 10, step: 0.01 }}
-                  value={studentForm.cgpa ?? ''}
-                  onChange={(e) => setStudentForm({ ...studentForm, cgpa: Number(e.target.value) })}
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  select
-                  label="Account Status"
-                  required
-                  fullWidth
-                  value={studentForm.status}
-                  onChange={(e) => setStudentForm({ ...studentForm, status: e.target.value as StudentStatus })}
-                >
-                  <MenuItem value="ACTIVE">ACTIVE</MenuItem>
-                  <MenuItem value="PLACED">PLACED</MenuItem>
-                  <MenuItem value="INACTIVE">INACTIVE</MenuItem>
-                  <MenuItem value="BLOCKED">BLOCKED</MenuItem>
-                </TextField>
               </Grid>
             </Grid>
           </DialogContent>
@@ -1385,6 +1529,15 @@ export const StudentsPage: React.FC = () => {
         onImportComplete={() => {
           fetchStudents();
           fetchLookups();
+        }}
+      />
+
+      {/* Academic Records Bulk Import Dialog */}
+      <AcademicBulkImportDialog
+        open={academicImportDialogOpen}
+        onClose={() => setAcademicImportDialogOpen(false)}
+        onSuccess={() => {
+          fetchStudents();
         }}
       />
     </Box>

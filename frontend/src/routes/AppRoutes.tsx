@@ -13,6 +13,8 @@ import { SectionsPage } from '../pages/admin/SectionsPage.js';
 import { StudentsPage } from '../pages/admin/StudentsPage.js';
 import { StudentDetailPage } from '../pages/admin/StudentDetailPage.js';
 import { CompaniesPage } from '../pages/admin/CompaniesPage.js';
+import { PlacementDrivesPage } from '../pages/admin/PlacementDrivesPage.js';
+import { PlacementDriveDetailPage } from '../pages/admin/PlacementDriveDetailPage.js';
 import { QuestionsPage } from '../pages/admin/QuestionsPage.js';
 import { AssessmentsPage } from '../pages/admin/AssessmentsPage.js';
 import { AssessmentBuilderPage } from '../pages/admin/AssessmentBuilderPage.js';
@@ -90,6 +92,22 @@ export const AppRoutes: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
                 <CompaniesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/placement-drives"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
+                <PlacementDrivesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/placement-drives/:id"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
+                <PlacementDriveDetailPage />
               </ProtectedRoute>
             }
           />

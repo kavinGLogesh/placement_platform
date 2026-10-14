@@ -53,6 +53,16 @@ export interface ResultListItemDto {
   timeTakenMinutes?: number | null;
   startTime?: string | null;
   violationCount?: number;
+  assessmentType?: string;
+  categoryBreakdown?: Array<{
+    category: string;
+    displayName: string;
+    totalQuestions: number;
+    correctCount: number;
+    marksAwarded: number;
+    maxMarks: number;
+    percentage: number;
+  }>;
   violations?: AttemptViolationDto[];
 }
 
@@ -227,11 +237,44 @@ export interface StudentResumeMetadataDto {
   message?: string;
 }
 
+export interface StudentMalpracticeEventDto {
+  id: string;
+  attemptId: string;
+  assessmentName: string;
+  violationType: string;
+  displayType: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  timestamp: string;
+  details: string;
+}
+
+export interface StudentImprovementTopicDto {
+  topic: string;
+  category: string;
+  displayName: string;
+  accuracy: number;
+  attemptedCount: number;
+  correctCount: number;
+  recommendation: string;
+}
+
+export interface StudentRecommendationsDto {
+  weakTopics: StudentImprovementTopicDto[];
+  strongAreas: StudentImprovementTopicDto[];
+  moderateAreas: StudentImprovementTopicDto[];
+  recommendedActivities: string[];
+  disclaimer: string;
+}
+
 export interface StudentDrilldownDto {
   student: {
     id: string;
     name: string;
     email: string;
+    personalEmail?: string | null;
+    isPersonalEmailVerified?: boolean;
+    phone?: string | null;
+    dob?: string | null;
     registerNumber: string;
     departmentName: string;
     departmentCode: string;
@@ -239,6 +282,7 @@ export interface StudentDrilldownDto {
     className: string;
     sectionName: string;
     batchYear: number;
+    currentYear?: number;
     cgpa: number;
     status: string;
   };
@@ -247,9 +291,14 @@ export interface StudentDrilldownDto {
     totalAttempted: number;
     totalCompleted: number;
     totalPassed: number;
+    totalFailed?: number;
     averageScore: number;
     averageAccuracy: number;
     passRate: number;
+    recordedWarnings?: number;
+    latestPercentage?: number;
+    currentYear?: number;
+    currentCgpa?: number;
   };
   assessmentHistory: ResultListItemDto[];
   categoryPerformance: CategoryPerformanceDto[];
@@ -264,6 +313,8 @@ export interface StudentDrilldownDto {
   performanceProgress?: AssessmentComparisonDto;
   resume?: StudentResumeMetadataDto;
   humanEvaluation?: StudentHumanEvaluationSummaryDto;
+  malpracticeHistory?: StudentMalpracticeEventDto[];
+  recommendations?: StudentRecommendationsDto;
 }
 
 export interface StudentDashboardDto {

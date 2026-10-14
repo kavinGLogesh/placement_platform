@@ -23,37 +23,37 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import SchoolIcon from '@mui/icons-material/School';
-import EmailIcon from '@mui/icons-material/Email';
-import PhoneIcon from '@mui/icons-material/Phone';
-import BusinessIcon from '@mui/icons-material/Business';
-import MenuBookIcon from '@mui/icons-material/MenuBook';
-import ClassIcon from '@mui/icons-material/Class';
-import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import GradeIcon from '@mui/icons-material/Grade';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DownloadIcon from '@mui/icons-material/Download';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import TrendingDownIcon from '@mui/icons-material/TrendingDown';
-import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import TimelineIcon from '@mui/icons-material/Timeline';
-import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import LaunchIcon from '@mui/icons-material/Launch';
-import GroupsIcon from '@mui/icons-material/Groups';
+import SecurityIcon from '@mui/icons-material/Security';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import HistoryIcon from '@mui/icons-material/History';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 import { managementService } from '../../services/management.service.js';
 import { analyticsService } from '../../services/analytics.service.js';
 import { Student, StudentStatus } from '../../types/management.types.js';
+import { StudentAcademicRecordsSection } from '../../components/admin/StudentAcademicRecordsSection.js';
+import { StudentPersonalEmailManager } from '../../components/admin/StudentPersonalEmailManager.js';
+import { AcademicBulkImportDialog } from '../../components/admin/AcademicBulkImportDialog.js';
+import { StudentSkillsCard } from '../../components/student/StudentSkillsCard.js';
 
 export const StudentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -62,6 +62,9 @@ export const StudentDetailPage: React.FC = () => {
   const [student, setStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 7-Tab Navigation State (0 = Overview, 1 = Personal Details, 2 = Academic Records, 3 = Semester Results, 4 = Assessment History, 5 = Malpractice History, 6 = Improvement Recommendations)
+  const [activeTab, setActiveTab] = useState<number>(0);
 
   // Resume Action State
   const [downloadingResume, setDownloadingResume] = useState(false);
@@ -73,10 +76,15 @@ export const StudentDetailPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
     name: '',
+    personalEmail: '',
     phone: '',
+    dob: '',
     cgpa: 8.0,
     status: 'ACTIVE' as StudentStatus,
   });
+
+  // Bulk Academic Import Dialog State
+  const [academicImportDialogOpen, setAcademicImportDialogOpen] = useState<boolean>(false);
 
   const fetchStudent = useCallback(async () => {
     if (!id) return;
@@ -87,7 +95,9 @@ export const StudentDetailPage: React.FC = () => {
       setStudent(data);
       setEditForm({
         name: data.name,
+        personalEmail: data.personalEmail || '',
         phone: data.phone || '',
+        dob: data.dob || '',
         cgpa: data.cgpa || 8.0,
         status: data.status,
       });
@@ -106,8 +116,8 @@ export const StudentDetailPage: React.FC = () => {
     fetchStudent();
   }, [fetchStudent]);
 
-  // Fetch Student Performance Drilldown & Resume Metadata
-  const { data: drilldown, isLoading: drilldownLoading } = useQuery({
+  // Fetch Student Performance Drilldown, Proctoring Events & Recommendations
+  const { data: drilldown, isLoading: drilldownLoading, refetch: refetchDrilldown } = useQuery({
     queryKey: ['studentDrilldown', id],
     queryFn: () => analyticsService.getStudentDrilldown(id || ''),
     enabled: Boolean(id),
@@ -120,12 +130,15 @@ export const StudentDetailPage: React.FC = () => {
     try {
       const updated = await managementService.updateStudent(id, {
         name: editForm.name,
+        personalEmail: editForm.personalEmail ? editForm.personalEmail.trim() : undefined,
         phone: editForm.phone,
+        dob: editForm.dob,
         cgpa: Number(editForm.cgpa),
         status: editForm.status,
       });
       setStudent(updated);
       setEditDialogOpen(false);
+      refetchDrilldown();
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'message' in err
@@ -146,11 +159,12 @@ export const StudentDetailPage: React.FC = () => {
       const blob = await managementService.downloadStudentResume(id, true);
       const fileUrl = window.URL.createObjectURL(blob);
       window.open(fileUrl, '_blank');
+      setTimeout(() => window.URL.revokeObjectURL(fileUrl), 60000);
     } catch (err: unknown) {
       const msg =
-        err && typeof err === 'object' && 'response' in err && (err as any).response?.data?.message
-          ? (err as any).response.data.message
-          : 'Unable to open verified resume';
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Could not preview verified resume file.';
       setResumeActionError(msg);
     } finally {
       setViewingResume(false);
@@ -164,21 +178,19 @@ export const StudentDetailPage: React.FC = () => {
       setDownloadingResume(true);
       setResumeActionError(null);
       const blob = await managementService.downloadStudentResume(id, false);
-      const fileUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      link.download =
-        drilldown?.resume?.fileName ||
-        `${student?.registerNumber || 'Student'}_Resume.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(fileUrl);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = drilldown?.resume?.fileName || `${student?.registerNumber || 'Student'}_Resume.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
     } catch (err: unknown) {
       const msg =
-        err && typeof err === 'object' && 'response' in err && (err as any).response?.data?.message
-          ? (err as any).response.data.message
-          : 'Unable to download verified resume';
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Could not download verified resume.';
       setResumeActionError(msg);
     } finally {
       setDownloadingResume(false);
@@ -187,10 +199,36 @@ export const StudentDetailPage: React.FC = () => {
 
   const progress = drilldown?.performanceProgress;
 
+  // Overview metrics derived deterministically
+  const currentCgpaDisplay =
+    drilldown?.summary?.currentCgpa != null
+      ? Number(drilldown.summary.currentCgpa).toFixed(2)
+      : student?.cgpa != null
+      ? Number(student.cgpa).toFixed(2)
+      : 'N/A';
+
+  const currentYearDisplay =
+    drilldown?.summary?.currentYear || student?.year || student?.class?.currentYear || 1;
+
+  const totalAssessmentsDisplay = drilldown?.summary?.totalAttempted ?? 0;
+  const passedCountDisplay = drilldown?.summary?.totalPassed ?? 0;
+  const failedCountDisplay =
+    drilldown?.summary?.totalFailed ??
+    Math.max(0, (drilldown?.summary?.totalAttempted ?? 0) - (drilldown?.summary?.totalPassed ?? 0));
+
+  const latestPercentageDisplay =
+    drilldown?.summary?.latestPercentage != null
+      ? `${Number(drilldown.summary.latestPercentage).toFixed(1)}%`
+      : drilldown?.assessmentHistory?.[0]?.percentage != null
+      ? `${Number(drilldown.assessmentHistory[0].percentage).toFixed(1)}%`
+      : 'N/A';
+
+  const recordedWarningsDisplay = drilldown?.summary?.recordedWarnings ?? 0;
+
   return (
-    <Box>
-      {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+    <Box sx={{ maxWidth: 1440, mx: 'auto', p: { xs: 2, sm: 3 } }}>
+      {/* Top Header & Navigation Breadcrumb */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Button
             variant="outlined"
@@ -219,7 +257,25 @@ export const StudentDetailPage: React.FC = () => {
           </div>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<SchoolIcon fontSize="small" />}
+            onClick={() => setAcademicImportDialogOpen(true)}
+            sx={{
+              color: '#0284c7',
+              borderColor: '#bae6fd',
+              bgcolor: '#f0f9ff',
+              borderRadius: '6px',
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '0.8125rem',
+              '&:hover': { borderColor: '#0284c7', bgcolor: '#e0f2fe' },
+            }}
+          >
+            Academic Excel Import
+          </Button>
           {student && (
             <Button
               variant="outlined"
@@ -236,7 +292,7 @@ export const StudentDetailPage: React.FC = () => {
                 '&:hover': { borderColor: '#1765B5', bgcolor: 'rgba(23, 101, 181, 0.04)' },
               }}
             >
-              Full Analytics Drilldown
+              Analytics Drilldown
             </Button>
           )}
           {student && (
@@ -272,749 +328,1082 @@ export const StudentDetailPage: React.FC = () => {
           <CircularProgress size={32} sx={{ color: '#1765B5' }} />
         </Box>
       ) : student ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {/* Identity & Hierarchy Placement Cards */}
-          <Grid container spacing={3}>
-            {/* Identity & Basic Details */}
-            <Grid item xs={12} md={5}>
-              <Card elevation={0} sx={{ height: '100%', border: '1px solid #DCE6F5', borderRadius: '8px', bgcolor: '#ffffff' }}>
-                <CardContent sx={{ p: 3.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                    <Box
-                      sx={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: '8px',
-                        bgcolor: '#1765B5',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <SchoolIcon sx={{ color: '#ffffff', fontSize: 28 }} />
-                    </Box>
-                    <div>
-                      <Typography variant="h6" fontWeight={700} sx={{ color: '#14264B' }}>
-                        {student.name}
-                      </Typography>
+        <>
+          {/* 7-Tab Navigation Bar */}
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 3,
+              backgroundColor: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 2.5,
+              overflow: 'hidden',
+            }}
+          >
+            <Tabs
+              value={activeTab}
+              onChange={(_e, newTab) => setActiveTab(newTab)}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{
+                px: 2,
+                borderBottom: '1px solid #e2e8f0',
+                '& .MuiTab-root': {
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  minHeight: 52,
+                  py: 1.5,
+                },
+                '& .Mui-selected': {
+                  color: '#0284c7',
+                },
+                '& .MuiTabs-indicator': {
+                  backgroundColor: '#0284c7',
+                  height: 3,
+                  borderRadius: '3px 3px 0 0',
+                },
+              }}
+            >
+              <Tab icon={<AssessmentIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Overview" />
+              <Tab icon={<PeopleAltIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Personal Details" />
+              <Tab icon={<SchoolIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Academic Records" />
+              <Tab icon={<GradeIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Semester Results" />
+              <Tab icon={<HistoryIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Assessment History (${drilldown?.assessmentHistory?.length || 0})`} />
+              <Tab
+                icon={<SecurityIcon sx={{ fontSize: 18 }} />}
+                iconPosition="start"
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <span>Malpractice History</span>
+                    {(drilldown?.malpracticeHistory?.length || 0) > 0 && (
                       <Chip
-                        label={student.registerNumber}
+                        label={drilldown?.malpracticeHistory?.length}
                         size="small"
-                        color="primary"
-                        sx={{ fontFamily: 'monospace', fontWeight: 700, mt: 0.5 }}
+                        color="error"
+                        sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
                       />
-                    </div>
+                    )}
                   </Box>
+                }
+              />
+              <Tab icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Improvement Recommendations" />
+            </Tabs>
+          </Paper>
 
-                  <Divider sx={{ my: 2, borderColor: '#DCE6F5' }} />
+          {/* ================================================================= */}
+          {/* TAB 0: OVERVIEW                                                   */}
+          {/* ================================================================= */}
+          {activeTab === 0 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* Overview Metric Cards */}
+              <Grid container spacing={2}>
+                <Grid item xs={6} sm={4} md={2}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2,
+                      border: '1px solid #DCE6F5',
+                      bgcolor: '#ffffff',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                      CURRENT CGPA
+                    </Typography>
+                    <Typography variant="h4" fontWeight={800} color="#0D9488" sx={{ mt: 0.5 }}>
+                      {currentCgpaDisplay}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      University grading rule
+                    </Typography>
+                  </Paper>
+                </Grid>
 
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <EmailIcon sx={{ color: 'secondary.light', fontSize: 20 }} />
-                      <div>
-                        <Typography variant="caption" color="text.secondary">
-                          College Email
-                        </Typography>
-                        <Typography variant="body2" fontWeight={600}>
-                          {student.collegeEmail}
-                        </Typography>
-                      </div>
-                    </Box>
+                <Grid item xs={6} sm={4} md={2}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2,
+                      border: '1px solid #DCE6F5',
+                      bgcolor: '#ffffff',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                      CURRENT YEAR
+                    </Typography>
+                    <Typography variant="h4" fontWeight={800} color="#14264B" sx={{ mt: 0.5 }}>
+                      Year {currentYearDisplay}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Batch {student.class?.batchYear || '—'}
+                    </Typography>
+                  </Paper>
+                </Grid>
 
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <PhoneIcon sx={{ color: 'warning.light', fontSize: 20 }} />
-                      <div>
-                        <Typography variant="caption" color="text.secondary">
-                          Phone Number
-                        </Typography>
-                        <Typography variant="body2" fontWeight={600}>
-                          {student.phone || 'Not provided'}
-                        </Typography>
-                      </div>
-                    </Box>
+                <Grid item xs={6} sm={4} md={2}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2,
+                      border: '1px solid #DCE6F5',
+                      bgcolor: '#ffffff',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                      ASSESSMENTS
+                    </Typography>
+                    <Typography variant="h4" fontWeight={800} color="#0284c7" sx={{ mt: 0.5 }}>
+                      {totalAssessmentsDisplay}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Total attempts taken
+                    </Typography>
+                  </Paper>
+                </Grid>
 
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <CheckCircleIcon sx={{ color: 'success.light', fontSize: 20 }} />
-                      <div>
-                        <Typography variant="caption" color="text.secondary">
-                          Placement Account Status
-                        </Typography>
+                <Grid item xs={6} sm={4} md={2}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2,
+                      border: '1px solid #bbf7d0',
+                      bgcolor: '#f0fdf4',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography variant="caption" color="#166534" fontWeight={700}>
+                      PASSED / FAILED
+                    </Typography>
+                    <Typography variant="h5" fontWeight={800} color="#15803d" sx={{ mt: 0.5 }}>
+                      {passedCountDisplay} / {failedCountDisplay}
+                    </Typography>
+                    <Typography variant="caption" color="#166534">
+                      {totalAssessmentsDisplay > 0
+                        ? `${Math.round((passedCountDisplay / totalAssessmentsDisplay) * 100)}% Pass Rate`
+                        : 'No attempts'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={6} sm={4} md={2}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2,
+                      border: '1px solid #DCE6F5',
+                      bgcolor: '#ffffff',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                      LATEST PERCENTAGE
+                    </Typography>
+                    <Typography variant="h4" fontWeight={800} color="#6366f1" sx={{ mt: 0.5 }}>
+                      {latestPercentageDisplay}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Most recent attempt
+                    </Typography>
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={6} sm={4} md={2}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2,
+                      border: '1px solid',
+                      borderColor: recordedWarningsDisplay > 0 ? '#fecaca' : '#DCE6F5',
+                      bgcolor: recordedWarningsDisplay > 0 ? '#fef2f2' : '#ffffff',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      color={recordedWarningsDisplay > 0 ? '#b91c1c' : 'text.secondary'}
+                      fontWeight={700}
+                    >
+                      RECORDED WARNINGS
+                    </Typography>
+                    <Typography
+                      variant="h4"
+                      fontWeight={800}
+                      color={recordedWarningsDisplay > 0 ? '#dc2626' : '#14264B'}
+                      sx={{ mt: 0.5 }}
+                    >
+                      {recordedWarningsDisplay}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Proctoring telemetry
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              {/* Snapshot Identity & Placement Resume */}
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Card elevation={0} sx={{ height: '100%', border: '1px solid #DCE6F5', borderRadius: 2 }}>
+                    <CardContent sx={{ p: 3 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5 }}>
+                        <Box
+                          sx={{
+                            width: 52,
+                            height: 52,
+                            borderRadius: '8px',
+                            bgcolor: '#1765B5',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <SchoolIcon sx={{ color: '#ffffff', fontSize: 28 }} />
+                        </Box>
                         <div>
-                          <Chip
-                            label={student.status}
-                            size="small"
-                            color={
-                              student.status === 'ACTIVE'
-                                ? 'success'
-                                : student.status === 'PLACED'
-                                ? 'secondary'
-                                : student.status === 'BLOCKED'
-                                ? 'error'
-                                : 'default'
-                            }
-                            sx={{ fontWeight: 700, mt: 0.5 }}
-                          />
+                          <Typography variant="h6" fontWeight={700} sx={{ color: '#14264B' }}>
+                            {student.name}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
+                            <Chip
+                              label={student.registerNumber}
+                              size="small"
+                              color="primary"
+                              sx={{ fontFamily: 'monospace', fontWeight: 700 }}
+                            />
+                            <Chip
+                              label={student.status}
+                              size="small"
+                              color={student.status === 'ACTIVE' ? 'success' : 'default'}
+                              sx={{ fontWeight: 700 }}
+                            />
+                          </Box>
                         </div>
-                      </div>
-                    </Box>
+                      </Box>
 
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <GradeIcon sx={{ color: 'warning.main', fontSize: 20 }} />
-                      <div>
-                        <Typography variant="caption" color="text.secondary">
-                          Cumulative CGPA
-                        </Typography>
-                        <Typography variant="h6" fontWeight={800} color="#b45309">
-                          {student.cgpa !== null && student.cgpa !== undefined ? Number(student.cgpa).toFixed(2) : 'N/A'}
-                        </Typography>
-                      </div>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+                      <Divider sx={{ my: 2 }} />
 
-            {/* Hierarchy Placement & Academic Progress */}
-            <Grid item xs={12} md={7}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 4 }}>
-                  <Typography variant="h6" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <BusinessIcon sx={{ color: 'primary.light' }} /> Academic Hierarchy Placement
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    Strict 6-tier institutional mapping verifying student cohort association.
-                  </Typography>
+                      <Grid container spacing={1.5}>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">
+                            Department
+                          </Typography>
+                          <Typography variant="body2" fontWeight={700}>
+                            {student.department?.code} - {student.department?.name}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">
+                            Course & Class
+                          </Typography>
+                          <Typography variant="body2" fontWeight={700}>
+                            {student.course?.code} ({student.class?.name || 'Class'})
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">
+                            College Login Email
+                          </Typography>
+                          <Typography variant="body2" fontWeight={700} sx={{ color: '#14264B' }}>
+                            {student.collegeEmail}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">
+                            Section / Cohort
+                          </Typography>
+                          <Typography variant="body2" fontWeight={700}>
+                            Section {student.section?.name || '—'}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </CardContent>
+                  </Card>
+                </Grid>
 
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6}>
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#EDF2FF', border: '1px solid #DCE6F5' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <BusinessIcon fontSize="inherit" /> Department
-                        </Typography>
-                        <Typography variant="body1" fontWeight={700} color="primary.main">
-                          {student.department?.code}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {student.department?.name}
+                <Grid item xs={12} md={6}>
+                  <Card elevation={0} sx={{ height: '100%', border: '1px solid #DCE6F5', borderRadius: 2 }}>
+                    <CardContent sx={{ p: 3 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+                        <PictureAsPdfIcon sx={{ color: '#ef4444', fontSize: 26 }} />
+                        <Typography variant="h6" fontWeight={700}>
+                          Verified Placement Resume
                         </Typography>
                       </Box>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#EDF2FF', border: '1px solid #DCE6F5' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <MenuBookIcon fontSize="inherit" /> Degree Course
-                        </Typography>
-                        <Typography variant="body1" fontWeight={700} color="secondary.main">
-                          {student.course?.code}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {student.course?.name}
-                        </Typography>
-                      </Box>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#EDF2FF', border: '1px solid #DCE6F5' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <ClassIcon fontSize="inherit" /> Academic Class
-                        </Typography>
-                        <Typography variant="body1" fontWeight={700} color="text.primary">
-                          {student.class?.name || '—'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Year {student.year} • Batch {student.class?.batchYear}
-                        </Typography>
-                      </Box>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#EDF2FF', border: '1px solid #DCE6F5' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <ViewModuleIcon fontSize="inherit" /> Section
-                        </Typography>
-                        <Typography variant="body1" fontWeight={700} color="success.main">
-                          Section {student.section?.name || '—'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Assigned Cohort Group
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  </Grid>
-
-                  <Divider sx={{ my: 3, borderColor: '#DCE6F5' }} />
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Registered: {new Date(student.createdAt).toLocaleDateString()}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Last Profile Update: {new Date(student.updatedAt).toLocaleDateString()}
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          {/* ================================================================= */}
-          {/* SECTION: VERIFIED PLACEMENT RESUME                                */}
-          {/* ================================================================= */}
-          <Card sx={{ border: '1px solid #DCE6F5' }}>
-            <CardContent sx={{ p: 3.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                <PictureAsPdfIcon sx={{ color: '#ef4444', fontSize: 26 }} />
-                <Typography variant="h6" fontWeight={700}>
-                  Verified Placement Resume
-                </Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Official candidate resume uploaded to the placement portal for campus recruitment drives.
-              </Typography>
-
-              {resumeActionError && (
-                <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setResumeActionError(null)}>
-                  {resumeActionError}
-                </Alert>
-              )}
-
-              {drilldownLoading ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
-                  <CircularProgress size={24} />
-                  <Typography variant="body2" color="text.secondary">Loading resume details...</Typography>
-                </Box>
-              ) : drilldown?.resume?.exists ? (
-                <Box
-                  sx={{
-                    p: 2.5,
-                    borderRadius: 2.5,
-                    bgcolor: '#EDF2FF',
-                    border: '1px solid #DCE6F5',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: 2,
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 2,
-                        bgcolor: 'rgba(239, 68, 68, 0.1)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <PictureAsPdfIcon sx={{ color: '#ef4444', fontSize: 28 }} />
-                    </Box>
-                    <div>
-                      <Typography variant="subtitle1" fontWeight={700} color="text.primary">
-                        {drilldown.resume.fileName || `${student.registerNumber}_Resume.pdf`}
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Official candidate placement resume submitted for campus placement drives.
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {drilldown.resume.uploadedAt
-                          ? `Uploaded: ${new Date(drilldown.resume.uploadedAt).toLocaleDateString()}`
-                          : 'Uploaded to platform'}{' '}
-                        • {drilldown.resume.fileSize || 'PDF Document'}
-                      </Typography>
-                    </div>
-                  </Box>
 
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-                    <Chip
-                      icon={<CheckCircleIcon />}
-                      label={drilldown.resume.status || 'Verified'}
-                      size="small"
-                      color={drilldown.resume.status === 'VERIFIED' ? 'success' : 'warning'}
-                      sx={{ fontWeight: 700 }}
-                    />
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      size="small"
-                      startIcon={viewingResume ? <CircularProgress size={16} /> : <VisibilityIcon />}
-                      onClick={handleViewResume}
-                      disabled={viewingResume}
-                    >
-                      View Resume
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      size="small"
-                      startIcon={downloadingResume ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />}
-                      onClick={handleDownloadResume}
-                      disabled={downloadingResume}
-                    >
-                      Download Resume
-                    </Button>
-                  </Box>
-                </Box>
-              ) : (
-                <Alert severity="info" variant="outlined">
-                  No verified placement resume uploaded.
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
+                      {resumeActionError && (
+                        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setResumeActionError(null)}>
+                          {resumeActionError}
+                        </Alert>
+                      )}
 
-          {/* ================================================================= */}
-          {/* SECTION: STUDENT PERFORMANCE PROGRESS                             */}
-          {/* ================================================================= */}
-          <Card sx={{ border: '1px solid #DCE6F5' }}>
-            <CardContent sx={{ p: 3.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <TimelineIcon color="primary" sx={{ fontSize: 26 }} />
-                  <Typography variant="h6" fontWeight={700}>
-                    Student Performance Progress
-                  </Typography>
-                </Box>
-
-                {progress?.canCompare && (
-                  <Chip
-                    label={`Performance Status: ${progress.status}`}
-                    color={
-                      progress.status === 'Improved'
-                        ? 'success'
-                        : progress.status === 'Decreased'
-                        ? 'error'
-                        : 'default'
-                    }
-                    sx={{ fontWeight: 700 }}
-                  />
-                )}
-              </Box>
-
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Chronological assessment score trajectory comparing the latest completed assessment against the immediately previous test.
-              </Typography>
-
-              {drilldownLoading ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
-                  <CircularProgress size={24} />
-                  <Typography variant="body2" color="text.secondary">Calculating performance progress...</Typography>
-                </Box>
-              ) : !progress || !progress.hasCompletedAssessments ? (
-                <Alert severity="info" variant="outlined">
-                  No completed assessment data available.
-                </Alert>
-              ) : !progress.canCompare ? (
-                <Box>
-                  <Alert severity="info" variant="outlined" sx={{ mb: 2.5 }}>
-                    {progress.statusMessage || 'Previous assessment comparison is not available.'}
-                  </Alert>
-
-                  {progress.currentTest && (
-                    <Box sx={{ p: 2.5, borderRadius: 2.5, bgcolor: '#EDF2FF', border: '1px solid #DCE6F5', maxWidth: 420 }}>
-                      <Typography variant="overline" color="primary.main" fontWeight={700}>
-                        Latest Completed Assessment
-                      </Typography>
-                      <Typography variant="subtitle1" fontWeight={700}>
-                        {progress.currentTest.assessmentTitle}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                        Completed on {new Date(progress.currentTest.date).toLocaleDateString()}
-                      </Typography>
-                      <Typography variant="h4" fontWeight={800} color="primary.main">
-                        {progress.currentTest.score} / {progress.currentTest.totalMarks}
-                      </Typography>
-                      <Typography variant="body2" fontWeight={600} color="text.secondary">
-                        Overall: {progress.currentTest.percentage}%
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-              ) : (
-                <Box>
-                  {/* Side-by-Side Test Comparison Cards */}
-                  <Grid container spacing={3} sx={{ mb: 3 }}>
-                    {/* Previous Test */}
-                    <Grid item xs={12} md={5}>
-                      <Box
-                        sx={{
-                          p: 3,
-                          borderRadius: 2.5,
-                          bgcolor: '#EDF2FF',
-                          border: '1px solid #DCE6F5',
-                          height: '100%',
-                        }}
-                      >
-                        <Typography variant="overline" color="text.secondary" fontWeight={700} letterSpacing={1}>
-                          Previous Assessment
-                        </Typography>
-                        <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
-                          {progress.previousTest?.assessmentTitle}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                          Completed: {progress.previousTest?.date ? new Date(progress.previousTest.date).toLocaleDateString() : '—'}
-                        </Typography>
-
-                        <Divider sx={{ my: 1.5 }} />
-
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      {drilldownLoading ? (
+                        <CircularProgress size={20} />
+                      ) : drilldown?.resume?.exists ? (
+                        <Box
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            bgcolor: '#EDF2FF',
+                            border: '1px solid #DCE6F5',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 1.5,
+                          }}
+                        >
                           <div>
-                            <Typography variant="caption" color="text.secondary">
-                              Awarded Marks
+                            <Typography variant="subtitle2" fontWeight={700}>
+                              {drilldown.resume.fileName || 'Verified_Resume.pdf'}
                             </Typography>
-                            <Typography variant="h4" fontWeight={800} color="text.primary">
-                              {progress.previousTest?.score} / {progress.previousTest?.totalMarks}
+                            <Typography variant="caption" color="text.secondary">
+                              {drilldown.resume.uploadedAt
+                                ? `Uploaded: ${new Date(drilldown.resume.uploadedAt).toLocaleDateString()}`
+                                : 'Verified File Ready'}
                             </Typography>
                           </div>
-                          <div>
-                            <Typography variant="caption" color="text.secondary">
-                              Percentage
-                            </Typography>
-                            <Typography variant="h5" fontWeight={700} color="text.secondary">
-                              {progress.previousTest?.percentage}%
-                            </Typography>
-                          </div>
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<VisibilityIcon fontSize="small" />}
+                              onClick={handleViewResume}
+                              disabled={viewingResume}
+                            >
+                              {viewingResume ? 'Loading...' : 'Preview'}
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={<DownloadIcon fontSize="small" />}
+                              onClick={handleDownloadResume}
+                              disabled={downloadingResume}
+                              sx={{ bgcolor: '#0284c7' }}
+                            >
+                              {downloadingResume ? 'Downloading...' : 'Download'}
+                            </Button>
+                          </Box>
                         </Box>
-                      </Box>
-                    </Grid>
+                      ) : (
+                        <Alert severity="info" variant="outlined">
+                          No verified placement resume uploaded by candidate yet.
+                        </Alert>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
 
-                    {/* Progress Indicator & Trend */}
-                    <Grid item xs={12} md={2} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <Box
-                        sx={{
-                          width: 56,
-                          height: 56,
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          bgcolor:
-                            progress.status === 'Improved'
-                              ? 'rgba(16, 185, 129, 0.12)'
-                              : progress.status === 'Decreased'
-                              ? 'rgba(239, 68, 68, 0.12)'
-                              : 'rgba(100, 116, 139, 0.12)',
-                          mb: 1.5,
-                        }}
-                      >
-                        {progress.status === 'Improved' ? (
-                          <TrendingUpIcon sx={{ color: '#10b981', fontSize: 32 }} />
-                        ) : progress.status === 'Decreased' ? (
-                          <TrendingDownIcon sx={{ color: '#ef4444', fontSize: 32 }} />
-                        ) : (
-                          <HorizontalRuleIcon sx={{ color: '#7182A0', fontSize: 32 }} />
-                        )}
-                      </Box>
-
-                      <Typography
-                        variant="h6"
-                        fontWeight={800}
-                        sx={{
-                          color:
-                            progress.status === 'Improved'
-                              ? '#10b981'
-                              : progress.status === 'Decreased'
-                              ? '#ef4444'
-                              : '#7182A0',
-                          textAlign: 'center',
-                        }}
-                      >
-                        {progress.status === 'Improved'
-                          ? `↑ Improved by ${progress.percentageChange ? Math.abs(progress.percentageChange).toFixed(2) + '%' : progress.percentageChangeDisplay}`
-                          : progress.status === 'Decreased'
-                          ? `↓ Decreased by ${progress.percentageChange ? Math.abs(progress.percentageChange).toFixed(2) + '%' : progress.percentageChangeDisplay}`
-                          : progress.percentageChangeDisplay}
+              {/* Sequential Score Progress & Trajectory */}
+              {progress?.canCompare && (
+                <Card elevation={0} sx={{ border: '1px solid #DCE6F5', borderRadius: 2 }}>
+                  <CardContent sx={{ p: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                      <TimelineIcon color="primary" />
+                      <Typography variant="h6" fontWeight={700}>
+                        Sequential Assessment Progress
                       </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Deterministic comparison of the two most recent completed attempts.
+                    </Typography>
 
-                      <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', mt: 0.5 }}>
-                        Score Change: {progress.scoreChange !== undefined && progress.scoreChange > 0 ? `+${progress.scoreChange}` : progress.scoreChange} marks
-                      </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={5}>
+                        <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                            PREVIOUS TEST
+                          </Typography>
+                          <Typography variant="subtitle1" fontWeight={700}>
+                            {progress.previousTest?.assessmentTitle}
+                          </Typography>
+                          <Typography variant="h5" fontWeight={800} color="text.primary" sx={{ mt: 0.5 }}>
+                            {progress.previousTest?.score} / {progress.previousTest?.totalMarks} ({progress.previousTest?.percentage}%)
+                          </Typography>
+                        </Paper>
+                      </Grid>
+
+                      <Grid item xs={12} sm={2} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        <Typography
+                          variant="h6"
+                          fontWeight={800}
+                          color={progress.status === 'Improved' ? '#16a34a' : progress.status === 'Decreased' ? '#dc2626' : '#64748b'}
+                        >
+                          {progress.percentageChangeDisplay}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Trajectory
+                        </Typography>
+                      </Grid>
+
+                      <Grid item xs={12} sm={5}>
+                        <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f0fdf4', borderColor: '#bbf7d0', borderRadius: 2 }}>
+                          <Typography variant="caption" color="#166534" fontWeight={700}>
+                            LATEST TEST
+                          </Typography>
+                          <Typography variant="subtitle1" fontWeight={700}>
+                            {progress.currentTest?.assessmentTitle}
+                          </Typography>
+                          <Typography variant="h5" fontWeight={800} color="#15803d" sx={{ mt: 0.5 }}>
+                            {progress.currentTest?.score} / {progress.currentTest?.totalMarks} ({progress.currentTest?.percentage}%)
+                          </Typography>
+                        </Paper>
+                      </Grid>
                     </Grid>
-
-                    {/* Current Test */}
-                    <Grid item xs={12} md={5}>
-                      <Box
-                        sx={{
-                          p: 3,
-                          borderRadius: 2.5,
-                          bgcolor: '#f0fdf4',
-                          border: '1px solid #bbf7d0',
-                          height: '100%',
-                        }}
-                      >
-                        <Typography variant="overline" color="success.main" fontWeight={700} letterSpacing={1}>
-                          Current Assessment (Latest)
-                        </Typography>
-                        <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
-                          {progress.currentTest?.assessmentTitle}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                          Completed: {progress.currentTest?.date ? new Date(progress.currentTest.date).toLocaleDateString() : '—'}
-                        </Typography>
-
-                        <Divider sx={{ my: 1.5 }} />
-
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                          <div>
-                            <Typography variant="caption" color="text.secondary">
-                              Awarded Marks
-                            </Typography>
-                            <Typography variant="h4" fontWeight={800} color="success.main">
-                              {progress.currentTest?.score} / {progress.currentTest?.totalMarks}
-                            </Typography>
-                          </div>
-                          <div>
-                            <Typography variant="caption" color="text.secondary">
-                              Percentage
-                            </Typography>
-                            <Typography variant="h5" fontWeight={700} color="success.dark">
-                              {progress.currentTest?.percentage}%
-                            </Typography>
-                          </div>
-                        </Box>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Box>
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
-
-          {/* ================================================================= */}
-          {/* SECTION: CATEGORY / PERFORMANCE COMPARISON                        */}
-          {/* ================================================================= */}
-          {progress?.canCompare && (
-            <Card sx={{ border: '1px solid #DCE6F5' }}>
-              <CardContent sx={{ p: 3.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                  <CompareArrowsIcon color="primary" sx={{ fontSize: 26 }} />
-                  <Typography variant="h6" fontWeight={700}>
-                    Performance Comparison
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-                  Deterministic category-level score comparison calculated from actual completed attempt answers.
-                </Typography>
-
-                {progress.categoryComparison && progress.categoryComparison.length > 0 ? (
-                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-                    <Table size="small">
-                      <TableHead sx={{ bgcolor: '#EDF2FF' }}>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 700 }}>Assessment Category</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }} align="right">Previous Score</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }} align="right">Current Score</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }} align="right">Score Change</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {progress.categoryComparison.map((cat) => (
-                          <TableRow key={cat.category} hover>
-                            <TableCell sx={{ fontWeight: 600 }}>{cat.displayName}</TableCell>
-                            <TableCell align="right">{cat.previousScore}</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600 }}>{cat.currentScore}</TableCell>
-                            <TableCell align="right">
-                              <Chip
-                                label={cat.change > 0 ? `+${cat.change}` : `${cat.change}`}
-                                size="small"
-                                color={cat.change > 0 ? 'success' : cat.change < 0 ? 'error' : 'default'}
-                                sx={{ fontWeight: 700, minWidth: 50 }}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Alert severity="info" variant="outlined">
-                    Category-level breakdown is not available for these assessments.
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
+            </Box>
           )}
 
           {/* ================================================================= */}
-          {/* SECTION: ASSESSMENT HISTORY                                       */}
+          {/* TAB 1: PERSONAL DETAILS                                           */}
           {/* ================================================================= */}
-          <Card sx={{ border: '1px solid #DCE6F5' }}>
-            <CardContent sx={{ p: 3.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <AssessmentIcon color="primary" sx={{ fontSize: 26 }} />
-                  <Typography variant="h6" fontWeight={700}>
-                    Complete Assessment History ({drilldown?.assessmentHistory?.length || 0})
-                  </Typography>
-                </Box>
-                {student && (
-                  <Button
-                    size="small"
-                    variant="text"
-                    endIcon={<LaunchIcon />}
-                    onClick={() => navigate(`/admin/students/${student.id}/performance`)}
-                  >
-                    View Analytics Drilldown
-                  </Button>
-                )}
+          {activeTab === 1 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* 11 Metadata Attributes Master Card */}
+              <Card elevation={0} sx={{ border: '1px solid #DCE6F5', borderRadius: 2 }}>
+                <CardContent sx={{ p: 3.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                    <Typography variant="h6" fontWeight={700} sx={{ color: '#14264B' }}>
+                      Candidate Identity & Institution Records (11 Mandatory Fields)
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<EditIcon fontSize="small" />}
+                      onClick={() => setEditDialogOpen(true)}
+                    >
+                      Edit Profile
+                    </Button>
+                  </Box>
+
+                  <Grid container spacing={2.5}>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        1. Register Number
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700} sx={{ fontFamily: 'monospace', color: 'primary.main' }}>
+                        {student.registerNumber}
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        2. Student Full Name
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700}>
+                        {student.name}
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          3. College Email ID (Sole Login ID)
+                        </Typography>
+                        <Chip
+                          label="Sole Login ID"
+                          size="small"
+                          color="primary"
+                          sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                        />
+                      </Box>
+                      <Typography variant="body1" fontWeight={700} sx={{ color: '#14264B' }}>
+                        {student.collegeEmail}
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        4. Department
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700}>
+                        {student.department?.code} - {student.department?.name}
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        5. Course / Degree Program
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700}>
+                        {student.course?.code} - {student.course?.name}
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        6. Academic Class
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700}>
+                        {student.class?.name || 'Class Batch'} (Batch {student.class?.batchYear})
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        7. Section / Cohort
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700}>
+                        Section {student.section?.name || '—'}
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        8. Current Year
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700}>
+                        Year {student.year} (Semester {student.academicRecord?.currentSemester || student.year * 2 - 1})
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        9. Contact Phone Number
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700}>
+                        {student.phone || 'Not provided'}
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          10. Personal Email (Contact Only)
+                        </Typography>
+                        {student.personalEmail && (
+                          <Chip
+                            label={student.isPersonalEmailVerified ? 'Verified' : 'Unverified'}
+                            size="small"
+                            color={student.isPersonalEmailVerified ? 'success' : 'warning'}
+                            sx={{ height: 18, fontSize: '0.65rem' }}
+                          />
+                        )}
+                      </Box>
+                      <Typography variant="body1" fontWeight={700}>
+                        {student.personalEmail || 'Not provided'}
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        11. Current Cumulative CGPA
+                      </Typography>
+                      <Typography variant="h6" fontWeight={800} color="#0D9488">
+                        {currentCgpaDisplay}
+                      </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="caption" color="text.secondary">
+                        Date of Birth (DOB)
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600}>
+                        {student.dob || '—'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+
+              {/* Personal Email Manager & Audit Log */}
+              <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                <StudentPersonalEmailManager
+                  studentId={student.id}
+                  collegeEmail={student.collegeEmail}
+                  personalEmail={student.personalEmail}
+                  isPersonalEmailVerified={student.isPersonalEmailVerified}
+                  onUpdated={(newEmail, isVerified) => {
+                    setStudent((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            personalEmail: newEmail,
+                            isPersonalEmailVerified: isVerified,
+                          }
+                        : prev
+                    );
+                  }}
+                />
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-                Chronological list of all completed assessments, ordered latest first.
-              </Typography>
 
-              {drilldownLoading ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
-                  <CircularProgress size={24} />
-                  <Typography variant="body2" color="text.secondary">Loading assessment records...</Typography>
-                </Box>
-              ) : drilldown?.assessmentHistory && drilldown.assessmentHistory.length > 0 ? (
-                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-                  <Table size="small">
-                    <TableHead sx={{ bgcolor: '#EDF2FF' }}>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 700 }}>Assessment</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }} align="right">Score</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }} align="right">Percentage</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }} align="center">Result</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }} align="center">Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {drilldown.assessmentHistory.map((item) => (
-                        <TableRow key={item.id} hover>
-                          <TableCell sx={{ fontWeight: 600 }}>{item.assessmentTitle}</TableCell>
-                          <TableCell color="text.secondary">
-                            {new Date(item.createdAt).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600 }}>
-                            {item.obtainedMarks} / {item.totalMarks}
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 700 }}>
-                            {item.percentage}%
-                          </TableCell>
-                          <TableCell align="center">
-                            <Chip
-                              icon={item.isPassed ? <CheckCircleOutlineIcon /> : <CancelOutlinedIcon />}
-                              label={item.isPassed ? 'PASS' : 'FAIL'}
-                              size="small"
-                              color={item.isPassed ? 'success' : 'error'}
-                              sx={{ fontWeight: 700 }}
-                            />
-                          </TableCell>
-                          <TableCell align="center">
-                            <Chip label="COMPLETED" size="small" variant="outlined" color="primary" sx={{ fontWeight: 600 }} />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              ) : (
-                <Alert severity="info" variant="outlined">
-                  No completed assessments recorded for this candidate yet.
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
+              {/* Student Skills & Competencies */}
+              <StudentSkillsCard studentId={student.id} readOnly={false} />
+            </Box>
+          )}
 
           {/* ================================================================= */}
-          {/* SECTION: HUMAN EVALUATION (GD & STRUCTURED INTERVIEWS)           */}
+          {/* TAB 2: ACADEMIC RECORDS                                           */}
           {/* ================================================================= */}
-          <Card sx={{ border: '1px solid #DCE6F5' }}>
-            <CardContent sx={{ p: 3.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                <GroupsIcon sx={{ color: '#16a34a', fontSize: 26 }} />
-                <Typography variant="h6" fontWeight={700}>
-                  Human Evaluation Summary (GD & Interviews)
+          {activeTab === 2 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <StudentAcademicRecordsSection
+                studentId={student.id}
+                studentRegisterNumber={student.registerNumber}
+                initialRecord={student.academicRecord || null}
+                onRecordUpdated={fetchStudent}
+              />
+            </Box>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 3: SEMESTER RESULTS                                           */}
+          {/* ================================================================= */}
+          {activeTab === 3 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* University Grading Formula Explanation Card */}
+              <Alert severity="info" sx={{ borderRadius: 2 }}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  University Grading Rules & Semester Calculation
                 </Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Human evaluator placement rounds showing communication, technical depth, confidence, and sequential improvement.
-              </Typography>
+                <Typography variant="body2">
+                  Overall Cumulative Grade Point Average (CGPA) is calculated strictly by university grading rules based on completed semester SGPAs:
+                  <strong> Overall CGPA = (Sum of completed semester SGPAs × Credits) / Total Completed Credits</strong> (or arithmetic mean of completed semester SGPAs, rounded to 2 decimal places). Marksheet uploads are strictly optional.
+                </Typography>
+              </Alert>
+
+              {/* Semesters 1 to 8 Table */}
+              <Card elevation={0} sx={{ border: '1px solid #DCE6F5', borderRadius: 2 }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6" fontWeight={700}>
+                      Semesters 1 to 8 Results
+                    </Typography>
+                    <Chip
+                      label={`Current: Semester ${student.academicRecord?.currentSemester || 1}`}
+                      color="primary"
+                      sx={{ fontWeight: 700 }}
+                    />
+                  </Box>
+
+                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                    <Table size="small">
+                      <TableHead sx={{ bgcolor: '#F8FAFC' }}>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>Semester</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="center">SGPA</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="center">Cumulative CGPA</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="center">Total Credits</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="center">Credits Earned</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="center">Backlogs</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="center">Marksheet Document</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {Array.from({ length: 8 }, (_, i) => {
+                          const semNum = i + 1;
+                          const sem = student.academicRecord?.semesters?.find(
+                            (s: any) => s.semesterNumber === semNum
+                          );
+                          const isCurrent = (student.academicRecord?.currentSemester || 1) === semNum;
+
+                          return (
+                            <TableRow key={semNum} hover sx={{ bgcolor: isCurrent ? '#f0f9ff' : undefined }}>
+                              <TableCell sx={{ fontWeight: 700 }}>
+                                Semester {semNum}
+                                {isCurrent && (
+                                  <Chip label="Current" size="small" color="info" sx={{ ml: 1, height: 20 }} />
+                                )}
+                              </TableCell>
+                              <TableCell align="center" sx={{ fontWeight: 700 }}>
+                                {sem?.sgpa != null ? Number(sem.sgpa).toFixed(2) : '—'}
+                              </TableCell>
+                              <TableCell align="center">
+                                {sem?.cgpa != null ? Number(sem.cgpa).toFixed(2) : '—'}
+                              </TableCell>
+                              <TableCell align="center">{sem?.totalCredits ?? 24}</TableCell>
+                              <TableCell align="center">{sem?.creditsEarned ?? 24}</TableCell>
+                              <TableCell align="center">
+                                <Typography
+                                  variant="body2"
+                                  color={sem?.backlogsCount && sem.backlogsCount > 0 ? 'error.main' : 'text.secondary'}
+                                  fontWeight={sem?.backlogsCount && sem.backlogsCount > 0 ? 700 : 400}
+                                >
+                                  {sem?.backlogsCount || 0}
+                                </Typography>
+                              </TableCell>
+                              <TableCell align="center">
+                                {sem?.hasMarksheet ? (
+                                  <Chip
+                                    icon={<CheckCircleIcon />}
+                                    label="Uploaded"
+                                    size="small"
+                                    color="success"
+                                  />
+                                ) : (
+                                  <Typography variant="caption" color="text.secondary">
+                                    Optional (Not Uploaded)
+                                  </Typography>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </CardContent>
+              </Card>
+            </Box>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 4: ASSESSMENT HISTORY                                         */}
+          {/* ================================================================= */}
+          {activeTab === 4 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Card elevation={0} sx={{ border: '1px solid #DCE6F5', borderRadius: 2 }}>
+                <CardContent sx={{ p: 3.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <AssessmentIcon color="primary" sx={{ fontSize: 26 }} />
+                      <Typography variant="h6" fontWeight={700}>
+                        Complete Assessment History ({drilldown?.assessmentHistory?.length || 0})
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+                    Chronological list of all assessment attempts with category breakdown, status, scores, and pass/fail indicators.
+                  </Typography>
+
+                  {drilldownLoading ? (
+                    <Box sx={{ py: 3, textAlign: 'center' }}>
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : !drilldown?.assessmentHistory || drilldown.assessmentHistory.length === 0 ? (
+                    <Alert severity="info" variant="outlined">
+                      No assessment attempts recorded for this candidate yet.
+                    </Alert>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {drilldown.assessmentHistory.map((item) => (
+                        <Paper
+                          key={item.id}
+                          variant="outlined"
+                          sx={{ p: 2.5, borderRadius: 2, bgcolor: '#ffffff' }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
+                            <div>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="subtitle1" fontWeight={700}>
+                                  {item.assessmentTitle}
+                                </Typography>
+                                <Chip
+                                  label={item.assessmentType || 'ASSESSMENT'}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ fontSize: '0.7rem' }}
+                                />
+                              </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                Date: {new Date(item.createdAt).toLocaleDateString()}
+                                {item.timeTakenMinutes ? ` • Duration: ${item.timeTakenMinutes} mins` : ''}
+                              </Typography>
+                            </div>
+
+                            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                              <Typography variant="h6" fontWeight={800} color="text.primary">
+                                {item.obtainedMarks} / {item.totalMarks} ({item.percentage}%)
+                              </Typography>
+                              <Chip
+                                icon={item.isPassed ? <CheckCircleOutlineIcon /> : <CancelOutlinedIcon />}
+                                label={item.isPassed ? 'PASS' : 'FAIL'}
+                                size="small"
+                                color={item.isPassed ? 'success' : 'error'}
+                                sx={{ fontWeight: 700 }}
+                              />
+                              <Chip
+                                label={item.attemptStatus || 'COMPLETED'}
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                              />
+                            </Box>
+                          </Box>
+
+                          {/* Category-Wise Performance Breakdown */}
+                          {item.categoryBreakdown && item.categoryBreakdown.length > 0 && (
+                            <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #f1f5f9' }}>
+                              <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ display: 'block', mb: 1 }}>
+                                SECTION / CATEGORY PERFORMANCE BREAKDOWN:
+                              </Typography>
+                              <Grid container spacing={1.5}>
+                                {item.categoryBreakdown.map((cat, idx) => (
+                                  <Grid item xs={12} sm={4} key={idx}>
+                                    <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                        {cat.category}
+                                      </Typography>
+                                      <Typography variant="body2" fontWeight={700}>
+                                        {cat.score} / {cat.maxScore} ({cat.percentage}%)
+                                      </Typography>
+                                    </Box>
+                                  </Grid>
+                                ))}
+                              </Grid>
+                            </Box>
+                          )}
+                        </Paper>
+                      ))}
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </Box>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 5: MALPRACTICE HISTORY                                        */}
+          {/* ================================================================= */}
+          {activeTab === 5 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* Telemetry Notice */}
+              <Alert severity="info" sx={{ borderRadius: 2 }}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Objective Browser Event Telemetry
+                </Typography>
+                <Typography variant="body2">
+                  Proctoring history is recorded transparently from client browser window events (focus loss, tab switching, fullscreen exits, camera connectivity interruptions, and system warnings). The system only logs verified browser state events without making unverified external claims.
+                </Typography>
+              </Alert>
+
+              <Card elevation={0} sx={{ border: '1px solid #DCE6F5', borderRadius: 2 }}>
+                <CardContent sx={{ p: 3.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                    <SecurityIcon color="error" sx={{ fontSize: 26 }} />
+                    <Typography variant="h6" fontWeight={700}>
+                      Proctoring & Malpractice Event Log
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+                    Recorded chronological security warnings and suspicious activity triggers.
+                  </Typography>
+
+                  {drilldownLoading ? (
+                    <Box sx={{ py: 3, textAlign: 'center' }}>
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : !drilldown?.malpracticeHistory || drilldown.malpracticeHistory.length === 0 ? (
+                    <Alert severity="success" variant="outlined">
+                      Clean Proctoring Record: Zero malpractice or security warnings recorded for this candidate.
+                    </Alert>
+                  ) : (
+                    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                      <Table size="small">
+                        <TableHead sx={{ bgcolor: '#F8FAFC' }}>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Timestamp</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Assessment Context</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Event Type</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Severity</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Event Details</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {drilldown.malpracticeHistory.map((evt) => (
+                            <TableRow key={evt.id} hover>
+                              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                                {new Date(evt.timestamp).toLocaleString()}
+                              </TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>{evt.assessmentName}</TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={evt.displayType}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ fontWeight: 600 }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={evt.severity}
+                                  size="small"
+                                  color={
+                                    evt.severity === 'CRITICAL'
+                                      ? 'error'
+                                      : evt.severity === 'HIGH'
+                                      ? 'error'
+                                      : evt.severity === 'MEDIUM'
+                                      ? 'warning'
+                                      : 'default'
+                                  }
+                                  sx={{ fontWeight: 700 }}
+                                />
+                              </TableCell>
+                              <TableCell>{evt.details}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </Box>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 6: IMPROVEMENT RECOMMENDATIONS                                */}
+          {/* ================================================================= */}
+          {activeTab === 6 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* Important Advisory Disclaimer */}
+              <Alert severity="info" sx={{ borderRadius: 2 }}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Advisory Recommendations Disclaimer
+                </Typography>
+                <Typography variant="body2">
+                  {drilldown?.recommendations?.disclaimer ||
+                    'Advisory Notice: Improvement recommendations are strictly analytical and advisory guidance derived from assessment accuracy metrics. They do not alter candidate marks, evaluation results, or proctoring logs.'}
+                </Typography>
+              </Alert>
 
               <Grid container spacing={3}>
-                {/* GD Summary */}
+                {/* Weak Topics */}
                 <Grid item xs={12} md={6}>
-                  <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: '#EDF2FF', border: '1px solid #DCE6F5' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                      <Typography variant="subtitle1" fontWeight={700} color="#166534">
-                        Group Discussion (GD)
-                      </Typography>
-                      <Chip
-                        label={`${drilldown?.humanEvaluation?.gd?.totalEvaluated || 0} Evaluated`}
-                        size="small"
-                        color="success"
-                      />
-                    </Box>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      <strong>Average Score:</strong> {drilldown?.humanEvaluation?.gd?.averagePercentage ? `${drilldown.humanEvaluation.gd.averagePercentage}%` : '—'}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mb: 1.5 }}>
-                      <strong>Latest Score:</strong> {drilldown?.humanEvaluation?.gd?.latestPercentage ? `${drilldown.humanEvaluation.gd.latestPercentage}%` : '—'}
-                    </Typography>
+                  <Card elevation={0} sx={{ height: '100%', border: '1px solid #fecaca', borderRadius: 2, bgcolor: '#fffafa' }}>
+                    <CardContent sx={{ p: 3 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <WarningAmberIcon color="error" />
+                        <Typography variant="h6" fontWeight={700} color="#b91c1c">
+                          Focus Improvement Topics (&lt;60% Accuracy)
+                        </Typography>
+                      </Box>
 
-                    <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
-                      Evaluation Improvement:
-                    </Typography>
-                    {drilldown?.humanEvaluation?.gd?.progression && drilldown.humanEvaluation.gd.progression.length > 0 ? (
-                      drilldown.humanEvaluation.gd.progression.map((p: any, idx: number) => (
-                        <Box key={idx} sx={{ p: 1, my: 0.5, bgcolor: '#ffffff', borderRadius: 1, border: '1px solid #DCE6F5' }}>
-                          <Typography variant="caption" fontWeight={600}>
-                            {p.displayText}
-                          </Typography>
+                      {drilldown?.recommendations?.weakTopics && drilldown.recommendations.weakTopics.length > 0 ? (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {drilldown.recommendations.weakTopics.map((topic, idx) => (
+                            <Paper key={idx} variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#ffffff' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                <Typography variant="subtitle2" fontWeight={700}>
+                                  {topic.displayName}
+                                </Typography>
+                                <Chip
+                                  label={`${topic.accuracy}% Accuracy`}
+                                  size="small"
+                                  color="error"
+                                  sx={{ fontWeight: 700 }}
+                                />
+                              </Box>
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                                Category: {topic.category} • Attempted: {topic.attemptedCount} questions
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                <strong>Targeted Action:</strong> {topic.recommendation}
+                              </Typography>
+                            </Paper>
+                          ))}
                         </Box>
-                      ))
-                    ) : (
-                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        No previous evaluation available.
-                      </Typography>
-                    )}
-                  </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          No severe weak areas identified. Candidate demonstrates healthy baseline proficiency.
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
                 </Grid>
 
-                {/* Interview Summary */}
+                {/* Strong Areas */}
                 <Grid item xs={12} md={6}>
-                  <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: '#EDF2FF', border: '1px solid #DCE6F5' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                      <Typography variant="subtitle1" fontWeight={700} color="#1e40af">
-                        Structured Interviews
-                      </Typography>
-                      <Chip
-                        label={`${drilldown?.humanEvaluation?.interview?.totalEvaluated || 0} Evaluated`}
-                        size="small"
-                        color="primary"
-                      />
-                    </Box>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      <strong>Average Score:</strong> {drilldown?.humanEvaluation?.interview?.averagePercentage ? `${drilldown.humanEvaluation.interview.averagePercentage}%` : '—'}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mb: 1.5 }}>
-                      <strong>Latest Score:</strong> {drilldown?.humanEvaluation?.interview?.latestPercentage ? `${drilldown.humanEvaluation.interview.latestPercentage}%` : '—'}
-                    </Typography>
+                  <Card elevation={0} sx={{ height: '100%', border: '1px solid #bbf7d0', borderRadius: 2, bgcolor: '#f0fdf4' }}>
+                    <CardContent sx={{ p: 3 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <CheckCircleIcon color="success" />
+                        <Typography variant="h6" fontWeight={700} color="#15803d">
+                          Mastered Core Strengths (&ge;75% Accuracy)
+                        </Typography>
+                      </Box>
 
-                    <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
-                      Evaluation Improvement:
-                    </Typography>
-                    {drilldown?.humanEvaluation?.interview?.progression && drilldown.humanEvaluation.interview.progression.length > 0 ? (
-                      drilldown.humanEvaluation.interview.progression.map((p: any, idx: number) => (
-                        <Box key={idx} sx={{ p: 1, my: 0.5, bgcolor: '#ffffff', borderRadius: 1, border: '1px solid #DCE6F5' }}>
-                          <Typography variant="caption" fontWeight={600}>
-                            {p.displayText}
-                          </Typography>
+                      {drilldown?.recommendations?.strongAreas && drilldown.recommendations.strongAreas.length > 0 ? (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {drilldown.recommendations.strongAreas.map((topic, idx) => (
+                            <Paper key={idx} variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#ffffff' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                <Typography variant="subtitle2" fontWeight={700}>
+                                  {topic.displayName}
+                                </Typography>
+                                <Chip
+                                  label={`${topic.accuracy}% Accuracy`}
+                                  size="small"
+                                  color="success"
+                                  sx={{ fontWeight: 700 }}
+                                />
+                              </Box>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                Category: {topic.category} • Correct: {topic.correctCount} / {topic.attemptedCount}
+                              </Typography>
+                            </Paper>
+                          ))}
                         </Box>
-                      ))
-                    ) : (
-                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        No previous evaluation available.
-                      </Typography>
-                    )}
-                  </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          Complete further assessments to establish established strong domains.
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
                 </Grid>
               </Grid>
-            </CardContent>
-          </Card>
-        </Box>
+
+              {/* Actionable Placement Preparation Activities */}
+              <Card elevation={0} sx={{ border: '1px solid #DCE6F5', borderRadius: 2 }}>
+                <CardContent sx={{ p: 3.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                    <AutoAwesomeIcon color="primary" />
+                    <Typography variant="h6" fontWeight={700}>
+                      Actionable Placement Preparation Roadmaps
+                    </Typography>
+                  </Box>
+
+                  {drilldown?.recommendations?.recommendedActivities &&
+                  drilldown.recommendations.recommendedActivities.length > 0 ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      {drilldown.recommendations.recommendedActivities.map((act, idx) => (
+                        <Box
+                          key={idx}
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            bgcolor: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1.5,
+                          }}
+                        >
+                          <Typography variant="body2" fontWeight={700} color="primary.main">
+                            #{idx + 1}
+                          </Typography>
+                          <Typography variant="body2" fontWeight={600} color="#1e293b">
+                            {act}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      Standard placement training curriculum recommended.
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Box>
+          )}
+        </>
       ) : null}
 
       {/* Edit Profile Modal */}
@@ -1028,27 +1417,42 @@ export const StudentDetailPage: React.FC = () => {
             backgroundColor: '#ffffff',
             border: '1px solid #DCE6F5',
             borderRadius: 2.5,
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
           },
         }}
       >
         <form onSubmit={handleUpdate}>
           <DialogTitle sx={{ color: '#14264B', fontWeight: 700, borderBottom: '1px solid #DCE6F5', pb: 2 }}>
-            Edit Student Information
+            Edit Candidate Profile
           </DialogTitle>
           <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 2.5 }}>
             <TextField
-              label="Full Name"
+              label="Student Full Name"
               required
               fullWidth
               value={editForm.name}
               onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
             />
             <TextField
+              label="Personal Email Address"
+              type="email"
+              fullWidth
+              value={editForm.personalEmail}
+              onChange={(e) => setEditForm({ ...editForm, personalEmail: e.target.value })}
+              helperText="Candidate personal contact only (does not change login ID)"
+            />
+            <TextField
               label="Phone Number"
               fullWidth
               value={editForm.phone}
               onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+            />
+            <TextField
+              label="Date of Birth (DOB)"
+              fullWidth
+              value={editForm.dob}
+              onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })}
+              placeholder="DD-MM-YYYY"
             />
             <TextField
               label="Cumulative CGPA"
@@ -1082,6 +1486,16 @@ export const StudentDetailPage: React.FC = () => {
           </DialogActions>
         </form>
       </Dialog>
+
+      {/* Bulk Academic Import Dialog */}
+      <AcademicBulkImportDialog
+        open={academicImportDialogOpen}
+        onClose={() => setAcademicImportDialogOpen(false)}
+        onSuccess={() => {
+          fetchStudent();
+          refetchDrilldown();
+        }}
+      />
     </Box>
   );
 };

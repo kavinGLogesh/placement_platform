@@ -1,4 +1,5 @@
 import { prisma } from '../config/prisma.config.js';
+import { AppError } from '../middleware/errorHandler.js';
 import {
   CollegeDto,
   CreateCollegeDto,
@@ -18,6 +19,9 @@ import {
   StudentDto,
   CreateStudentDto,
   UpdateStudentDto,
+  StudentSkillDto,
+  CreateStudentSkillDto,
+  UpdateStudentSkillDto,
   StudentQueryFilters,
   PaginatedResult,
   StudentStatus,
@@ -34,6 +38,7 @@ export class InMemoryManagementStore {
   public classes: Map<string, ClassDto> = new Map();
   public sections: Map<string, SectionDto> = new Map();
   public students: Map<string, StudentDto> = new Map();
+  public skills: Map<string, StudentSkillDto> = new Map();
   private initialized = false;
 
   initialize(): void {
@@ -219,6 +224,28 @@ export class InMemoryManagementStore {
     };
     this.students.set(stu1.id, stu1);
     this.students.set(stu2.id, stu2);
+
+    // Default Skills for stu-001 (Aarav Sharma)
+    const defaultSkills: Array<{ name: string; category: string; level: string }> = [
+      { name: 'Python Programming', category: 'TECHNICAL', level: 'ADVANCED' },
+      { name: 'Data Structures & Algorithms', category: 'TECHNICAL', level: 'ADVANCED' },
+      { name: 'SQL & Database Design', category: 'TECHNICAL', level: 'INTERMEDIATE' },
+      { name: 'Problem Solving', category: 'APTITUDE', level: 'PROFICIENT' },
+      { name: 'Verbal Communication', category: 'COMMUNICATION', level: 'INTERMEDIATE' },
+    ];
+    defaultSkills.forEach((s, idx) => {
+      const id = `sk-00${idx + 1}`;
+      this.skills.set(id, {
+        id,
+        studentId: 'stu-001',
+        name: s.name,
+        category: s.category,
+        level: s.level,
+        verified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    });
 
     this.initialized = true;
   }
@@ -1012,6 +1039,8 @@ export class ManagementRepository {
       registerNumber: dto.registerNumber.trim().toUpperCase(),
       name: dto.name.trim(),
       collegeEmail: dto.collegeEmail.trim().toLowerCase(),
+      personalEmail: dto.personalEmail ? dto.personalEmail.trim().toLowerCase() : null,
+      isPersonalEmailVerified: false,
       phone: dto.phone?.trim() || null,
       dob: dto.dob?.trim() || null,
       departmentId: dto.departmentId,
@@ -1040,6 +1069,7 @@ export class ManagementRepository {
         registerNumber: record.registerNumber,
         name: record.name,
         collegeEmail: record.collegeEmail,
+        personalEmail: record.personalEmail,
         phone: record.phone,
         dob: record.dob,
         departmentId: record.departmentId,
@@ -1175,7 +1205,10 @@ export class ManagementRepository {
 
   async findStudentById(id: string): Promise<StudentDto | null> {
     if (process.env.NODE_ENV === 'test') {
-      return this.mem.students.get(id) || null;
+      const stu = this.mem.students.get(id);
+      if (!stu) return null;
+      const skills = Array.from(this.mem.skills.values()).filter((s) => s.studentId === id);
+      return { ...stu, skills };
     }
 
     const item = await prisma.student.findUnique({
@@ -1185,6 +1218,16 @@ export class ManagementRepository {
         course: { select: { id: true, code: true, name: true } },
         class: { select: { id: true, name: true, batchYear: true, currentYear: true } },
         section: { select: { id: true, name: true } },
+        academicRecord: {
+          include: {
+            semesters: {
+              orderBy: { semesterNumber: 'asc' },
+            },
+          },
+        },
+        skills: {
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
     return (item as StudentDto) || null;
@@ -1194,7 +1237,10 @@ export class ManagementRepository {
     const upper = regNum.trim().toUpperCase();
     if (process.env.NODE_ENV === 'test') {
       for (const s of this.mem.students.values()) {
-        if (s.registerNumber === upper) return s;
+        if (s.registerNumber === upper) {
+          const skills = Array.from(this.mem.skills.values()).filter((sk) => sk.studentId === s.id);
+          return { ...s, skills };
+        }
       }
       return null;
     }
@@ -1206,6 +1252,16 @@ export class ManagementRepository {
         course: { select: { id: true, code: true, name: true } },
         class: { select: { id: true, name: true, batchYear: true, currentYear: true } },
         section: { select: { id: true, name: true } },
+        academicRecord: {
+          include: {
+            semesters: {
+              orderBy: { semesterNumber: 'asc' },
+            },
+          },
+        },
+        skills: {
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
     return (item as StudentDto) || null;
@@ -1215,7 +1271,10 @@ export class ManagementRepository {
     const lower = email.trim().toLowerCase();
     if (process.env.NODE_ENV === 'test') {
       for (const s of this.mem.students.values()) {
-        if (s.collegeEmail.toLowerCase() === lower) return s;
+        if (s.collegeEmail.toLowerCase() === lower) {
+          const skills = Array.from(this.mem.skills.values()).filter((sk) => sk.studentId === s.id);
+          return { ...s, skills };
+        }
       }
       return null;
     }
@@ -1227,9 +1286,146 @@ export class ManagementRepository {
         course: { select: { id: true, code: true, name: true } },
         class: { select: { id: true, name: true, batchYear: true, currentYear: true } },
         section: { select: { id: true, name: true } },
+        academicRecord: {
+          include: {
+            semesters: {
+              orderBy: { semesterNumber: 'asc' },
+            },
+          },
+        },
+        skills: {
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
     return (item as StudentDto) || null;
+  }
+
+  // ===========================================================================
+  // STUDENT SKILLS CRUD
+  // ===========================================================================
+  async findStudentSkills(studentId: string): Promise<StudentSkillDto[]> {
+    if (process.env.NODE_ENV === 'test') {
+      return Array.from(this.mem.skills.values())
+        .filter((s) => s.studentId === studentId)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }
+
+    const skills = await prisma.studentSkill.findMany({
+      where: { studentId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return skills as StudentSkillDto[];
+  }
+
+  async createStudentSkill(studentId: string, dto: CreateStudentSkillDto): Promise<StudentSkillDto> {
+    const trimmedName = dto.name.trim();
+    if (process.env.NODE_ENV === 'test') {
+      const existing = Array.from(this.mem.skills.values()).find(
+        (s) => s.studentId === studentId && s.name.toLowerCase() === trimmedName.toLowerCase()
+      );
+      if (existing) {
+        throw new AppError('Skill already added for this student', 409);
+      }
+      const newSkill: StudentSkillDto = {
+        id: `sk-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        studentId,
+        name: trimmedName,
+        category: (dto.category || 'TECHNICAL').toUpperCase(),
+        level: (dto.level || 'INTERMEDIATE').toUpperCase(),
+        verified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      this.mem.skills.set(newSkill.id, newSkill);
+      return newSkill;
+    }
+
+    const existing = await prisma.studentSkill.findFirst({
+      where: {
+        studentId,
+        name: trimmedName,
+      },
+    });
+    if (existing) {
+      throw new AppError('Skill already added for this student', 409);
+    }
+
+    const skill = await prisma.studentSkill.create({
+      data: {
+        studentId,
+        name: trimmedName,
+        category: (dto.category || 'TECHNICAL').toUpperCase(),
+        level: (dto.level || 'INTERMEDIATE').toUpperCase(),
+        verified: false,
+      },
+    });
+    return skill as StudentSkillDto;
+  }
+
+  async updateStudentSkill(studentId: string, skillId: string, dto: UpdateStudentSkillDto): Promise<StudentSkillDto> {
+    if (process.env.NODE_ENV === 'test') {
+      const skill = this.mem.skills.get(skillId);
+      if (!skill || skill.studentId !== studentId) {
+        throw new AppError('Skill not found', 404);
+      }
+      if (dto.name && dto.name.trim().toLowerCase() !== skill.name.toLowerCase()) {
+        const conflict = Array.from(this.mem.skills.values()).find(
+          (s) => s.studentId === studentId && s.id !== skillId && s.name.toLowerCase() === dto.name!.trim().toLowerCase()
+        );
+        if (conflict) throw new AppError('Skill with this name already exists', 409);
+      }
+      const updated: StudentSkillDto = {
+        ...skill,
+        name: dto.name ? dto.name.trim() : skill.name,
+        category: dto.category ? dto.category.toUpperCase() : skill.category,
+        level: dto.level ? dto.level.toUpperCase() : skill.level,
+        updatedAt: new Date(),
+      };
+      this.mem.skills.set(skillId, updated);
+      return updated;
+    }
+
+    const skill = await prisma.studentSkill.findFirst({
+      where: { id: skillId, studentId },
+    });
+    if (!skill) throw new AppError('Skill not found', 404);
+
+    if (dto.name && dto.name.trim().toLowerCase() !== skill.name.toLowerCase()) {
+      const conflict = await prisma.studentSkill.findFirst({
+        where: { studentId, name: dto.name.trim(), NOT: { id: skillId } },
+      });
+      if (conflict) throw new AppError('Skill with this name already exists', 409);
+    }
+
+    const updated = await prisma.studentSkill.update({
+      where: { id: skillId },
+      data: {
+        ...(dto.name ? { name: dto.name.trim() } : {}),
+        ...(dto.category ? { category: dto.category.toUpperCase() } : {}),
+        ...(dto.level ? { level: dto.level.toUpperCase() } : {}),
+      },
+    });
+    return updated as StudentSkillDto;
+  }
+
+  async deleteStudentSkill(studentId: string, skillId: string): Promise<boolean> {
+    if (process.env.NODE_ENV === 'test') {
+      const skill = this.mem.skills.get(skillId);
+      if (!skill || skill.studentId !== studentId) {
+        throw new AppError('Skill not found', 404);
+      }
+      this.mem.skills.delete(skillId);
+      return true;
+    }
+
+    const skill = await prisma.studentSkill.findFirst({
+      where: { id: skillId, studentId },
+    });
+    if (!skill) throw new AppError('Skill not found', 404);
+
+    await prisma.studentSkill.delete({ where: { id: skillId } });
+    return true;
   }
 
   async updateStudent(id: string, dto: UpdateStudentDto): Promise<StudentDto | null> {
@@ -1239,6 +1435,8 @@ export class ManagementRepository {
       const updated: StudentDto = {
         ...existing,
         name: dto.name ? dto.name.trim() : existing.name,
+        personalEmail: dto.personalEmail !== undefined ? dto.personalEmail?.trim() || null : existing.personalEmail,
+        isPersonalEmailVerified: dto.isPersonalEmailVerified !== undefined ? dto.isPersonalEmailVerified : existing.isPersonalEmailVerified,
         phone: dto.phone !== undefined ? dto.phone?.trim() || null : existing.phone,
         dob: dto.dob !== undefined ? dto.dob?.trim() || null : existing.dob,
         departmentId: dto.departmentId || existing.departmentId,
@@ -1258,6 +1456,8 @@ export class ManagementRepository {
       where: { id },
       data: {
         ...(dto.name ? { name: dto.name.trim() } : {}),
+        ...(dto.personalEmail !== undefined ? { personalEmail: dto.personalEmail?.trim() || null } : {}),
+        ...(dto.isPersonalEmailVerified !== undefined ? { isPersonalEmailVerified: dto.isPersonalEmailVerified } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone?.trim() || null } : {}),
         ...(dto.dob !== undefined ? { dob: dto.dob?.trim() || null } : {}),
         ...(dto.departmentId ? { departmentId: dto.departmentId } : {}),
@@ -1273,6 +1473,13 @@ export class ManagementRepository {
         course: { select: { id: true, code: true, name: true } },
         class: { select: { id: true, name: true, batchYear: true, currentYear: true } },
         section: { select: { id: true, name: true } },
+        academicRecord: {
+          include: {
+            semesters: {
+              orderBy: { semesterNumber: 'asc' },
+            },
+          },
+        },
       },
     });
     return updated as StudentDto;

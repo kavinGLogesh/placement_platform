@@ -160,6 +160,8 @@ export interface StudentDto {
   registerNumber: string;
   name: string;
   collegeEmail: string;
+  personalEmail?: string | null;
+  isPersonalEmailVerified?: boolean;
   phone?: string | null;
   dob?: string | null;
   departmentId: string;
@@ -175,6 +177,31 @@ export interface StudentDto {
   course?: { id: string; code: string; name: string };
   class?: { id: string; name: string; batchYear: number; currentYear: number };
   section?: { id: string; name: string };
+  academicRecord?: any;
+  skills?: StudentSkillDto[];
+}
+
+export interface StudentSkillDto {
+  id: string;
+  studentId: string;
+  name: string;
+  category: string; // TECHNICAL, APTITUDE, COMMUNICATION, DOMAIN
+  level: string; // BEGINNER, INTERMEDIATE, PROFICIENT, ADVANCED
+  verified: boolean;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface CreateStudentSkillDto {
+  name: string;
+  category?: string;
+  level?: string;
+}
+
+export interface UpdateStudentSkillDto {
+  name?: string;
+  category?: string;
+  level?: string;
 }
 
 export interface CreateStudentDto {
@@ -182,6 +209,7 @@ export interface CreateStudentDto {
   registerNumber: string;
   name: string;
   collegeEmail: string;
+  personalEmail?: string;
   phone?: string;
   dob?: string;
   password?: string;
@@ -201,6 +229,8 @@ export interface StudentWithAccountDto extends StudentDto {
 export interface UpdateStudentDto {
   userId?: string | null;
   name?: string;
+  personalEmail?: string | null;
+  isPersonalEmailVerified?: boolean;
   phone?: string;
   dob?: string;
   password?: string;

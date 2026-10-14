@@ -135,12 +135,39 @@ export interface Student {
   cgpa?: number | null;
   status: StudentStatus;
   temporaryPassword?: string;
+  personalEmail?: string | null;
+  isPersonalEmailVerified?: boolean;
+  academicRecord?: import('./academic.types.js').StudentAcademicRecord | null;
+  skills?: StudentSkill[];
   createdAt: string;
   updatedAt: string;
   department?: { id: string; code: string; name: string };
   course?: { id: string; code: string; name: string };
   class?: { id: string; name: string; batchYear: number; currentYear: number };
   section?: { id: string; name: string };
+}
+
+export interface StudentSkill {
+  id: string;
+  studentId: string;
+  name: string;
+  category: string; // TECHNICAL, APTITUDE, COMMUNICATION, DOMAIN
+  level: string; // BEGINNER, INTERMEDIATE, PROFICIENT, ADVANCED
+  verified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStudentSkillInput {
+  name: string;
+  category?: string;
+  level?: string;
+}
+
+export interface UpdateStudentSkillInput {
+  name?: string;
+  category?: string;
+  level?: string;
 }
 
 export interface ResetPasswordResponse {
@@ -152,6 +179,7 @@ export interface CreateStudentInput {
   registerNumber: string;
   name: string;
   collegeEmail: string;
+  personalEmail?: string;
   phone?: string;
   dob?: string;
   password?: string;
@@ -166,6 +194,8 @@ export interface CreateStudentInput {
 
 export interface UpdateStudentInput {
   name?: string;
+  personalEmail?: string;
+  isPersonalEmailVerified?: boolean;
   phone?: string;
   dob?: string;
   password?: string;
@@ -226,13 +256,6 @@ export interface ExcelImportResult {
   duplicateCount: number;
   errors: ExcelImportRowError[];
   credentials?: ExcelImportCredential[];
-}
-
-export interface StudentSkill {
-  name: string;
-  category: 'TECHNICAL' | 'APTITUDE' | 'COMMUNICATION' | 'DOMAIN';
-  level: 'BEGINNER' | 'INTERMEDIATE' | 'PROFICIENT' | 'ADVANCED';
-  verified: boolean;
 }
 
 export interface StudentCertification {

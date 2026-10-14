@@ -495,6 +495,48 @@ export class ManagementController {
       next(error);
     }
   };
+
+  getStudentSkills = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const skills = await this.service.getStudentSkills(id);
+      sendSuccess(res, 'Student skills retrieved successfully', skills);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  addStudentSkill = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const skill = await this.service.addStudentSkill(id, req.body);
+      sendSuccess(res, 'Student skill added successfully', skill, 201);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateStudentSkill = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const skillId = String(req.params.skillId);
+      const skill = await this.service.updateStudentSkill(id, skillId, req.body);
+      sendSuccess(res, 'Student skill updated successfully', skill);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  deleteStudentSkill = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const skillId = String(req.params.skillId);
+      await this.service.removeStudentSkill(id, skillId);
+      sendSuccess(res, 'Student skill deleted successfully', { success: true });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export const managementController = new ManagementController();

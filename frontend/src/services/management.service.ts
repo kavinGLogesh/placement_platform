@@ -25,6 +25,9 @@ import {
   AiStudentImportConfirmRequest,
   AiStudentImportConfirmResponse,
   StudentImportHistoryRecord,
+  StudentSkill,
+  CreateStudentSkillInput,
+  UpdateStudentSkillInput,
 } from '../types/management.types.js';
 
 interface ApiResponse<T> {
@@ -298,5 +301,42 @@ export const managementService = {
   async getImportHistoryById(id: string): Promise<StudentImportHistoryRecord> {
     const res = await apiClient.get<ApiResponse<StudentImportHistoryRecord>>(`/students/import-history/${id}`);
     return res.data.data;
+  },
+
+  // ===========================================================================
+  // STUDENT SKILLS API (Student Self-Service & Admin)
+  // ===========================================================================
+  async getStudentSkills(studentId?: string): Promise<StudentSkill[]> {
+    const endpoint = studentId ? `/students/${studentId}/skills` : '/student/skills';
+    const res = await apiClient.get<ApiResponse<StudentSkill[]>>(endpoint);
+    return res.data.data;
+  },
+
+  async addStudentSkill(
+    data: CreateStudentSkillInput,
+    studentId?: string
+  ): Promise<StudentSkill> {
+    const endpoint = studentId ? `/students/${studentId}/skills` : '/student/skills';
+    const res = await apiClient.post<ApiResponse<StudentSkill>>(endpoint, data);
+    return res.data.data;
+  },
+
+  async updateStudentSkill(
+    skillId: string,
+    data: UpdateStudentSkillInput,
+    studentId?: string
+  ): Promise<StudentSkill> {
+    const endpoint = studentId
+      ? `/students/${studentId}/skills/${skillId}`
+      : `/student/skills/${skillId}`;
+    const res = await apiClient.put<ApiResponse<StudentSkill>>(endpoint, data);
+    return res.data.data;
+  },
+
+  async deleteStudentSkill(skillId: string, studentId?: string): Promise<void> {
+    const endpoint = studentId
+      ? `/students/${studentId}/skills/${skillId}`
+      : `/student/skills/${skillId}`;
+    await apiClient.delete<ApiResponse<{ success: boolean }>>(endpoint);
   },
 };

@@ -16,6 +16,9 @@ import {
   StudentPerformanceAnalyticsDto,
   TrendDataPointDto,
   CategoryComparisonDto,
+  StudentMalpracticeEventDto,
+  StudentRecommendationsDto,
+  StudentImprovementTopicDto,
 } from '../types/analytics.types.js';
 import { attemptRepository } from './attempt.repository.js';
 import { managementRepository } from './management.repository.js';
@@ -1324,6 +1327,146 @@ export class AnalyticsRepository {
     };
   }
 
+  private formatMalpracticeEvents(violations: any[]): StudentMalpracticeEventDto[] {
+    return violations.map((v) => {
+      let displayType = 'Client Security Event';
+      let severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
+
+      const vType = String(v.violationType || 'SECURITY_EVENT').toUpperCase();
+      switch (vType) {
+        case 'TAB_SWITCH':
+          displayType = 'Tab Switching Event';
+          severity = 'MEDIUM';
+          break;
+        case 'WINDOW_BLUR':
+          displayType = 'Window Focus Lost';
+          severity = 'LOW';
+          break;
+        case 'FULLSCREEN_EXIT':
+          displayType = 'Fullscreen Exited';
+          severity = 'MEDIUM';
+          break;
+        case 'CLIPBOARD_COPY':
+          displayType = 'Copy Action Detected';
+          severity = 'MEDIUM';
+          break;
+        case 'CLIPBOARD_PASTE':
+          displayType = 'Paste Action Detected';
+          severity = 'MEDIUM';
+          break;
+        case 'CLIPBOARD_CUT':
+          displayType = 'Cut Action Detected';
+          severity = 'LOW';
+          break;
+        case 'RIGHT_CLICK':
+          displayType = 'Right-Click / Context Menu Attempt';
+          severity = 'LOW';
+          break;
+        case 'CAMERA_DISCONNECTED':
+          displayType = 'Camera / Video Feed Interrupted';
+          severity = 'HIGH';
+          break;
+        case 'WARNING':
+          displayType = 'Proctor Warning Issued';
+          severity = 'HIGH';
+          break;
+        case 'TERMINATION':
+          displayType = 'Assessment Terminated by Proctoring Engine';
+          severity = 'CRITICAL';
+          break;
+        case 'SCREENSHOT_ATTEMPT':
+          displayType = 'PrintScreen / Key Capture Shortcut Event';
+          severity = 'MEDIUM';
+          break;
+        default:
+          displayType = vType.replace(/_/g, ' ');
+          severity = 'LOW';
+      }
+
+      const assessmentName = v.attempt?.assessment?.name || v.assessmentName || 'Assessment';
+      const timestampStr =
+        v.timestamp instanceof Date
+          ? v.timestamp.toISOString()
+          : String(v.timestamp || new Date().toISOString());
+
+      return {
+        id: v.id || `viol-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        attemptId: v.attemptId || '',
+        assessmentName,
+        violationType: vType,
+        displayType,
+        severity,
+        timestamp: timestampStr,
+        details:
+          v.details ||
+          'Browser-level interaction event recorded during assessment session (browser sandboxing log)',
+      };
+    });
+  }
+
+  private buildRecommendations(topics: TopicPerformanceDto[]): StudentRecommendationsDto {
+    const weakTopics: StudentImprovementTopicDto[] = [];
+    const strongAreas: StudentImprovementTopicDto[] = [];
+    const moderateAreas: StudentImprovementTopicDto[] = [];
+
+    for (const t of topics) {
+      if (!t.attemptedCount || t.attemptedCount === 0) continue;
+      const catName = CATEGORY_DISPLAY_NAMES[t.category] || t.category;
+      const item: StudentImprovementTopicDto = {
+        topic: t.topic,
+        category: t.category,
+        displayName: `${catName} — ${t.topic}`,
+        accuracy: t.accuracy,
+        attemptedCount: t.attemptedCount,
+        correctCount: t.correctCount,
+        recommendation: '',
+      };
+
+      if (t.accuracy < 60) {
+        item.recommendation = `Targeted practice recommended in ${t.topic}. Focus on foundational concepts and timed speed drills.`;
+        weakTopics.push(item);
+      } else if (t.accuracy >= 75) {
+        item.recommendation = `High mastery demonstrated in ${t.topic}. Maintain proficiency with advanced and edge-case questions.`;
+        strongAreas.push(item);
+      } else {
+        item.recommendation = `Moderate proficiency in ${t.topic}. Increase accuracy and review common problem patterns.`;
+        moderateAreas.push(item);
+      }
+    }
+
+    const recommendedActivities: string[] = [];
+    if (weakTopics.length > 0) {
+      const cats = Array.from(new Set(weakTopics.map((w) => w.category)));
+      if (cats.includes('QUANTITATIVE_APTITUDE')) {
+        recommendedActivities.push('Complete timed speed math and formula drills in weak Quantitative Aptitude modules.');
+      }
+      if (cats.includes('LOGICAL_REASONING')) {
+        recommendedActivities.push('Practice complex analytical reasoning, deductions, and pattern problem sets.');
+      }
+      if (cats.includes('VERBAL_ABILITY')) {
+        recommendedActivities.push('Conduct daily reading comprehension and grammatical error-spotting practice.');
+      }
+      if (cats.includes('TECHNICAL_MCQ')) {
+        recommendedActivities.push('Review Computer Science core subjects: DBMS normalization, OS process management, and Data Structures.');
+      }
+      if (cats.includes('CODING')) {
+        recommendedActivities.push('Solve algorithmic coding exercises in Arrays, Trees, and Dynamic Programming with optimal time complexity.');
+      }
+    } else {
+      recommendedActivities.push('Maintain consistent interview readiness by taking comprehensive full-length placement mock assessments.');
+      recommendedActivities.push('Participate in mock technical interviews and live coding walkthroughs.');
+    }
+
+    return {
+      weakTopics,
+      strongAreas,
+      moderateAreas,
+      recommendedActivities,
+      disclaimer:
+        'Improvement recommendations are strictly analytical and advisory based on actual attempt history. Recommendation algorithms cannot and will never alter marks, evaluation results, or recorded proctoring logs.',
+    };
+  }
+
   // ===========================================================================
   // 6. STUDENT DRILLDOWN (ADMIN VIEW FOR SPECIFIC STUDENT)
   // ===========================================================================
@@ -1331,56 +1474,116 @@ export class AnalyticsRepository {
     if (process.env.NODE_ENV === 'test') {
       return await this.getStudentDrilldownMemStore(studentId);
     }
-      const student = await prisma.student.findUnique({
-        where: { id: studentId },
-        include: {
-          department: true,
-          course: true,
-          class: true,
-          section: true,
-          assessmentAssignments: true,
-          attempts: true,
-          results: {
-            include: {
-              assessment: true,
-              attempt: { select: { submittedAt: true } },
-            },
-            orderBy: { createdAt: 'desc' },
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        department: true,
+        course: true,
+        class: true,
+        section: true,
+        assessmentAssignments: true,
+        attempts: true,
+        results: {
+          include: {
+            assessment: true,
+            attempt: { select: { submittedAt: true, status: true, violationCount: true } },
           },
-          codingSubmissions: {
-            orderBy: { createdAt: 'desc' },
-          },
+          orderBy: { createdAt: 'desc' },
         },
-      });
+        codingSubmissions: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
 
-      if (!student) {
-        return null;
+    if (!student) {
+      return null;
+    }
+
+    const totalAssigned = student.assessmentAssignments.length;
+    const totalAttempted = student.attempts.length;
+    const totalCompleted = student.results.length;
+    const totalPassed = student.results.filter((r) => r.isPassed).length;
+    const totalFailed = Math.max(0, totalCompleted - totalPassed);
+
+    let sumPercentage = 0;
+    let sumAccuracy = 0;
+    for (const r of student.results) {
+      sumPercentage += r.percentage;
+      sumAccuracy += r.accuracy;
+    }
+
+    const averageScore =
+      totalCompleted > 0 ? Number((sumPercentage / totalCompleted).toFixed(2)) : 0;
+    const averageAccuracy =
+      totalCompleted > 0 ? Number((sumAccuracy / totalCompleted).toFixed(2)) : 0;
+    const passRate =
+      totalCompleted > 0 ? Number(((totalPassed / totalCompleted) * 100).toFixed(2)) : 0;
+
+    // Category breakdown for student
+    const answers = await prisma.attemptAnswer.findMany({
+      where: { attempt: { studentId } },
+      include: { question: { select: { category: true, topic: true, marks: true } } },
+    });
+
+    // Group answers by attemptId
+    const answersByAttempt = new Map<string, typeof answers>();
+    for (const a of answers) {
+      const list = answersByAttempt.get(a.attemptId) || [];
+      list.push(a);
+      answersByAttempt.set(a.attemptId, list);
+    }
+
+    const assessmentHistory: ResultListItemDto[] = student.results.map((r) => {
+      const attAnswers = answersByAttempt.get(r.attemptId) || [];
+      const catMap = new Map<
+        string,
+        { totalQuestions: number; correctCount: number; marksAwarded: number; maxMarks: number }
+      >();
+      for (const a of attAnswers) {
+        const cat = a.question.category;
+        const curr = catMap.get(cat) || {
+          totalQuestions: 0,
+          correctCount: 0,
+          marksAwarded: 0,
+          maxMarks: 0,
+        };
+        curr.totalQuestions += 1;
+        if (a.isCorrect) curr.correctCount += 1;
+        curr.marksAwarded += a.marksAwarded || 0;
+        curr.maxMarks += a.question.marks || 1;
+        catMap.set(cat, curr);
       }
 
-      const totalAssigned = student.assessmentAssignments.length;
-      const totalAttempted = student.attempts.length;
-      const totalCompleted = student.results.length;
-      const totalPassed = student.results.filter((r) => r.isPassed).length;
+      const categoryBreakdown = Array.from(catMap.entries()).map(([cat, stats]) => ({
+        category: cat,
+        displayName: CATEGORY_DISPLAY_NAMES[cat] || cat.replace(/_/g, ' '),
+        totalQuestions: stats.totalQuestions,
+        correctCount: stats.correctCount,
+        marksAwarded: Number(stats.marksAwarded.toFixed(2)),
+        maxMarks: Number(stats.maxMarks.toFixed(2)),
+        percentage:
+          stats.maxMarks > 0 ? Number(((stats.marksAwarded / stats.maxMarks) * 100).toFixed(2)) : 0,
+      }));
 
-      let sumPercentage = 0;
-      let sumAccuracy = 0;
-      for (const r of student.results) {
-        sumPercentage += r.percentage;
-        sumAccuracy += r.accuracy;
+      let assessmentType = 'General Assessment';
+      if (r.assessment?.isCompanyAssessment) {
+        assessmentType = 'Company Specific Assessment';
+      } else if (catMap.has('CODING') && catMap.size === 1) {
+        assessmentType = 'Hands-On Coding Challenge';
+      } else if (catMap.has('CODING')) {
+        assessmentType = 'Integrated MCQ & Coding Assessment';
+      } else {
+        assessmentType = 'Aptitude & Technical MCQ';
       }
 
-      const averageScore =
-        totalCompleted > 0 ? Number((sumPercentage / totalCompleted).toFixed(2)) : 0;
-      const averageAccuracy =
-        totalCompleted > 0 ? Number((sumAccuracy / totalCompleted).toFixed(2)) : 0;
-      const passRate =
-        totalCompleted > 0 ? Number(((totalPassed / totalCompleted) * 100).toFixed(2)) : 0;
-
-      const assessmentHistory: ResultListItemDto[] = student.results.map((r) => ({
+      return {
         id: r.id,
         attemptId: r.attemptId,
         assessmentId: r.assessmentId,
         assessmentTitle: r.assessment?.name || 'Assessment',
+        assessmentType,
+        categoryBreakdown,
         studentId: student.id,
         studentName: student.name,
         registerNumber: student.registerNumber,
@@ -1397,133 +1600,172 @@ export class AnalyticsRepository {
         unansweredCount: r.unansweredCount,
         submittedAt: r.attempt?.submittedAt ? r.attempt.submittedAt.toISOString() : null,
         createdAt: r.createdAt.toISOString(),
-      }));
-
-      // Coding metrics
-      const totalSubmissions = student.codingSubmissions.length;
-      let acceptedCount = 0;
-      let partialCount = 0;
-      let failedCount = 0;
-      let passedTestsSum = 0;
-      let totalTestsSum = 0;
-      const languages = new Set<string>();
-
-      for (const sub of student.codingSubmissions) {
-        languages.add(sub.language);
-        passedTestsSum += sub.passedTestCount;
-        totalTestsSum += sub.totalTestCount;
-        if (sub.status === 'ACCEPTED') acceptedCount++;
-        else if (sub.passedTestCount > 0 && sub.passedTestCount < sub.totalTestCount)
-          partialCount++;
-        else failedCount++;
-      }
-
-      const passedTestsRatio =
-        totalTestsSum > 0 ? Number(((passedTestsSum / totalTestsSum) * 100).toFixed(2)) : 0;
-
-      // Category breakdown for student
-      const answers = await prisma.attemptAnswer.findMany({
-        where: { attempt: { studentId } },
-        include: { question: { select: { category: true, topic: true, marks: true } } },
-      });
-
-      const catTopicAgg = this.aggregateTopicData(
-        answers.map((a) => ({
-          category: a.question.category,
-          topic: a.question.topic,
-          isCorrect: !!a.isCorrect,
-          marksAwarded: a.marksAwarded || 0,
-          maxMarks: a.question.marks || 1,
-        }))
-      );
-
-      let categoryComparison: CategoryComparisonDto[] = [];
-      if (student.results.length >= 2) {
-        const currAttemptId = student.results[0].attemptId;
-        const prevAttemptId = student.results[1].attemptId;
-
-        const [currAnswers, prevAnswers] = await Promise.all([
-          prisma.attemptAnswer.findMany({
-            where: { attemptId: currAttemptId },
-            include: { question: { select: { category: true, marks: true } } },
-          }),
-          prisma.attemptAnswer.findMany({
-            where: { attemptId: prevAttemptId },
-            include: { question: { select: { category: true, marks: true } } },
-          }),
-        ]);
-
-        const currCatMarks = new Map<string, number>();
-        const prevCatMarks = new Map<string, number>();
-
-        for (const a of currAnswers) {
-          const cat = a.question.category;
-          currCatMarks.set(cat, (currCatMarks.get(cat) || 0) + (a.marksAwarded || 0));
-        }
-        for (const a of prevAnswers) {
-          const cat = a.question.category;
-          prevCatMarks.set(cat, (prevCatMarks.get(cat) || 0) + (a.marksAwarded || 0));
-        }
-
-        const allCats = Array.from(new Set([...currCatMarks.keys(), ...prevCatMarks.keys()]));
-        categoryComparison = allCats.map((cat) => {
-          const pScore = Number((prevCatMarks.get(cat) || 0).toFixed(2));
-          const cScore = Number((currCatMarks.get(cat) || 0).toFixed(2));
-          return {
-            category: cat,
-            displayName: CATEGORY_DISPLAY_NAMES[cat] || cat,
-            previousScore: pScore,
-            currentScore: cScore,
-            change: Number((cScore - pScore).toFixed(2)),
-          };
-        });
-      }
-
-      const performanceProgress = computePerformanceProgress(
-        assessmentHistory,
-        categoryComparison
-      );
-
-      const resume = getStudentResumeDetails(student.id, student.registerNumber, student.updatedAt);
-
-      return {
-        student: {
-          id: student.id,
-          name: student.name,
-          email: student.collegeEmail,
-          registerNumber: student.registerNumber,
-          departmentName: student.department?.name || 'Department',
-          departmentCode: student.department?.code || 'DEPT',
-          courseName: student.course?.name || 'B.E.',
-          className: student.class?.name || 'Class',
-          sectionName: student.section?.name || 'A',
-          batchYear: student.year,
-          cgpa: student.cgpa || 0,
-          status: student.status,
-        },
-        summary: {
-          totalAssigned,
-          totalAttempted,
-          totalCompleted,
-          totalPassed,
-          averageScore,
-          averageAccuracy,
-          passRate,
-        },
-        assessmentHistory,
-        categoryPerformance: catTopicAgg.categories,
-        codingPerformance: {
-          totalSubmissions,
-          acceptedCount,
-          partialCount,
-          failedCount,
-          passedTestsRatio,
-          languagesUsed: Array.from(languages),
-        },
-        performanceProgress,
-        resume,
-        humanEvaluation: await evaluationService.getStudentHumanEvaluationSummary(student.id),
+        attemptStatus: r.attempt?.submittedAt ? 'COMPLETED' : 'SUBMITTED',
+        violationCount: r.attempt?.violationCount || 0,
       };
+    });
+
+    // Coding metrics
+    const totalSubmissions = student.codingSubmissions.length;
+    let acceptedCount = 0;
+    let partialCount = 0;
+    let failedCount = 0;
+    let passedTestsSum = 0;
+    let totalTestsSum = 0;
+    const languages = new Set<string>();
+
+    for (const sub of student.codingSubmissions) {
+      languages.add(sub.language);
+      passedTestsSum += sub.passedTestCount;
+      totalTestsSum += sub.totalTestCount;
+      if (sub.status === 'ACCEPTED') acceptedCount++;
+      else if (sub.passedTestCount > 0 && sub.passedTestCount < sub.totalTestCount)
+        partialCount++;
+      else failedCount++;
+    }
+
+    const passedTestsRatio =
+      totalTestsSum > 0 ? Number(((passedTestsSum / totalTestsSum) * 100).toFixed(2)) : 0;
+
+    const catTopicAgg = this.aggregateTopicData(
+      answers.map((a) => ({
+        category: a.question.category,
+        topic: a.question.topic,
+        isCorrect: !!a.isCorrect,
+        marksAwarded: a.marksAwarded || 0,
+        maxMarks: a.question.marks || 1,
+      }))
+    );
+
+    // Malpractice History Query
+    const dbViolations = await prisma.attemptViolation.findMany({
+      where: { studentId },
+      include: {
+        attempt: {
+          select: {
+            id: true,
+            attemptNumber: true,
+            assessment: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    const malpracticeHistory = this.formatMalpracticeEvents(dbViolations);
+    const recordedWarnings = dbViolations.filter((v) =>
+      ['WARNING', 'TERMINATION', 'TAB_SWITCH', 'CAMERA_DISCONNECTED'].includes(v.violationType)
+    ).length;
+
+    const recommendations = this.buildRecommendations(catTopicAgg.topics);
+
+    let categoryComparison: CategoryComparisonDto[] = [];
+    if (student.results.length >= 2) {
+      const currAttemptId = student.results[0].attemptId;
+      const prevAttemptId = student.results[1].attemptId;
+
+      const [currAnswers, prevAnswers] = await Promise.all([
+        prisma.attemptAnswer.findMany({
+          where: { attemptId: currAttemptId },
+          include: { question: { select: { category: true, marks: true } } },
+        }),
+        prisma.attemptAnswer.findMany({
+          where: { attemptId: prevAttemptId },
+          include: { question: { select: { category: true, marks: true } } },
+        }),
+      ]);
+
+      const currCatMarks = new Map<string, number>();
+      const prevCatMarks = new Map<string, number>();
+
+      for (const a of currAnswers) {
+        const cat = a.question.category;
+        currCatMarks.set(cat, (currCatMarks.get(cat) || 0) + (a.marksAwarded || 0));
+      }
+      for (const a of prevAnswers) {
+        const cat = a.question.category;
+        prevCatMarks.set(cat, (prevCatMarks.get(cat) || 0) + (a.marksAwarded || 0));
+      }
+
+      const allCats = Array.from(new Set([...currCatMarks.keys(), ...prevCatMarks.keys()]));
+      categoryComparison = allCats.map((cat) => {
+        const pScore = Number((prevCatMarks.get(cat) || 0).toFixed(2));
+        const cScore = Number((currCatMarks.get(cat) || 0).toFixed(2));
+        return {
+          category: cat,
+          displayName: CATEGORY_DISPLAY_NAMES[cat] || cat,
+          previousScore: pScore,
+          currentScore: cScore,
+          change: Number((cScore - pScore).toFixed(2)),
+        };
+      });
+    }
+
+    const performanceProgress = computePerformanceProgress(
+      assessmentHistory,
+      categoryComparison
+    );
+
+    const resume = getStudentResumeDetails(student.id, student.registerNumber, student.updatedAt);
+    const latestPercentage =
+      student.results.length > 0
+        ? student.results[0].percentage
+        : student.cgpa
+        ? Number((student.cgpa * 10).toFixed(1))
+        : 0;
+    const currentYear = student.class?.currentYear || student.year;
+    const currentCgpa = student.cgpa || 0;
+
+    return {
+      student: {
+        id: student.id,
+        name: student.name,
+        email: student.collegeEmail,
+        personalEmail: student.personalEmail,
+        isPersonalEmailVerified: student.isPersonalEmailVerified,
+        phone: student.phone,
+        dob: student.dob,
+        registerNumber: student.registerNumber,
+        departmentName: student.department?.name || 'Department',
+        departmentCode: student.department?.code || 'DEPT',
+        courseName: student.course?.name || 'B.E.',
+        className: student.class?.name || 'Class',
+        sectionName: student.section?.name || 'A',
+        batchYear: student.year,
+        currentYear,
+        cgpa: currentCgpa,
+        status: student.status,
+      },
+      summary: {
+        totalAssigned,
+        totalAttempted,
+        totalCompleted,
+        totalPassed,
+        totalFailed,
+        averageScore,
+        averageAccuracy,
+        passRate,
+        recordedWarnings,
+        latestPercentage,
+        currentYear,
+        currentCgpa,
+      },
+      assessmentHistory,
+      categoryPerformance: catTopicAgg.categories,
+      codingPerformance: {
+        totalSubmissions,
+        acceptedCount,
+        partialCount,
+        failedCount,
+        passedTestsRatio,
+        languagesUsed: Array.from(languages),
+      },
+      performanceProgress,
+      resume,
+      humanEvaluation: await evaluationService.getStudentHumanEvaluationSummary(student.id),
+      malpracticeHistory,
+      recommendations,
+    };
   }
 
   private async getStudentDrilldownMemStore(studentId: string): Promise<StudentDrilldownDto | null> {
@@ -1710,11 +1952,46 @@ export class AnalyticsRepository {
 
     const resume = getStudentResumeDetails(student.id, student.registerNumber, student.updatedAt);
 
+    // In-memory violations
+    const memViols: any[] = [];
+    for (const [attemptId, vList] of attemptRepository.memStore.violations.entries()) {
+      const att = attemptRepository.memStore.attempts.get(attemptId);
+      if (att && att.studentId === studentId) {
+        const assessment = assessmentRepository.memStore.assessments.get(att.assessmentId);
+        vList.forEach((v) => {
+          memViols.push({
+            ...v,
+            assessmentName: assessment?.name || 'Assessment',
+          });
+        });
+      }
+    }
+
+    const malpracticeHistory = this.formatMalpracticeEvents(memViols);
+    const recordedWarnings = memViols.filter((v) =>
+      ['WARNING', 'TERMINATION', 'TAB_SWITCH', 'CAMERA_DISCONNECTED'].includes(v.violationType)
+    ).length;
+
+    const recommendations = this.buildRecommendations(catAgg.topics);
+    const totalFailed = Math.max(0, totalCompleted - totalPassed);
+    const latestPercentage =
+      results.length > 0
+        ? results[0].percentage
+        : student.cgpa
+        ? Number((student.cgpa * 10).toFixed(1))
+        : 0;
+    const currentYear = student.year || 1;
+    const currentCgpa = student.cgpa || 0;
+
     return {
       student: {
         id: student.id,
         name: student.name,
         email: student.collegeEmail,
+        personalEmail: student.personalEmail,
+        isPersonalEmailVerified: student.isPersonalEmailVerified,
+        phone: student.phone,
+        dob: student.dob,
         registerNumber: student.registerNumber,
         departmentName: dept?.name || 'Department',
         departmentCode: dept?.code || 'DEPT',
@@ -1722,7 +1999,8 @@ export class AnalyticsRepository {
         className: cls?.name || 'Class',
         sectionName: sec?.name || 'A',
         batchYear: student.year,
-        cgpa: student.cgpa || 0,
+        currentYear,
+        cgpa: currentCgpa,
         status: student.status,
       },
       summary: {
@@ -1730,9 +2008,14 @@ export class AnalyticsRepository {
         totalAttempted,
         totalCompleted,
         totalPassed,
+        totalFailed,
         averageScore,
         averageAccuracy,
         passRate,
+        recordedWarnings,
+        latestPercentage,
+        currentYear,
+        currentCgpa,
       },
       assessmentHistory,
       categoryPerformance: catAgg.categories,
@@ -1747,6 +2030,8 @@ export class AnalyticsRepository {
       performanceProgress,
       resume,
       humanEvaluation: await evaluationService.getStudentHumanEvaluationSummary(student.id),
+      malpracticeHistory,
+      recommendations,
     };
   }
 

@@ -21,6 +21,9 @@ import {
   StudentDto,
   CreateStudentDto,
   UpdateStudentDto,
+  StudentSkillDto,
+  CreateStudentSkillDto,
+  UpdateStudentSkillDto,
   StudentWithAccountDto,
   StudentQueryFilters,
   PaginatedResult,
@@ -471,6 +474,36 @@ export class ManagementService {
   async deleteStudent(id: string): Promise<void> {
     await this.getStudentById(id);
     await this.repo.deleteStudent(id);
+  }
+
+  // ===========================================================================
+  // STUDENT SKILLS SERVICE
+  // ===========================================================================
+  async getStudentSkills(studentId: string): Promise<StudentSkillDto[]> {
+    await this.getStudentById(studentId);
+    return this.repo.findStudentSkills(studentId);
+  }
+
+  async addStudentSkill(studentId: string, dto: CreateStudentSkillDto): Promise<StudentSkillDto> {
+    if (!dto.name || !dto.name.trim()) {
+      throw new AppError('Skill name is required', 400);
+    }
+    await this.getStudentById(studentId);
+    return this.repo.createStudentSkill(studentId, dto);
+  }
+
+  async updateStudentSkill(
+    studentId: string,
+    skillId: string,
+    dto: UpdateStudentSkillDto
+  ): Promise<StudentSkillDto> {
+    await this.getStudentById(studentId);
+    return this.repo.updateStudentSkill(studentId, skillId, dto);
+  }
+
+  async removeStudentSkill(studentId: string, skillId: string): Promise<boolean> {
+    await this.getStudentById(studentId);
+    return this.repo.deleteStudentSkill(studentId, skillId);
   }
 
   // ===========================================================================

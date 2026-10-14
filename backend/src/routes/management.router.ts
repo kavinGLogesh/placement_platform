@@ -14,12 +14,37 @@ import {
   validateStudentQuery,
 } from '../validators/management.validator.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { academicController } from '../controllers/academic.controller.js';
 import { resolveStudentId } from '../controllers/attempt.controller.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB file size limit
 });
+
+const marksheetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB limit
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    const isAllowedExt = /\.(pdf|jpe?g|png|webp)$/i.test(file.originalname);
+    if (allowed.includes(file.mimetype.toLowerCase()) || isAllowedExt) {
+      cb(null, true);
+    } else {
+      cb(new AppError('Only PDF documents (.pdf) or image files (.png, .jpg, .jpeg, .webp) are allowed', 400));
+    }
+  },
+});
+
+const handleMarksheetUpload = (req: any, res: any, next: any) => {
+  marksheetUpload.any()(req, res, (err: any) => {
+    if (err) return next(err);
+    if (req.files && req.files.length > 0) {
+      req.file = req.files[0];
+    }
+    next();
+  });
+};
 
 export const collegeRouter = Router();
 export const departmentRouter = Router();
@@ -96,6 +121,10 @@ studentManagementRouter.post('/ai-import/confirm', ...adminAuth, managementContr
 studentManagementRouter.get('/import-history', ...adminAuth, managementController.getImportHistory);
 studentManagementRouter.get('/import-history/:id', ...adminAuth, managementController.getImportHistoryById);
 
+// Academic Records Excel Bulk Import (strictly admin only)
+studentManagementRouter.post('/academic-records/bulk-import/preview', ...adminAuth, upload.single('file'), academicController.previewAcademicImport);
+studentManagementRouter.post('/academic-records/bulk-import/confirm', ...adminAuth, academicController.confirmAcademicImport);
+
 // Student self-profile endpoint (/api/students/me)
 studentManagementRouter.get('/me', authenticateToken, requireRole(Role.STUDENT), async (req, res, next) => {
   try {
@@ -140,4 +169,21 @@ studentManagementRouter.post('/', ...adminAuth, validateStudentInput, management
 studentManagementRouter.put('/:id', ...adminAuth, managementController.updateStudent);
 studentManagementRouter.delete('/:id', ...adminAuth, managementController.deleteStudent);
 studentManagementRouter.post('/:id/reset-password', ...adminAuth, managementController.resetStudentPassword);
+
+// Phase 10: Academic Records & Marksheets
+studentManagementRouter.get('/:id/academic-records', authenticateToken, academicController.getAcademicRecord);
+studentManagementRouter.put('/:id/academic-records', ...adminAuth, academicController.upsertAcademicRecord);
+studentManagementRouter.post('/:id/academic-records/documents/:docType', ...adminAuth, handleMarksheetUpload, academicController.uploadMarksheet);
+studentManagementRouter.get('/:id/academic-records/documents/:docType', authenticateToken, academicController.downloadMarksheet);
+
+// Phase 10: Personal Email & Audit Logs (Admin)
+studentManagementRouter.put('/:id/personal-email', ...adminAuth, academicController.adminUpdatePersonalEmail);
+studentManagementRouter.get('/:id/audit-logs', ...adminAuth, academicController.getAuditLogs);
+
+// Phase 11: Student Skills (Admin)
+studentManagementRouter.get('/:id/skills', ...adminAuth, managementController.getStudentSkills);
+studentManagementRouter.post('/:id/skills', ...adminAuth, managementController.addStudentSkill);
+studentManagementRouter.put('/:id/skills/:skillId', ...adminAuth, managementController.updateStudentSkill);
+studentManagementRouter.delete('/:id/skills/:skillId', ...adminAuth, managementController.deleteStudentSkill);
+
 

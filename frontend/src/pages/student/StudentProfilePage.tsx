@@ -43,6 +43,9 @@ import { managementService } from '../../services/management.service.js';
 import { authService } from '../../services/auth.service.js';
 import { StudentFullProfile } from '../../types/management.types.js';
 import { useAuth } from '../../hooks/useAuth.js';
+import { StudentPersonalEmailCard } from '../../components/student/StudentPersonalEmailCard.js';
+import { StudentAcademicRecordsView } from '../../components/student/StudentAcademicRecordsView.js';
+import { StudentSkillsCard } from '../../components/student/StudentSkillsCard.js';
 
 export const StudentProfilePage: React.FC = () => {
   const navigate = useNavigate();
@@ -423,6 +426,24 @@ export const StudentProfilePage: React.FC = () => {
         </Box>
       </Card>
 
+      {/* SECTION: CONTACT DETAILS & PERSONAL EMAIL VERIFICATION */}
+      <StudentPersonalEmailCard
+        collegeEmail={profile.collegeEmail}
+        initialPersonalEmail={profile.personalEmail}
+        initialIsVerified={profile.isPersonalEmailVerified}
+        phone={profile.phone}
+        onEditPhone={() => {
+          setPhoneNumber(profile.phone || '');
+          setEditPhoneOpen(true);
+        }}
+        onProfileUpdated={() => {
+          queryClient.invalidateQueries({ queryKey: ['studentOwnProfile'] });
+        }}
+      />
+
+      {/* SECTION: ACADEMIC RECORDS & MARKSHEET DOSSIER */}
+      <StudentAcademicRecordsView studentRegisterNumber={profile.registerNumber} />
+
       {/* Grid: Academic Info & CGPA */}
       <Grid container spacing={3} sx={{ mb: 3.5 }}>
         {/* Academic Details Card */}
@@ -547,15 +568,18 @@ export const StudentProfilePage: React.FC = () => {
 
             <Box sx={{ mt: 2, p: 1.5, borderRadius: 2, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
               <Typography variant="caption" sx={{ color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <CheckCircleIcon sx={{ fontSize: 14 }} /> Placement Criteria: Eligible
+                <CheckCircleIcon sx={{ fontSize: 14 }} /> Academic Standing: Good Standing
               </Typography>
               <Typography variant="caption" sx={{ color: '#15803d', display: 'block', mt: 0.3 }}>
-                Meets the minimum CGPA requirement (≥ 7.50) for Tier-1 corporate drives.
+                Consistent academic track record meeting university graduation requirements.
               </Typography>
             </Box>
           </Card>
         </Grid>
       </Grid>
+
+      {/* Candidate Skills Management */}
+      <StudentSkillsCard />
 
       {/* Skills & Certifications Section */}
       <Grid container spacing={3} sx={{ mb: 3.5 }}>

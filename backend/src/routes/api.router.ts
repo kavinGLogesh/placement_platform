@@ -26,6 +26,7 @@ import {
 } from './evaluation.router.js';
 import { companyRouter } from './company.router.js';
 import { attendanceRouter } from './attendance.router.js';
+import { placementDriveRouter } from './placement-drive.router.js';
 
 export const apiRouter = Router();
 
@@ -77,5 +78,8 @@ apiRouter.use('/evaluations', evaluationsAdminRouter);
 
 // Phase 11 Assessment Attendance & Follow-up Automation routes
 apiRouter.use('/attendance', attendanceRouter);
+
+// Phase 12 Placement Drives Management Module (Admin Exclusively)
+apiRouter.use('/admin/placement-drives', placementDriveRouter);
 
 

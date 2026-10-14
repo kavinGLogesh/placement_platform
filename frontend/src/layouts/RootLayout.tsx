@@ -31,6 +31,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import GroupsIcon from '@mui/icons-material/Groups';
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
+import WorkIcon from '@mui/icons-material/Work';
 import BusinessIcon from '@mui/icons-material/Business';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
@@ -108,6 +109,11 @@ export const RootLayout: React.FC = () => {
               icon: <PeopleAltIcon fontSize="small" />,
             },
             {
+              label: 'Placement Drives',
+              path: '/admin/placement-drives',
+              icon: <WorkIcon fontSize="small" />,
+            },
+            {
               label: 'Company Profiles',
               path: '/admin/companies',
               icon: <BusinessIcon fontSize="small" />,
@@ -173,6 +179,11 @@ export const RootLayout: React.FC = () => {
         {
           title: 'EVALUATION & DRIVES',
           items: [
+            {
+              label: 'Placement Drives',
+              path: '/admin/placement-drives',
+              icon: <WorkIcon fontSize="small" />,
+            },
             { label: 'GD Rounds', path: '/admin/gd', icon: <GroupsIcon fontSize="small" /> },
             {
               label: 'Technical Interviews',
