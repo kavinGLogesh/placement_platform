@@ -38,6 +38,10 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SecurityIcon from '@mui/icons-material/Security';
 import BlockIcon from '@mui/icons-material/Block';
+import SmartphoneIcon from '@mui/icons-material/Smartphone';
+import PeopleIcon from '@mui/icons-material/People';
+import PersonOffIcon from '@mui/icons-material/PersonOff';
+import VideocamOffIcon from '@mui/icons-material/VideocamOff';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { attemptService } from '../../services/attempt.service.js';
 import { QuestionContentRenderer } from '../../components/common/QuestionContentRenderer.js';
@@ -48,6 +52,7 @@ import {
   AttemptViolationType,
 } from '../../types/attempt.types.js';
 import { MonacoCodingWorkspace } from '../../components/coding/MonacoCodingWorkspace.js';
+import { CameraProctorMonitor } from '../../components/proctoring/CameraProctorMonitor.js';
 
 type SyncStatus = 'SAVED' | 'SYNCING' | 'OFFLINE';
 
@@ -372,10 +377,11 @@ export const StudentAttemptPage: React.FC = () => {
         },
       ]);
 
-      // 3. Three-Warning System: auto-terminate after 3rd confirmed violation (or configured limit)
+      // 3. Sequential Warning System: auto-terminate after confirmed limit (default 3 warnings) unless configured to WARN_ONLY
       const configuredLimit = (attempt?.assessment as any)?.maxViolations;
       const maxAllowed = typeof configuredLimit === 'number' && configuredLimit > 0 ? configuredLimit : 3;
-      const shouldAutoTerminate = nextCount >= maxAllowed;
+      const terminationAction = (attempt?.assessment as any)?.terminationAction || 'AUTO_SUBMIT';
+      const shouldAutoTerminate = terminationAction !== 'WARN_ONLY' && nextCount >= maxAllowed;
 
       if (shouldAutoTerminate) {
         isAutoSubmittingRef.current = true;
@@ -396,7 +402,7 @@ export const StudentAttemptPage: React.FC = () => {
         try {
           await attemptService.recordViolation(attemptId, {
             violationType: type,
-            details: `${details || ''} [TERMINATED: 3 WARNINGS REACHED]`,
+            details: `${details || ''} [TERMINATED: ${maxAllowed} WARNINGS REACHED]`,
             clientTimestamp: new Date().toISOString(),
           });
         } catch {
@@ -406,12 +412,12 @@ export const StudentAttemptPage: React.FC = () => {
         try {
           await attemptService.submitAttempt(attemptId);
         } catch (err) {
-          console.warn('Auto-submit on 3-warning limit error:', err);
+          console.warn('Auto-submit on warning limit error:', err);
         }
         return;
       }
 
-      // 4. Show Warning Modal (Warning 1/3 or Warning 2/3)
+      // 4. Show Warning Modal
       setViolationWarningOpen(true);
 
       // Asynchronously persist violation to authoritative backend
@@ -423,7 +429,7 @@ export const StudentAttemptPage: React.FC = () => {
         });
         if (res && typeof res.violationCount === 'number') {
           setViolationCount(res.violationCount);
-          if (res.isTerminated || res.violationCount >= maxAllowed) {
+          if (res.isTerminated || (res.violationCount >= maxAllowed && terminationAction !== 'WARN_ONLY')) {
             setIsTerminated(true);
             setViolationWarningOpen(false);
             exitFullscreen().catch(() => {});
@@ -995,6 +1001,12 @@ export const StudentAttemptPage: React.FC = () => {
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
+                <CheckCircleOutlineIcon sx={{ color: '#059669', fontSize: 18, mt: 0.25 }} />
+                <Typography variant="body2" fontWeight={600} color="#1E293B">
+                  <strong>Live Camera Monitoring (No Footage Stored):</strong> Real-time in-memory head posture tracking. Turning left or right for more than 2 seconds incurs an integrity warning strike. Video is analyzed locally; no recordings are stored.
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
                 <WarningAmberIcon sx={{ color: '#DC2626', fontSize: 18, mt: 0.25 }} />
                 <Typography variant="body2" fontWeight={700} color="#991B1B">
                   <strong>3-Strike Policy:</strong> You will receive 2 warnings. On the 3rd violation, the test is permanently stopped and submitted.
@@ -1043,21 +1055,28 @@ export const StudentAttemptPage: React.FC = () => {
         square
         elevation={0}
         sx={{
-          py: 1.5,
-          px: { xs: 2, md: 4 },
+          py: { xs: 1, md: 1.5 },
+          px: { xs: 1.25, md: 4 },
           bgcolor: '#ffffff',
           borderBottom: '1px solid #DCE6F5',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: { xs: 'wrap', md: 'nowrap' },
+          gap: { xs: 1, md: 2 },
+          pt: { xs: 5.5, md: 1.5 },
           position: 'sticky',
           top: 0,
           zIndex: 1100,
         }}
       >
         {/* Assessment Name */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="h6" fontWeight={800} sx={{ color: '#14264B' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 2 }, minWidth: 0 }}>
+          <Typography
+            variant="h6"
+            fontWeight={800}
+            sx={{ color: '#14264B', fontSize: { xs: '0.95rem', sm: '1.25rem' }, overflowWrap: 'anywhere' }}
+          >
             {attempt?.assessment?.name || 'Examination'}
           </Typography>
           <Chip
@@ -1069,7 +1088,16 @@ export const StudentAttemptPage: React.FC = () => {
         </Box>
 
         {/* Sync Status & Timer & Submit */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, md: 3 } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: { xs: 'space-between', md: 'flex-end' },
+            flexWrap: 'wrap',
+            gap: { xs: 0.75, md: 3 },
+            width: { xs: '100%', md: 'auto' },
+          }}
+        >
           {/* Sync Status Indicator */}
           <Chip
             size="small"
@@ -1168,7 +1196,7 @@ export const StudentAttemptPage: React.FC = () => {
             color={isFullscreen ? 'inherit' : 'warning'}
             startIcon={isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
             onClick={enterFullscreen}
-            sx={{ fontWeight: 700, fontSize: '0.75rem', px: 1.5 }}
+            sx={{ fontWeight: 700, fontSize: '0.75rem', px: { xs: 0.75, sm: 1.5 }, minWidth: 0 }}
           >
             {isFullscreen ? 'Full-Screen Active' : 'Return to Full-Screen'}
           </Button>
@@ -1179,7 +1207,7 @@ export const StudentAttemptPage: React.FC = () => {
             color="error"
             size="small"
             onClick={() => setSubmitDialogOpen(true)}
-            sx={{ fontWeight: 700, px: 2 }}
+            sx={{ fontWeight: 700, px: { xs: 1, sm: 2 }, minWidth: 0 }}
           >
             Submit Test
           </Button>
@@ -1187,9 +1215,19 @@ export const StudentAttemptPage: React.FC = () => {
       </Paper>
 
       {/* 2. Main Examination Canvas */}
-      <Box sx={{ flexGrow: 1, display: 'flex', p: { xs: 2, md: 3 }, gap: 3, overflow: 'hidden' }}>
+      <Box
+        sx={{
+          flexGrow: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: { xs: 'column', lg: 'row' },
+          p: { xs: 1, sm: 2, md: 3 },
+          gap: { xs: 1.5, md: 3 },
+          overflow: { xs: 'visible', lg: 'hidden' },
+        }}
+      >
         {/* Left / Center: Active Question Area */}
-        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {error && (
             <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
               {error}
@@ -1197,7 +1235,15 @@ export const StudentAttemptPage: React.FC = () => {
           )}
 
           {currentQuestion && currentQuestion.category === 'CODING' ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                flexGrow: 1,
+                minWidth: 0,
+                overflow: { xs: 'visible', md: 'hidden' },
+              }}
+            >
               <MonacoCodingWorkspace
                 attemptId={attemptId!}
                 questionId={currentQuestion.questionId || currentQuestion.id}
@@ -1210,14 +1256,19 @@ export const StudentAttemptPage: React.FC = () => {
               />
               <Box
                 sx={{
-                  mt: 1.5,
-                  p: 1.5,
+                  mt: { xs: 1, sm: 1.5 },
+                  p: { xs: 1, sm: 1.5 },
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  gap: 1,
                   bgcolor: '#ffffff',
                   border: '1px solid #DCE6F5',
                   borderRadius: 2,
+                  position: { xs: 'sticky', sm: 'static' },
+                  bottom: 0,
+                  zIndex: 10000,
                 }}
               >
                 <Button
@@ -1226,16 +1277,18 @@ export const StudentAttemptPage: React.FC = () => {
                   startIcon={currentAnswer?.isMarkedForReview ? <BookmarkIcon /> : <BookmarkBorderIcon />}
                   onClick={handleToggleReview}
                   size="small"
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
                 >
                   {currentAnswer?.isMarkedForReview ? 'Marked for Review' : 'Mark for Review'}
                 </Button>
 
-                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
                   <Button
                     variant="outlined"
                     startIcon={<NavigateBeforeIcon />}
                     disabled={currentIndex === 0}
                     onClick={() => goToQuestion(currentIndex - 1)}
+                    sx={{ flex: 1 }}
                   >
                     Previous
                   </Button>
@@ -1244,6 +1297,7 @@ export const StudentAttemptPage: React.FC = () => {
                     endIcon={<NavigateNextIcon />}
                     disabled={currentIndex === questions.length - 1}
                     onClick={() => goToQuestion(currentIndex + 1)}
+                    sx={{ flex: 1 }}
                   >
                     Next
                   </Button>
@@ -1257,6 +1311,7 @@ export const StudentAttemptPage: React.FC = () => {
               onCut={(e) => e.preventDefault()}
               sx={{
                 flexGrow: 1,
+                minWidth: 0,
                 display: 'flex',
                 flexDirection: 'column',
                 bgcolor: '#ffffff',
@@ -1306,7 +1361,7 @@ export const StudentAttemptPage: React.FC = () => {
               </Box>
 
               {/* Question Content & Options */}
-              <CardContent sx={{ flexGrow: 1, p: { xs: 2.5, md: 4 }, overflowY: 'auto' }}>
+              <CardContent sx={{ flexGrow: 1, p: { xs: 1.5, sm: 2.5, md: 4 }, overflowY: 'auto', overflowWrap: 'anywhere' }}>
                 <Box sx={{ mb: 4 }}>
                   <QuestionContentRenderer
                     content={currentQuestion.questionText}
@@ -1425,18 +1480,23 @@ export const StudentAttemptPage: React.FC = () => {
               {/* Bottom Action Controls */}
               <Box
                 sx={{
-                  p: 2,
-                  px: 3,
+                  p: { xs: 1, sm: 2 },
+                  px: { xs: 1, sm: 3 },
                   borderTop: '1px solid #DCE6F5',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexDirection: { xs: 'column', sm: 'row' },
                   flexWrap: 'wrap',
-                  gap: 1.5,
+                  gap: { xs: 1, sm: 1.5 },
                   bgcolor: '#EDF2FF',
+                  position: { xs: 'sticky', sm: 'static' },
+                  bottom: 0,
+                  zIndex: 10000,
+                  boxShadow: { xs: '0 -4px 12px rgba(20, 38, 75, 0.12)', sm: 'none' },
                 }}
               >
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 0.75, width: { xs: '100%', sm: 'auto' } }}>
                   <Button
                     variant="outlined"
                     color={currentAnswer?.isMarkedForReview ? 'secondary' : 'inherit'}
@@ -1445,6 +1505,7 @@ export const StudentAttemptPage: React.FC = () => {
                     }
                     onClick={handleToggleReview}
                     size="small"
+                    sx={{ flex: { xs: 1, sm: 'initial' }, minWidth: 0, whiteSpace: 'nowrap' }}
                   >
                     {currentAnswer?.isMarkedForReview ? 'Marked for Review' : 'Mark for Review'}
                   </Button>
@@ -1456,17 +1517,19 @@ export const StudentAttemptPage: React.FC = () => {
                     onClick={handleClearSelection}
                     size="small"
                     disabled={!currentAnswer?.selectedOptionIds?.length && !currentAnswer?.textAnswer}
+                    sx={{ flex: { xs: 1, sm: 'initial' }, minWidth: 0, whiteSpace: 'nowrap' }}
                   >
                     Clear Choice
                   </Button>
                 </Box>
 
-                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
                   <Button
                     variant="outlined"
                     startIcon={<NavigateBeforeIcon />}
                     disabled={currentIndex === 0}
                     onClick={() => goToQuestion(currentIndex - 1)}
+                    sx={{ flex: 1, minWidth: 0 }}
                   >
                     Previous
                   </Button>
@@ -1476,6 +1539,7 @@ export const StudentAttemptPage: React.FC = () => {
                     endIcon={<NavigateNextIcon />}
                     disabled={currentIndex === questions.length - 1}
                     onClick={() => goToQuestion(currentIndex + 1)}
+                    sx={{ flex: 1, minWidth: 0 }}
                   >
                     Save & Next
                   </Button>
@@ -1716,6 +1780,82 @@ export const StudentAttemptPage: React.FC = () => {
             <DialogContentText sx={{ color: '#334155', fontWeight: 500, fontSize: '0.95rem' }}>
               {lastViolationReason.message}
             </DialogContentText>
+            {lastViolationReason.type === 'MOBILE_PHONE_DETECTED' && (
+              <Box
+                sx={{
+                  mt: 1.5,
+                  p: 1.5,
+                  bgcolor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                }}
+              >
+                <SmartphoneIcon sx={{ color: '#DC2626', fontSize: 28 }} />
+                <Typography variant="body2" fontWeight={700} color="#991B1B">
+                  Warning: Mobile phone detected. Please remove your phone.
+                </Typography>
+              </Box>
+            )}
+            {lastViolationReason.type === 'MULTIPLE_PERSONS_DETECTED' && (
+              <Box
+                sx={{
+                  mt: 1.5,
+                  p: 1.5,
+                  bgcolor: '#FFF7ED',
+                  border: '1px solid #FED7AA',
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                }}
+              >
+                <PeopleIcon sx={{ color: '#EA580C', fontSize: 28 }} />
+                <Typography variant="body2" fontWeight={700} color="#9A3412">
+                  Warning: Another person has been detected. Only the registered student is allowed during the assessment.
+                </Typography>
+              </Box>
+            )}
+            {lastViolationReason.type === 'FACE_NOT_VISIBLE' && (
+              <Box
+                sx={{
+                  mt: 1.5,
+                  p: 1.5,
+                  bgcolor: '#FEFCE8',
+                  border: '1px solid #FEF08A',
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                }}
+              >
+                <PersonOffIcon sx={{ color: '#CA8A04', fontSize: 28 }} />
+                <Typography variant="body2" fontWeight={700} color="#854D0E">
+                  Warning: Your face is not visible. Please return to your seat.
+                </Typography>
+              </Box>
+            )}
+            {lastViolationReason.type === 'CAMERA_DISCONNECTED' && (
+              <Box
+                sx={{
+                  mt: 1.5,
+                  p: 1.5,
+                  bgcolor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                }}
+              >
+                <VideocamOffIcon sx={{ color: '#DC2626', fontSize: 28 }} />
+                <Typography variant="body2" fontWeight={700} color="#991B1B">
+                  Warning: Camera disconnected. Please reconnect your camera immediately to continue your assessment.
+                </Typography>
+              </Box>
+            )}
           </Box>
 
           <Box
@@ -1883,6 +2023,16 @@ export const StudentAttemptPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Real-Time Camera Proctoring Monitor (Zero Footage Stored) */}
+      <CameraProctorMonitor
+        onViolation={triggerViolation}
+        violationCount={violationCount}
+        maxViolations={(attempt?.assessment as any)?.maxViolations || 3}
+        enableMobileDetection={(attempt?.assessment as any)?.enableMobileDetection !== false}
+        isActive={!isTerminated}
+        isWarningModalOpen={violationWarningOpen}
+      />
     </Box>
     </>
   );

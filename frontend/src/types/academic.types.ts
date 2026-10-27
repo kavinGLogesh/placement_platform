@@ -43,6 +43,13 @@ export interface StudentAcademicRecord {
 
   ugDegree: string | null;
   ugBranch: string | null;
+  ugStatus?: string | null;
+  ugCgpa?: number | null;
+  ugPercentage?: number | null;
+  pgDegree?: string | null;
+  pgStatus?: string | null;
+  pgCgpa?: number | null;
+  pgPercentage?: number | null;
   degreeLevel?: string | null;
   studyStatus?: string | null;
   currentSemester?: number | null;
@@ -81,6 +88,13 @@ export interface UpsertAcademicRecordInput {
 
   ugDegree?: string | null;
   ugBranch?: string | null;
+  ugStatus?: string | null;
+  ugCgpa?: number | null;
+  ugPercentage?: number | null;
+  pgDegree?: string | null;
+  pgStatus?: string | null;
+  pgCgpa?: number | null;
+  pgPercentage?: number | null;
   degreeLevel?: string | null;
   studyStatus?: string | null;
   currentSemester?: number | null;

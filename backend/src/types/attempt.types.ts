@@ -59,6 +59,9 @@ export interface AssessmentAttemptDto {
     negativeMarking: boolean;
     totalMarks?: number;
     totalQuestions?: number;
+    enableMobileDetection?: boolean;
+    maxViolations?: number;
+    terminationAction?: 'AUTO_SUBMIT' | 'WARN_ONLY';
   };
   questions?: SanitizedPaperQuestionDto[];
   answers?: AttemptAnswerDto[];
@@ -168,7 +171,12 @@ export type AttemptViolationType =
   | 'CLIPBOARD_COPY'
   | 'CLIPBOARD_CUT'
   | 'CLIPBOARD_PASTE'
-  | 'RIGHT_CLICK';
+  | 'RIGHT_CLICK'
+  | 'LOOKING_AWAY'
+  | 'FACE_NOT_VISIBLE'
+  | 'MOBILE_PHONE_DETECTED'
+  | 'MULTIPLE_PERSONS_DETECTED'
+  | 'CAMERA_DISCONNECTED';
 
 export interface AttemptViolationDto {
   id: string;

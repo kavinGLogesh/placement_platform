@@ -1029,9 +1029,47 @@ export class ManagementRepository {
   async createStudent(dto: CreateStudentDto): Promise<StudentDto> {
     const id = `stu-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const dept = await this.findDepartmentById(dto.departmentId);
-    const course = await this.findCourseById(dto.courseId);
-    const cls = await this.findClassById(dto.classId);
-    const sec = await this.findSectionById(dto.sectionId);
+    const course = dto.courseId ? await this.findCourseById(dto.courseId) : null;
+    const cls = dto.classId ? await this.findClassById(dto.classId) : null;
+    const sec = dto.sectionId ? await this.findSectionById(dto.sectionId) : null;
+
+    const cgpaVal = dto.cgpa ?? (dto.ugCgpa !== undefined && dto.ugCgpa !== null ? dto.ugCgpa : null);
+    const hasAcademicInfo =
+      dto.tenthObtainedMarks !== undefined ||
+      dto.tenthTotalMarks !== undefined ||
+      dto.tenthPercentage !== undefined ||
+      dto.twelfthObtainedMarks !== undefined ||
+      dto.twelfthTotalMarks !== undefined ||
+      dto.twelfthPercentage !== undefined ||
+      dto.ugDegree !== undefined ||
+      dto.ugStatus !== undefined ||
+      dto.ugCgpa !== undefined ||
+      dto.ugPercentage !== undefined ||
+      dto.pgDegree !== undefined ||
+      dto.pgStatus !== undefined ||
+      dto.pgCgpa !== undefined ||
+      dto.pgPercentage !== undefined;
+
+    const acadRecordData = hasAcademicInfo
+      ? {
+          tenthObtainedMarks: dto.tenthObtainedMarks ?? null,
+          tenthTotalMarks: dto.tenthTotalMarks ?? null,
+          tenthPercentage: dto.tenthPercentage ?? null,
+          twelfthObtainedMarks: dto.twelfthObtainedMarks ?? null,
+          twelfthTotalMarks: dto.twelfthTotalMarks ?? null,
+          twelfthPercentage: dto.twelfthPercentage ?? null,
+          ugDegree: dto.ugDegree || (course ? course.name : null),
+          ugStatus: dto.ugStatus || 'STUDYING',
+          ugCgpa: dto.ugCgpa ?? cgpaVal,
+          ugPercentage: dto.ugPercentage ?? null,
+          pgDegree: dto.pgDegree ?? null,
+          pgStatus: dto.pgStatus ?? null,
+          pgCgpa: dto.pgCgpa ?? null,
+          pgPercentage: dto.pgPercentage ?? null,
+          currentCgpa: dto.ugCgpa ?? cgpaVal,
+          overallPercentage: dto.ugPercentage ?? null,
+        }
+      : null;
 
     const record: StudentDto = {
       id,
@@ -1044,11 +1082,11 @@ export class ManagementRepository {
       phone: dto.phone?.trim() || null,
       dob: dto.dob?.trim() || null,
       departmentId: dto.departmentId,
-      courseId: dto.courseId,
-      classId: dto.classId,
-      sectionId: dto.sectionId,
+      courseId: dto.courseId ?? null,
+      classId: dto.classId ?? null,
+      sectionId: dto.sectionId ?? null,
       year: dto.year,
-      cgpa: dto.cgpa || null,
+      cgpa: cgpaVal,
       status: dto.status || StudentStatus.ACTIVE,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1059,6 +1097,16 @@ export class ManagementRepository {
     };
 
     if (process.env.NODE_ENV === 'test') {
+      if (acadRecordData) {
+        record.academicRecord = {
+          id: `acad-${record.id}`,
+          studentId: record.id,
+          ...acadRecordData,
+          semesters: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      }
       this.mem.students.set(record.id, record);
       return record;
     }
@@ -1087,6 +1135,21 @@ export class ManagementRepository {
         section: { select: { id: true, name: true } },
       },
     });
+
+    if (acadRecordData) {
+      const savedAcad = await prisma.studentAcademicRecord.upsert({
+        where: { studentId: created.id },
+        create: {
+          studentId: created.id,
+          ...acadRecordData,
+        },
+        update: {
+          ...acadRecordData,
+        },
+      });
+      (created as StudentDto).academicRecord = savedAcad;
+    }
+
     return created as StudentDto;
   }
 
@@ -1523,9 +1586,10 @@ export class ManagementRepository {
       return createdCount;
     }
 
-    const result = await prisma.$transaction(
-      students.map((s) =>
-        prisma.student.create({
+    const createdStudents = await prisma.$transaction(
+      students.map((s) => {
+        const cgpaVal = s.cgpa ?? (s.ugCgpa !== undefined && s.ugCgpa !== null ? s.ugCgpa : null);
+        return prisma.student.create({
           data: {
             userId: s.userId || null,
             registerNumber: s.registerNumber.trim().toUpperCase(),
@@ -1534,17 +1598,73 @@ export class ManagementRepository {
             phone: s.phone?.trim() || null,
             dob: s.dob?.trim() || null,
             departmentId: s.departmentId,
-            courseId: s.courseId,
-            classId: s.classId,
-            sectionId: s.sectionId,
+            courseId: s.courseId || null,
+            classId: s.classId || null,
+            sectionId: s.sectionId || null,
             year: s.year,
-            cgpa: s.cgpa || null,
+            cgpa: cgpaVal,
             status: s.status || StudentStatus.ACTIVE,
           },
-        })
-      )
+        });
+      })
     );
-    return result.length;
+
+    // Upsert academic records for created students who have academic info
+    await Promise.all(
+      createdStudents.map((created, idx) => {
+        const s = students[idx];
+        const hasAcademic =
+          s.tenthObtainedMarks !== undefined ||
+          s.tenthTotalMarks !== undefined ||
+          s.tenthPercentage !== undefined ||
+          s.twelfthObtainedMarks !== undefined ||
+          s.twelfthTotalMarks !== undefined ||
+          s.twelfthPercentage !== undefined ||
+          s.ugDegree !== undefined ||
+          s.ugStatus !== undefined ||
+          s.ugCgpa !== undefined ||
+          s.ugPercentage !== undefined ||
+          s.pgDegree !== undefined ||
+          s.pgStatus !== undefined ||
+          s.pgCgpa !== undefined ||
+          s.pgPercentage !== undefined;
+
+        if (!hasAcademic) return Promise.resolve(null);
+
+        const cgpaVal = s.cgpa ?? (s.ugCgpa !== undefined && s.ugCgpa !== null ? s.ugCgpa : null);
+        const acadData = {
+          tenthObtainedMarks: s.tenthObtainedMarks ?? null,
+          tenthTotalMarks: s.tenthTotalMarks ?? null,
+          tenthPercentage: s.tenthPercentage ?? null,
+          twelfthObtainedMarks: s.twelfthObtainedMarks ?? null,
+          twelfthTotalMarks: s.twelfthTotalMarks ?? null,
+          twelfthPercentage: s.twelfthPercentage ?? null,
+          ugDegree: s.ugDegree ?? null,
+          ugStatus: s.ugStatus || 'STUDYING',
+          ugCgpa: s.ugCgpa ?? cgpaVal,
+          ugPercentage: s.ugPercentage ?? null,
+          pgDegree: s.pgDegree ?? null,
+          pgStatus: s.pgStatus ?? null,
+          pgCgpa: s.pgCgpa ?? null,
+          pgPercentage: s.pgPercentage ?? null,
+          currentCgpa: s.ugCgpa ?? cgpaVal,
+          overallPercentage: s.ugPercentage ?? null,
+        };
+
+        return prisma.studentAcademicRecord.upsert({
+          where: { studentId: created.id },
+          create: {
+            studentId: created.id,
+            ...acadData,
+          },
+          update: {
+            ...acadData,
+          },
+        });
+      })
+    );
+
+    return createdStudents.length;
   }
 }
 

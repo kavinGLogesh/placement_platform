@@ -30,6 +30,8 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import TuneIcon from '@mui/icons-material/Tune';
 import BusinessIcon from '@mui/icons-material/Business';
+import SecurityIcon from '@mui/icons-material/Security';
+import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import { assessmentService } from '../../services/assessment.service.js';
 import { managementService } from '../../services/management.service.js';
 import { companyService } from '../../services/company.service.js';
@@ -82,6 +84,11 @@ export const AssessmentBuilderPage: React.FC = () => {
   const [negativeMarking, setNegativeMarking] = useState<boolean>(false);
   const [randomQuestions, setRandomQuestions] = useState<boolean>(true);
   const [randomOptions, setRandomOptions] = useState<boolean>(true);
+
+  // Form State - Proctoring & Security
+  const [enableMobileDetection, setEnableMobileDetection] = useState<boolean>(true);
+  const [maxViolations, setMaxViolations] = useState<number>(3);
+  const [terminationAction, setTerminationAction] = useState<'AUTO_SUBMIT' | 'WARN_ONLY'>('AUTO_SUBMIT');
 
   // Form State - Department Targeting
   const [departmentTargeting, setDepartmentTargeting] = useState<'ALL' | 'SPECIFIC'>('ALL');
@@ -296,6 +303,9 @@ export const AssessmentBuilderPage: React.FC = () => {
         departmentTargeting,
         departmentIds: departmentTargeting === 'SPECIFIC' ? selectedDepartmentIds : [],
         sections,
+        enableMobileDetection,
+        maxViolations,
+        terminationAction,
       };
 
       const created = await assessmentService.createAssessment(payload);
@@ -680,6 +690,72 @@ export const AssessmentBuilderPage: React.FC = () => {
                   </Typography>
                 </Grid>
               </Grid>
+
+              <Divider sx={{ my: 3.5, borderColor: '#DCE6F5' }} />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <SecurityIcon sx={{ color: '#1765B5', fontSize: 22 }} />
+                <Typography variant="h6" fontWeight={700} color="#14264B">
+                  Proctoring & Anti-Malpractice Controls
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+                Configure real-time secure exam proctoring, AI-based mobile phone detection, and penalty policies.
+              </Typography>
+
+              <Grid container spacing={2.5}>
+                <Grid item xs={12} sm={4}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={enableMobileDetection}
+                        onChange={(e) => setEnableMobileDetection(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                        <SmartphoneIcon sx={{ fontSize: 18, color: '#1765B5' }} />
+                        <span>AI Mobile Phone Detection</span>
+                      </Box>
+                    }
+                  />
+                  <Typography variant="caption" display="block" color="text.secondary">
+                    Flag visible phones using on-device computer vision
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    size="small"
+                    label="Max Warning Strikes"
+                    value={maxViolations}
+                    onChange={(e) => setMaxViolations(Math.max(1, Math.min(10, parseInt(e.target.value) || 3)))}
+                    helperText="Strikes before triggering termination policy (Default: 3)"
+                    inputProps={{ min: 1, max: 10 }}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="termination-action-label">Policy on Limit Reached</InputLabel>
+                    <Select
+                      labelId="termination-action-label"
+                      label="Policy on Limit Reached"
+                      value={terminationAction}
+                      onChange={(e) => setTerminationAction(e.target.value as 'AUTO_SUBMIT' | 'WARN_ONLY')}
+                    >
+                      <MenuItem value="AUTO_SUBMIT">Auto-Submit & Terminate Attempt</MenuItem>
+                      <MenuItem value="WARN_ONLY">Warn & Log Malpractice Only</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Action taken when maximum warnings are reached
+                  </Typography>
+                </Grid>
+              </Grid>
             </Paper>
           </Grid>
 
@@ -721,6 +797,22 @@ export const AssessmentBuilderPage: React.FC = () => {
                   <Typography variant="body2" color="text.secondary">Negative Marking:</Typography>
                   <Typography variant="body2" fontWeight={700} color={negativeMarking ? '#d97706' : '#7182A0'}>
                     {negativeMarking ? 'Active' : 'Disabled'}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Phone Detection:</Typography>
+                  <Typography variant="body2" fontWeight={700} color={enableMobileDetection ? '#16A34A' : '#7182A0'}>
+                    {enableMobileDetection ? 'Enabled' : 'Disabled'}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Max Strikes:</Typography>
+                  <Typography variant="body2" fontWeight={700} color="#14264B">{maxViolations} Warnings</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Penalty Policy:</Typography>
+                  <Typography variant="body2" fontWeight={700} color={terminationAction === 'AUTO_SUBMIT' ? '#DC2626' : '#D97706'}>
+                    {terminationAction === 'AUTO_SUBMIT' ? 'Auto-Submit' : 'Warn Only'}
                   </Typography>
                 </Box>
               </Box>

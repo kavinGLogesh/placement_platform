@@ -128,9 +128,9 @@ export interface Student {
   phone?: string | null;
   dob?: string | null;
   departmentId: string;
-  courseId: string;
-  classId: string;
-  sectionId: string;
+  courseId: string | null;
+  classId: string | null;
+  sectionId: string | null;
   year: number;
   cgpa?: number | null;
   status: StudentStatus;
@@ -190,6 +190,28 @@ export interface CreateStudentInput {
   year: number;
   cgpa?: number;
   status?: StudentStatus;
+
+  // 10th Standard Academic Credentials
+  tenthObtainedMarks?: number | null;
+  tenthTotalMarks?: number | null;
+  tenthPercentage?: number | null;
+
+  // 12th Standard Academic Credentials
+  twelfthObtainedMarks?: number | null;
+  twelfthTotalMarks?: number | null;
+  twelfthPercentage?: number | null;
+
+  // Undergraduate (UG) Credentials
+  ugDegree?: string | null;
+  ugStatus?: 'STUDYING' | 'COMPLETED' | string | null;
+  ugCgpa?: number | null;
+  ugPercentage?: number | null;
+
+  // Postgraduate (PG) Credentials (Optional)
+  pgDegree?: string | null;
+  pgStatus?: 'STUDYING' | 'COMPLETED' | string | null;
+  pgCgpa?: number | null;
+  pgPercentage?: number | null;
 }
 
 export interface UpdateStudentInput {
@@ -206,6 +228,28 @@ export interface UpdateStudentInput {
   year?: number;
   cgpa?: number;
   status?: StudentStatus;
+
+  // 10th Standard Academic Credentials
+  tenthObtainedMarks?: number | null;
+  tenthTotalMarks?: number | null;
+  tenthPercentage?: number | null;
+
+  // 12th Standard Academic Credentials
+  twelfthObtainedMarks?: number | null;
+  twelfthTotalMarks?: number | null;
+  twelfthPercentage?: number | null;
+
+  // Undergraduate (UG) Credentials
+  ugDegree?: string | null;
+  ugStatus?: 'STUDYING' | 'COMPLETED' | string | null;
+  ugCgpa?: number | null;
+  ugPercentage?: number | null;
+
+  // Postgraduate (PG) Credentials (Optional)
+  pgDegree?: string | null;
+  pgStatus?: 'STUDYING' | 'COMPLETED' | string | null;
+  pgCgpa?: number | null;
+  pgPercentage?: number | null;
 }
 
 export interface StudentFilters {
@@ -400,4 +444,3 @@ export interface StudentImportHistoryRecord {
   detailsJson?: string | null;
   createdAt: string;
 }
-

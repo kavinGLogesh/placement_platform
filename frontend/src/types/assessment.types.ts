@@ -116,6 +116,9 @@ export interface AssessmentDto {
   assignmentsCount?: number;
   departmentTargeting?: 'ALL' | 'SPECIFIC';
   departmentIds?: string[];
+  enableMobileDetection?: boolean;
+  maxViolations?: number;
+  terminationAction?: 'AUTO_SUBMIT' | 'WARN_ONLY';
 }
 
 export interface CreateAssessmentDto {
@@ -135,6 +138,9 @@ export interface CreateAssessmentDto {
   departmentTargeting?: 'ALL' | 'SPECIFIC';
   departmentIds?: string[];
   sections: CreateAssessmentSectionDto[];
+  enableMobileDetection?: boolean;
+  maxViolations?: number;
+  terminationAction?: 'AUTO_SUBMIT' | 'WARN_ONLY';
 }
 
 export interface UpdateAssessmentDto {
@@ -154,6 +160,9 @@ export interface UpdateAssessmentDto {
   departmentTargeting?: 'ALL' | 'SPECIFIC';
   departmentIds?: string[];
   sections?: CreateAssessmentSectionDto[];
+  enableMobileDetection?: boolean;
+  maxViolations?: number;
+  terminationAction?: 'AUTO_SUBMIT' | 'WARN_ONLY';
 }
 
 export interface RandomizedOptionDto {

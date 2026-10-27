@@ -249,7 +249,7 @@ async function runTest() {
   console.log('- Email:', kavinStudent.collegeEmail);
   console.log('- DOB (metadata):', kavinStudent.dob);
   console.log('- Department:', kavinStudent.department.name);
-  console.log('- Course:', kavinStudent.course.name);
+  console.log('- Course:', kavinStudent.course?.name);
   console.log('- Linked User ID:', kavinStudent.userId);
   console.log('- Role:', kavinStudent.user?.role);
   console.log('- Must Change Password:', kavinStudent.user?.mustChangePassword);

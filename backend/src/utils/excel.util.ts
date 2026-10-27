@@ -12,6 +12,28 @@ export interface RawStudentRow {
   year: number;
   sectionName: string;
   cgpa?: number;
+
+  // 10th Standard Academic Marks
+  tenthObtainedMarks?: number;
+  tenthTotalMarks?: number;
+  tenthPercentage?: number;
+
+  // 12th Standard Academic Marks
+  twelfthObtainedMarks?: number;
+  twelfthTotalMarks?: number;
+  twelfthPercentage?: number;
+
+  // Undergraduate (UG) Credentials
+  ugDegree?: string;
+  ugStatus?: string;
+  ugCgpa?: number;
+  ugPercentage?: number;
+
+  // Postgraduate (PG) Credentials (Optional)
+  pgDegree?: string;
+  pgStatus?: string;
+  pgCgpa?: number;
+  pgPercentage?: number;
 }
 
 /**
@@ -19,6 +41,12 @@ export interface RawStudentRow {
  */
 const normalizeKey = (key: string): string => {
   return key.toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+const parseNum = (val: unknown): number | undefined => {
+  if (val === undefined || val === null || val === '') return undefined;
+  const num = Number(val);
+  return isNaN(num) ? undefined : num;
 };
 
 /**
@@ -67,14 +95,44 @@ export const parseStudentExcel = (buffer: Buffer): { rows: RawStudentRow[]; pars
     const rawYear = normalized['year'] || normalized['currentyear'];
     const parsedYear = Number(rawYear);
 
-    const rawCgpa = normalized['cgpa'];
-    let parsedCgpa: number | undefined = undefined;
-    if (rawCgpa !== '' && rawCgpa !== undefined && rawCgpa !== null) {
-      const num = Number(rawCgpa);
-      if (!isNaN(num)) {
-        parsedCgpa = num;
-      }
-    }
+    // Basic CGPA (overall / legacy column)
+    const parsedCgpa = parseNum(normalized['cgpa'] || normalized['overallcgpa']);
+
+    // 10th Standard
+    const rawTenthTotal = normalized['10thtotalmarks'] || normalized['tenthtotalmarks'] || normalized['10thmaxmarks'];
+    const tenthTotal = parseNum(rawTenthTotal);
+    const rawTenthObtained = normalized['10thmarksobtained'] || normalized['10thobtainedmarks'] || normalized['tenthabtainedmarks'] || normalized['tenthmarksobtained'] || normalized['10thmarks'];
+    const tenthObtained = parseNum(rawTenthObtained);
+    const rawTenthPercentage = normalized['10thpercentage'] || normalized['tenthpercentage'] || normalized['10thpercent'];
+    const tenthPercentage = parseNum(rawTenthPercentage);
+
+    // 12th Standard
+    const rawTwelfthTotal = normalized['12thtotalmarks'] || normalized['twelfthtotalmarks'] || normalized['12thmaxmarks'];
+    const twelfthTotal = parseNum(rawTwelfthTotal);
+    const rawTwelfthObtained = normalized['12thmarksobtained'] || normalized['12thobtainedmarks'] || normalized['twelfthobtainedmarks'] || normalized['twelfthmarksobtained'] || normalized['12thmarks'];
+    const twelfthObtained = parseNum(rawTwelfthObtained);
+    const rawTwelfthPercentage = normalized['12thpercentage'] || normalized['twelfthpercentage'] || normalized['12thpercent'];
+    const twelfthPercentage = parseNum(rawTwelfthPercentage);
+
+    // UG Credentials
+    const rawUgDegree = normalized['ugdegree'] || normalized['undergraduatedegree'] || normalized['degreeprogram'];
+    const ugDegree = rawUgDegree ? String(rawUgDegree).trim() : undefined;
+    const rawUgStatus = normalized['ugstatus'] || normalized['undergraduatestatus'] || normalized['educationstatus'];
+    const ugStatus = rawUgStatus ? String(rawUgStatus).trim().toUpperCase() : undefined;
+    const rawUgCgpa = normalized['ugcgpa'] || normalized['undergraduatecgpa'] || normalized['currentcgpa'] || normalized['finalcgpa'];
+    const ugCgpa = parseNum(rawUgCgpa);
+    const rawUgPercentage = normalized['ugpercentage'] || normalized['undergraduatepercentage'] || normalized['currentpercentage'] || normalized['finalpercentage'];
+    const ugPercentage = parseNum(rawUgPercentage);
+
+    // PG Credentials (Optional)
+    const rawPgDegree = normalized['pgdegree'] || normalized['postgraduatedegree'];
+    const pgDegree = rawPgDegree ? String(rawPgDegree).trim() : undefined;
+    const rawPgStatus = normalized['pgstatus'] || normalized['postgraduatestatus'];
+    const pgStatus = rawPgStatus ? String(rawPgStatus).trim().toUpperCase() : undefined;
+    const rawPgCgpa = normalized['pgcgpa'] || normalized['postgraduatecgpa'];
+    const pgCgpa = parseNum(rawPgCgpa);
+    const rawPgPercentage = normalized['pgpercentage'] || normalized['postgraduatepercentage'];
+    const pgPercentage = parseNum(rawPgPercentage);
 
     // Required column check
     const missing: string[] = [];
@@ -96,6 +154,137 @@ export const parseStudentExcel = (buffer: Buffer): { rows: RawStudentRow[]; pars
       return;
     }
 
+    // Row-level academic validations
+    let hasRowError = false;
+
+    // 10th Validations
+    if (rawTenthTotal !== undefined && rawTenthTotal !== '' && (tenthTotal === undefined || tenthTotal <= 0)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: '10th Total Marks',
+        message: '10th Total Marks must be a number greater than 0',
+      });
+      hasRowError = true;
+    }
+
+    if (rawTenthObtained !== undefined && rawTenthObtained !== '' && (tenthObtained === undefined || tenthObtained < 0)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: '10th Marks Obtained',
+        message: '10th Marks Obtained must be 0 or greater',
+      });
+      hasRowError = true;
+    }
+
+    if (tenthObtained !== undefined && tenthTotal !== undefined && tenthObtained > tenthTotal) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: '10th Marks Obtained',
+        message: `10th Marks Obtained (${tenthObtained}) cannot exceed Total Marks (${tenthTotal})`,
+      });
+      hasRowError = true;
+    }
+
+    if (rawTenthPercentage !== undefined && rawTenthPercentage !== '' && (tenthPercentage === undefined || tenthPercentage < 0 || tenthPercentage > 100)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: '10th Percentage',
+        message: '10th Percentage must be between 0.00 and 100.00',
+      });
+      hasRowError = true;
+    }
+
+    // 12th Validations
+    if (rawTwelfthTotal !== undefined && rawTwelfthTotal !== '' && (twelfthTotal === undefined || twelfthTotal <= 0)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: '12th Total Marks',
+        message: '12th Total Marks must be a number greater than 0',
+      });
+      hasRowError = true;
+    }
+
+    if (rawTwelfthObtained !== undefined && rawTwelfthObtained !== '' && (twelfthObtained === undefined || twelfthObtained < 0)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: '12th Marks Obtained',
+        message: '12th Marks Obtained must be 0 or greater',
+      });
+      hasRowError = true;
+    }
+
+    if (twelfthObtained !== undefined && twelfthTotal !== undefined && twelfthObtained > twelfthTotal) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: '12th Marks Obtained',
+        message: `12th Marks Obtained (${twelfthObtained}) cannot exceed Total Marks (${twelfthTotal})`,
+      });
+      hasRowError = true;
+    }
+
+    if (rawTwelfthPercentage !== undefined && rawTwelfthPercentage !== '' && (twelfthPercentage === undefined || twelfthPercentage < 0 || twelfthPercentage > 100)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: '12th Percentage',
+        message: '12th Percentage must be between 0.00 and 100.00',
+      });
+      hasRowError = true;
+    }
+
+    // UG Validations
+    if (rawUgCgpa !== undefined && rawUgCgpa !== '' && (ugCgpa === undefined || ugCgpa < 0 || ugCgpa > 10)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: 'UG CGPA',
+        message: 'UG CGPA must be between 0.00 and 10.00',
+      });
+      hasRowError = true;
+    }
+
+    if (rawUgPercentage !== undefined && rawUgPercentage !== '' && (ugPercentage === undefined || ugPercentage < 0 || ugPercentage > 100)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: 'UG Percentage',
+        message: 'UG Percentage must be between 0.00 and 100.00',
+      });
+      hasRowError = true;
+    }
+
+    // PG Validations (Optional)
+    if (rawPgCgpa !== undefined && rawPgCgpa !== '' && (pgCgpa === undefined || pgCgpa < 0 || pgCgpa > 10)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: 'PG CGPA',
+        message: 'PG CGPA must be between 0.00 and 10.00',
+      });
+      hasRowError = true;
+    }
+
+    if (rawPgPercentage !== undefined && rawPgPercentage !== '' && (pgPercentage === undefined || pgPercentage < 0 || pgPercentage > 100)) {
+      parseErrors.push({
+        row: rowNumber,
+        registerNumber: regNum,
+        field: 'PG Percentage',
+        message: 'PG Percentage must be between 0.00 and 100.00',
+      });
+      hasRowError = true;
+    }
+
+    if (hasRowError) {
+      return;
+    }
+
     rows.push({
       rowNumber,
       registerNumber: regNum,
@@ -106,7 +295,21 @@ export const parseStudentExcel = (buffer: Buffer): { rows: RawStudentRow[]; pars
       courseCode: courseCode,
       year: parsedYear,
       sectionName: secName,
-      cgpa: parsedCgpa,
+      cgpa: parsedCgpa ?? ugCgpa,
+      tenthObtainedMarks: tenthObtained,
+      tenthTotalMarks: tenthTotal,
+      tenthPercentage: tenthPercentage,
+      twelfthObtainedMarks: twelfthObtained,
+      twelfthTotalMarks: twelfthTotal,
+      twelfthPercentage: twelfthPercentage,
+      ugDegree,
+      ugStatus: ugStatus === 'COMPLETED' ? 'COMPLETED' : 'STUDYING',
+      ugCgpa,
+      ugPercentage,
+      pgDegree,
+      pgStatus: pgStatus === 'COMPLETED' ? 'COMPLETED' : (pgDegree || pgCgpa || pgPercentage ? 'STUDYING' : undefined),
+      pgCgpa,
+      pgPercentage,
     });
   });
 
@@ -142,6 +345,20 @@ export const generateTemplateExcelBuffer = (): Buffer => {
       Year: 3,
       Section: 'A',
       CGPA: 8.75,
+      '10th Marks Obtained': 465,
+      '10th Total Marks': 500,
+      '10th Percentage': 93.0,
+      '12th Marks Obtained': 558,
+      '12th Total Marks': 600,
+      '12th Percentage': 93.0,
+      'UG Degree': 'B.Tech',
+      'UG Status': 'STUDYING',
+      'UG CGPA': 8.75,
+      'UG Percentage': 87.5,
+      'PG Degree': '',
+      'PG Status': '',
+      'PG CGPA': '',
+      'PG Percentage': '',
     },
     {
       'Register Number': '2026CS102',
@@ -153,6 +370,20 @@ export const generateTemplateExcelBuffer = (): Buffer => {
       Year: 3,
       Section: 'B',
       CGPA: 9.1,
+      '10th Marks Obtained': 480,
+      '10th Total Marks': 500,
+      '10th Percentage': 96.0,
+      '12th Marks Obtained': 570,
+      '12th Total Marks': 600,
+      '12th Percentage': 95.0,
+      'UG Degree': 'B.Tech',
+      'UG Status': 'STUDYING',
+      'UG CGPA': 9.1,
+      'UG Percentage': 91.0,
+      'PG Degree': '',
+      'PG Status': '',
+      'PG CGPA': '',
+      'PG Percentage': '',
     },
     {
       'Register Number': '2026EC101',
@@ -164,6 +395,20 @@ export const generateTemplateExcelBuffer = (): Buffer => {
       Year: 3,
       Section: 'A',
       CGPA: 8.4,
+      '10th Marks Obtained': 440,
+      '10th Total Marks': 500,
+      '10th Percentage': 88.0,
+      '12th Marks Obtained': 510,
+      '12th Total Marks': 600,
+      '12th Percentage': 85.0,
+      'UG Degree': 'B.E.',
+      'UG Status': 'STUDYING',
+      'UG CGPA': 8.4,
+      'UG Percentage': 84.0,
+      'PG Degree': '',
+      'PG Status': '',
+      'PG CGPA': '',
+      'PG Percentage': '',
     },
   ];
 

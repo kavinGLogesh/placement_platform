@@ -256,6 +256,9 @@ export function validateCreateAssessment(data: unknown): CreateAssessmentDto {
     startDate,
     endDate,
     numberOfPapers,
+    enableMobileDetection: payload.enableMobileDetection !== undefined ? Boolean(payload.enableMobileDetection) : true,
+    maxViolations: typeof payload.maxViolations === 'number' && payload.maxViolations >= 1 ? Math.floor(payload.maxViolations) : 3,
+    terminationAction: payload.terminationAction === 'WARN_ONLY' ? 'WARN_ONLY' : 'AUTO_SUBMIT',
     companyId: typeof payload.companyId === 'string' && payload.companyId.trim() ? payload.companyId.trim() : null,
     isCompanyAssessment: payload.isCompanyAssessment !== undefined ? Boolean(payload.isCompanyAssessment) : (Boolean(payload.companyId)),
     departmentTargeting,
@@ -436,6 +439,13 @@ export function validateUpdateAssessment(data: unknown): UpdateAssessmentDto {
   if (startDate !== undefined) result.startDate = startDate;
   if (endDate !== undefined) result.endDate = endDate;
   if (payload.numberOfPapers !== undefined) result.numberOfPapers = payload.numberOfPapers as number;
+  if (payload.enableMobileDetection !== undefined) result.enableMobileDetection = Boolean(payload.enableMobileDetection);
+  if (payload.maxViolations !== undefined && typeof payload.maxViolations === 'number' && payload.maxViolations >= 1) {
+    result.maxViolations = Math.floor(payload.maxViolations);
+  }
+  if (payload.terminationAction !== undefined) {
+    result.terminationAction = payload.terminationAction === 'WARN_ONLY' ? 'WARN_ONLY' : 'AUTO_SUBMIT';
+  }
   if (payload.companyId !== undefined) {
     result.companyId = typeof payload.companyId === 'string' && payload.companyId.trim() ? payload.companyId.trim() : null;
   }

@@ -71,22 +71,31 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
   const [editForm, setEditForm] = useState<UpsertAcademicRecordInput>({
     tenthBoard: initialRecord?.tenthBoard || '',
     tenthPassingYear: initialRecord?.tenthPassingYear || 2020,
-    tenthTotalMarks: initialRecord?.tenthTotalMarks || 500,
-    tenthObtainedMarks: initialRecord?.tenthObtainedMarks || 450,
-    tenthPercentage: initialRecord?.tenthPercentage || 90.0,
+    tenthTotalMarks: initialRecord?.tenthTotalMarks ?? 500,
+    tenthObtainedMarks: initialRecord?.tenthObtainedMarks ?? 450,
+    tenthPercentage: initialRecord?.tenthPercentage ?? 90.0,
 
     twelfthBoard: initialRecord?.twelfthBoard || '',
     twelfthPassingYear: initialRecord?.twelfthPassingYear || 2022,
-    twelfthTotalMarks: initialRecord?.twelfthTotalMarks || 600,
-    twelfthObtainedMarks: initialRecord?.twelfthObtainedMarks || 540,
-    twelfthPercentage: initialRecord?.twelfthPercentage || 90.0,
+    twelfthTotalMarks: initialRecord?.twelfthTotalMarks ?? 600,
+    twelfthObtainedMarks: initialRecord?.twelfthObtainedMarks ?? 540,
+    twelfthPercentage: initialRecord?.twelfthPercentage ?? 90.0,
 
     ugDegree: initialRecord?.ugDegree || 'B.Tech',
     ugBranch: initialRecord?.ugBranch || 'Computer Science & Engineering',
+    ugStatus: initialRecord?.ugStatus || initialRecord?.studyStatus || 'STUDYING',
+    ugCgpa: initialRecord?.ugCgpa ?? initialRecord?.currentCgpa ?? 8.5,
+    ugPercentage: initialRecord?.ugPercentage ?? initialRecord?.overallPercentage ?? null,
+
+    pgDegree: initialRecord?.pgDegree || '',
+    pgStatus: initialRecord?.pgStatus || '',
+    pgCgpa: initialRecord?.pgCgpa ?? null,
+    pgPercentage: initialRecord?.pgPercentage ?? null,
+
     degreeLevel: initialRecord?.degreeLevel || 'UG',
-    studyStatus: initialRecord?.studyStatus || 'STUDYING',
+    studyStatus: initialRecord?.studyStatus || initialRecord?.ugStatus || 'STUDYING',
     currentSemester: initialRecord?.currentSemester || 1,
-    currentCgpa: initialRecord?.currentCgpa || 8.5,
+    currentCgpa: initialRecord?.currentCgpa ?? initialRecord?.ugCgpa ?? 8.5,
     activeBacklogs: initialRecord?.activeBacklogs || 0,
     historyOfBacklogs: initialRecord?.historyOfBacklogs || 0,
 
@@ -107,22 +116,31 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
     setEditForm({
       tenthBoard: record?.tenthBoard || '',
       tenthPassingYear: record?.tenthPassingYear || 2020,
-      tenthTotalMarks: record?.tenthTotalMarks || 500,
-      tenthObtainedMarks: record?.tenthObtainedMarks || 450,
-      tenthPercentage: record?.tenthPercentage || 90.0,
+      tenthTotalMarks: record?.tenthTotalMarks ?? null,
+      tenthObtainedMarks: record?.tenthObtainedMarks ?? null,
+      tenthPercentage: record?.tenthPercentage ?? null,
 
       twelfthBoard: record?.twelfthBoard || '',
       twelfthPassingYear: record?.twelfthPassingYear || 2022,
-      twelfthTotalMarks: record?.twelfthTotalMarks || 600,
-      twelfthObtainedMarks: record?.twelfthObtainedMarks || 540,
-      twelfthPercentage: record?.twelfthPercentage || 90.0,
+      twelfthTotalMarks: record?.twelfthTotalMarks ?? null,
+      twelfthObtainedMarks: record?.twelfthObtainedMarks ?? null,
+      twelfthPercentage: record?.twelfthPercentage ?? null,
 
       ugDegree: record?.ugDegree || 'B.Tech',
       ugBranch: record?.ugBranch || 'Computer Science & Engineering',
+      ugStatus: record?.ugStatus || record?.studyStatus || 'STUDYING',
+      ugCgpa: record?.ugCgpa ?? record?.currentCgpa ?? null,
+      ugPercentage: record?.ugPercentage ?? record?.overallPercentage ?? null,
+
+      pgDegree: record?.pgDegree || '',
+      pgStatus: record?.pgStatus || '',
+      pgCgpa: record?.pgCgpa ?? null,
+      pgPercentage: record?.pgPercentage ?? null,
+
       degreeLevel: record?.degreeLevel || 'UG',
-      studyStatus: record?.studyStatus || 'STUDYING',
+      studyStatus: record?.studyStatus || record?.ugStatus || 'STUDYING',
       currentSemester: record?.currentSemester || 1,
-      currentCgpa: record?.currentCgpa || 8.5,
+      currentCgpa: record?.currentCgpa ?? record?.ugCgpa ?? null,
       activeBacklogs: record?.activeBacklogs || 0,
       historyOfBacklogs: record?.historyOfBacklogs || 0,
 
@@ -146,7 +164,17 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
     setSaving(true);
     setActionError(null);
     try {
-      const updated = await academicService.updateAdminAcademicRecord(studentId, editForm);
+      const payload: UpsertAcademicRecordInput = {
+        ...editForm,
+        studyStatus: editForm.ugStatus || editForm.studyStatus,
+        currentCgpa: editForm.ugCgpa ?? editForm.currentCgpa,
+        overallPercentage: editForm.ugPercentage ?? editForm.overallPercentage,
+        pgDegree: editForm.pgDegree?.trim() || null,
+        pgStatus: editForm.pgStatus?.trim() || null,
+        pgCgpa: editForm.pgCgpa !== undefined && editForm.pgCgpa !== null && !isNaN(Number(editForm.pgCgpa)) ? Number(editForm.pgCgpa) : null,
+        pgPercentage: editForm.pgPercentage !== undefined && editForm.pgPercentage !== null && !isNaN(Number(editForm.pgPercentage)) ? Number(editForm.pgPercentage) : null,
+      };
+      const updated = await academicService.updateAdminAcademicRecord(studentId, payload);
       setRecord(updated);
       setEditOpen(false);
       setActionSuccess('Academic records saved and synchronized successfully.');
@@ -255,7 +283,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                 Student Academic Records & Marksheets
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                10th, 12th, and Undergraduate semester-wise credentials with verified marksheets.
+                10th, 12th, Undergraduate (UG), and Postgraduate (PG) academic credentials with optional marksheets.
               </Typography>
             </div>
           </Box>
@@ -293,16 +321,16 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
 
         <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
           <Typography variant="body2" fontWeight={600}>
-            University Grading & Marksheets Policy
+            Academic Records & Grading Policy
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Cumulative Grade Point Average (CGPA) is calculated strictly in accordance with applicable university grading rules from completed semester SGPAs. Marksheet document uploads are strictly optional and are not required to complete academic records or compute CGPA.
+            Marks, CGPA, and percentages are recorded directly as official academic standing. Marksheet document uploads are strictly optional and are not mandatory for student registration, profile completion, or placement eligibility.
           </Typography>
         </Alert>
 
-        {/* Top Cards: 10th Standard & 12th Standard */}
+        {/* 4 Academic Sections: 10th Standard, 12th Standard, Undergraduate (UG), Postgraduate (PG) */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
-          {/* 10th Standard Card */}
+          {/* 1. 10th Standard Card */}
           <Grid item xs={12} md={6}>
             <Box
               sx={{
@@ -322,7 +350,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     Secondary (10th Standard)
                   </Typography>
                   <Chip
-                    label={record?.hasTenthMarksheet ? 'Marksheet Verified' : 'No Marksheet'}
+                    label={record?.hasTenthMarksheet ? 'Marksheet Verified' : 'Optional (No Marksheet)'}
                     size="small"
                     color={record?.hasTenthMarksheet ? 'success' : 'default'}
                     icon={record?.hasTenthMarksheet ? <CheckCircleIcon /> : <WarningAmberIcon />}
@@ -336,7 +364,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                       Board / Council
                     </Typography>
                     <Typography variant="body2" fontWeight={600}>
-                      {record?.tenthBoard || '—'}
+                      {record?.tenthBoard || 'Not Provided'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -344,7 +372,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                       Passing Year
                     </Typography>
                     <Typography variant="body2" fontWeight={600}>
-                      {record?.tenthPassingYear || '—'}
+                      {record?.tenthPassingYear || 'Not Provided'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -354,7 +382,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     <Typography variant="body2" fontWeight={600}>
                       {record?.tenthObtainedMarks != null && record?.tenthTotalMarks != null
                         ? `${record.tenthObtainedMarks} / ${record.tenthTotalMarks}`
-                        : '—'}
+                        : 'Not Provided'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -362,7 +390,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                       Percentage
                     </Typography>
                     <Typography variant="h6" fontWeight={800} color="#0284C7">
-                      {record?.tenthPercentage != null ? `${record.tenthPercentage.toFixed(2)}%` : '—'}
+                      {record?.tenthPercentage != null ? `${Number(record.tenthPercentage).toFixed(2)}%` : 'Not Provided'}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -376,7 +404,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                   onClick={() => handleOpenUploadModal('tenth')}
                   sx={{ textTransform: 'none', fontWeight: 600 }}
                 >
-                  {record?.hasTenthMarksheet ? 'Replace Marksheet' : 'Upload Marksheet'}
+                  {record?.hasTenthMarksheet ? 'Replace Marksheet' : 'Upload Marksheet (Optional)'}
                 </Button>
                 {record?.hasTenthMarksheet && (
                   <>
@@ -420,7 +448,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
             </Box>
           </Grid>
 
-          {/* 12th Standard Card */}
+          {/* 2. 12th Standard Card */}
           <Grid item xs={12} md={6}>
             <Box
               sx={{
@@ -440,7 +468,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     Higher Secondary / 12th Standard / Diploma
                   </Typography>
                   <Chip
-                    label={record?.hasTwelfthMarksheet ? 'Marksheet Verified' : 'No Marksheet'}
+                    label={record?.hasTwelfthMarksheet ? 'Marksheet Verified' : 'Optional (No Marksheet)'}
                     size="small"
                     color={record?.hasTwelfthMarksheet ? 'success' : 'default'}
                     icon={record?.hasTwelfthMarksheet ? <CheckCircleIcon /> : <WarningAmberIcon />}
@@ -454,7 +482,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                       Board / Institution
                     </Typography>
                     <Typography variant="body2" fontWeight={600}>
-                      {record?.twelfthBoard || '—'}
+                      {record?.twelfthBoard || 'Not Provided'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -462,7 +490,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                       Passing Year
                     </Typography>
                     <Typography variant="body2" fontWeight={600}>
-                      {record?.twelfthPassingYear || '—'}
+                      {record?.twelfthPassingYear || 'Not Provided'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -472,7 +500,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     <Typography variant="body2" fontWeight={600}>
                       {record?.twelfthObtainedMarks != null && record?.twelfthTotalMarks != null
                         ? `${record.twelfthObtainedMarks} / ${record.twelfthTotalMarks}`
-                        : '—'}
+                        : 'Not Provided'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -480,7 +508,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                       Percentage
                     </Typography>
                     <Typography variant="h6" fontWeight={800} color="#0284C7">
-                      {record?.twelfthPercentage != null ? `${record.twelfthPercentage.toFixed(2)}%` : '—'}
+                      {record?.twelfthPercentage != null ? `${Number(record.twelfthPercentage).toFixed(2)}%` : 'Not Provided'}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -494,7 +522,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                   onClick={() => handleOpenUploadModal('twelfth')}
                   sx={{ textTransform: 'none', fontWeight: 600 }}
                 >
-                  {record?.hasTwelfthMarksheet ? 'Replace Marksheet' : 'Upload Marksheet'}
+                  {record?.hasTwelfthMarksheet ? 'Replace Marksheet' : 'Upload Marksheet (Optional)'}
                 </Button>
                 {record?.hasTwelfthMarksheet && (
                   <>
@@ -537,89 +565,236 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
               </Box>
             </Box>
           </Grid>
-        </Grid>
 
-        {/* Undergraduate Degree Overview Card */}
-        <Box
-          sx={{
-            p: 3,
-            borderRadius: 2,
-            bgcolor: '#F0F9FF',
-            border: '1px solid #BAE6FD',
-            mb: 3,
-          }}
-        >
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <MenuBookIcon sx={{ color: '#0369A1' }} />
-              <Typography variant="subtitle1" fontWeight={700} color="#0369A1">
-                Degree Program & Academic Standing
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Chip
-                label={record?.degreeLevel || 'UG'}
-                size="small"
-                color="primary"
-                sx={{ fontWeight: 700 }}
-              />
-              <Chip
-                label={record?.studyStatus || 'STUDYING'}
-                size="small"
-                color={record?.studyStatus === 'COMPLETED' ? 'success' : 'default'}
-                sx={{ fontWeight: 700 }}
-              />
-              <Chip
-                label={`Current: Sem ${record?.currentSemester || 1}`}
-                size="small"
-                variant="outlined"
-                color="info"
-                sx={{ fontWeight: 700 }}
-              />
-              <Chip
-                label={`Active Backlogs: ${record?.activeBacklogs || 0}`}
-                size="small"
-                color={record?.activeBacklogs && record.activeBacklogs > 0 ? 'error' : 'success'}
-                sx={{ fontWeight: 700 }}
-              />
-              <Chip
-                label={`Backlog History: ${record?.historyOfBacklogs || 0}`}
-                size="small"
-                variant="outlined"
-                sx={{ fontWeight: 600 }}
-              />
-            </Box>
-          </Box>
+          {/* 3. Undergraduate (UG) Card */}
+          <Grid item xs={12} md={6}>
+            <Box
+              sx={{
+                p: 3,
+                borderRadius: 2,
+                bgcolor: '#F0F9FF',
+                border: '1px solid #BAE6FD',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <MenuBookIcon sx={{ color: '#0369A1' }} />
+                    <Typography variant="subtitle1" fontWeight={700} color="#0369A1">
+                      Undergraduate (UG)
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Chip
+                      label={
+                        (record?.ugStatus || record?.studyStatus) === 'COMPLETED'
+                          ? 'Completed'
+                          : (record?.ugStatus || record?.studyStatus) === 'STUDYING'
+                          ? 'Studying'
+                          : record?.ugStatus || record?.studyStatus || 'Not Provided'
+                      }
+                      size="small"
+                      color={(record?.ugStatus || record?.studyStatus) === 'COMPLETED' ? 'success' : 'info'}
+                      sx={{ fontWeight: 700 }}
+                    />
+                    {record?.currentSemester && (
+                      <Chip
+                        label={`Sem ${record.currentSemester}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontWeight: 600 }}
+                      />
+                    )}
+                  </Box>
+                </Box>
 
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
-              <Typography variant="caption" color="text.secondary">
-                Degree & Branch
-              </Typography>
-              <Typography variant="body1" fontWeight={600} color="#1E293B">
-                {record?.ugDegree || 'B.Tech'} - {record?.ugBranch || 'Computer Science & Engineering'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <Typography variant="caption" color="text.secondary">
-                Cumulative CGPA (Overall)
-              </Typography>
-              <Typography variant="h5" fontWeight={800} color="#0D9488">
-                {record?.currentCgpa != null ? Number(record.currentCgpa).toFixed(2) : '—'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <Typography variant="caption" color="text.secondary">
-                Placement Drive Standing
-              </Typography>
-              <Typography variant="body2" fontWeight={600} color="#0369A1">
-                {(!record?.activeBacklogs || record.activeBacklogs === 0) && (record?.currentCgpa || 0) >= 7.5
-                  ? 'All Tier-1 Direct Eligibility Criteria Met'
-                  : 'Review Drive-Specific Eligibility'}
-              </Typography>
-            </Grid>
+                <Grid container spacing={1.5}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Degree
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {record?.ugDegree || 'Not Provided'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Education Status
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {(record?.ugStatus || record?.studyStatus) === 'COMPLETED'
+                        ? 'Completed'
+                        : (record?.ugStatus || record?.studyStatus) === 'STUDYING'
+                        ? 'Studying'
+                        : 'Not Provided'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      {(record?.ugStatus || record?.studyStatus) === 'COMPLETED' ? 'Final CGPA' : 'Current CGPA'}
+                    </Typography>
+                    <Typography variant="h6" fontWeight={800} color="#0D9488">
+                      {record?.ugCgpa != null
+                        ? Number(record.ugCgpa).toFixed(2)
+                        : record?.currentCgpa != null
+                        ? Number(record.currentCgpa).toFixed(2)
+                        : 'Not Provided'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      {(record?.ugStatus || record?.studyStatus) === 'COMPLETED' ? 'Final Percentage' : 'Current Percentage'}
+                    </Typography>
+                    <Typography variant="h6" fontWeight={800} color="#0284C7">
+                      {record?.ugPercentage != null
+                        ? `${Number(record.ugPercentage).toFixed(2)}%`
+                        : record?.overallPercentage != null
+                        ? `${Number(record.overallPercentage).toFixed(2)}%`
+                        : 'Not Provided'}
+                    </Typography>
+                  </Grid>
+                  {record?.ugBranch && (
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary">
+                        Branch / Specialization
+                      </Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {record.ugBranch}
+                      </Typography>
+                    </Grid>
+                  )}
+                </Grid>
+              </Box>
+
+              <Box sx={{ mt: 2.5, pt: 1.5, borderTop: '1px solid #BAE6FD', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip
+                  label={`Active Backlogs: ${record?.activeBacklogs || 0}`}
+                  size="small"
+                  color={record?.activeBacklogs && record.activeBacklogs > 0 ? 'error' : 'success'}
+                  sx={{ fontWeight: 600 }}
+                />
+                <Chip
+                  label={`Backlog History: ${record?.historyOfBacklogs || 0}`}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontWeight: 600 }}
+                />
+              </Box>
+            </Box>
           </Grid>
-        </Box>
+
+          {/* 4. Postgraduate (PG) Card */}
+          <Grid item xs={12} md={6}>
+            <Box
+              sx={{
+                p: 3,
+                borderRadius: 2,
+                bgcolor: record?.pgDegree || record?.pgCgpa != null || record?.pgPercentage != null ? '#FAF5FF' : '#F8FAFC',
+                border: '1px solid',
+                borderColor: record?.pgDegree || record?.pgCgpa != null || record?.pgPercentage != null ? '#E9D5FF' : '#E2E8F0',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <SchoolIcon sx={{ color: record?.pgDegree ? '#7E22CE' : '#64748B' }} />
+                    <Typography
+                      variant="subtitle1"
+                      fontWeight={700}
+                      color={record?.pgDegree ? '#7E22CE' : '#475569'}
+                    >
+                      Postgraduate (PG)
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={
+                      record?.pgStatus === 'COMPLETED'
+                        ? 'Completed'
+                        : record?.pgStatus === 'STUDYING'
+                        ? 'Studying'
+                        : record?.pgDegree
+                        ? 'Enrolled'
+                        : 'Optional / Not Enrolled'
+                    }
+                    size="small"
+                    color={
+                      record?.pgStatus === 'COMPLETED'
+                        ? 'success'
+                        : record?.pgStatus === 'STUDYING'
+                        ? 'info'
+                        : 'default'
+                    }
+                    variant={record?.pgDegree ? 'filled' : 'outlined'}
+                    sx={{ fontWeight: 700 }}
+                  />
+                </Box>
+
+                <Grid container spacing={1.5}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Degree
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {record?.pgDegree || 'Not Provided'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Education Status
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {record?.pgStatus === 'COMPLETED'
+                        ? 'Completed'
+                        : record?.pgStatus === 'STUDYING'
+                        ? 'Studying'
+                        : 'Not Provided'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      {record?.pgStatus === 'COMPLETED' ? 'Final CGPA' : 'Current CGPA'}
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight={800}
+                      color={record?.pgCgpa != null ? '#7E22CE' : 'text.secondary'}
+                    >
+                      {record?.pgCgpa != null ? Number(record.pgCgpa).toFixed(2) : 'Not Provided'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      {record?.pgStatus === 'COMPLETED' ? 'Final Percentage' : 'Current Percentage'}
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight={800}
+                      color={record?.pgPercentage != null ? '#7E22CE' : 'text.secondary'}
+                    >
+                      {record?.pgPercentage != null ? `${Number(record.pgPercentage).toFixed(2)}%` : 'Not Provided'}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              <Box sx={{ mt: 2.5, pt: 1.5, borderTop: '1px solid #E2E8F0' }}>
+                <Typography variant="caption" color="text.secondary">
+                  {record?.pgDegree || record?.pgCgpa != null || record?.pgPercentage != null
+                    ? 'Official postgraduate academic record recorded directly.'
+                    : 'Postgraduate fields are optional for students who have not started PG.'}
+                </Typography>
+              </Box>
+            </Box>
+          </Grid>
+        </Grid>
 
         {/* Semester-Wise Records Table */}
         <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#1E293B' }}>
@@ -897,61 +1072,22 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
 
             <Divider />
 
-            {/* Degree & Program Info */}
+            {/* Undergraduate (UG) Details */}
             <Box>
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#1E293B' }}>
-                Degree Program, Status & Current Standing
+                Undergraduate (UG) Details
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={3}>
                   <TextField
-                    select
-                    label="Degree Level"
-                    fullWidth
-                    size="small"
-                    value={editForm.degreeLevel || 'UG'}
-                    onChange={(e) => setEditForm({ ...editForm, degreeLevel: e.target.value })}
-                  >
-                    <MenuItem value="UG">Undergraduate (UG)</MenuItem>
-                    <MenuItem value="PG">Postgraduate (PG)</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} sm={3}>
-                  <TextField
-                    select
-                    label="Study Status"
-                    fullWidth
-                    size="small"
-                    value={editForm.studyStatus || 'STUDYING'}
-                    onChange={(e) => setEditForm({ ...editForm, studyStatus: e.target.value })}
-                  >
-                    <MenuItem value="STUDYING">Currently Studying</MenuItem>
-                    <MenuItem value="COMPLETED">Graduated / Completed</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} sm={2}>
-                  <TextField
-                    label="Current Semester"
-                    type="number"
-                    fullWidth
-                    size="small"
-                    inputProps={{ min: 1, max: 8 }}
-                    value={editForm.currentSemester || 1}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, currentSemester: Number(e.target.value) || 1 })
-                    }
-                  />
-                </Grid>
-                <Grid item xs={12} sm={2}>
-                  <TextField
-                    label="Degree (e.g., B.Tech / M.Tech)"
+                    label="UG Degree (e.g. B.Tech / B.E.)"
                     fullWidth
                     size="small"
                     value={editForm.ugDegree || ''}
                     onChange={(e) => setEditForm({ ...editForm, ugDegree: e.target.value })}
                   />
                 </Grid>
-                <Grid item xs={12} sm={2}>
+                <Grid item xs={12} sm={3}>
                   <TextField
                     label="Branch / Specialization"
                     fullWidth
@@ -960,21 +1096,65 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     onChange={(e) => setEditForm({ ...editForm, ugBranch: e.target.value })}
                   />
                 </Grid>
-                <Grid item xs={4} sm={4}>
+                <Grid item xs={12} sm={3}>
                   <TextField
-                    label="Overall CGPA"
+                    select
+                    label="UG Education Status"
+                    fullWidth
+                    size="small"
+                    value={editForm.ugStatus || editForm.studyStatus || 'STUDYING'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditForm({ ...editForm, ugStatus: val, studyStatus: val });
+                    }}
+                  >
+                    <MenuItem value="STUDYING">Studying (Ongoing)</MenuItem>
+                    <MenuItem value="COMPLETED">Completed (Graduated)</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    label="Current Semester"
+                    type="number"
+                    fullWidth
+                    size="small"
+                    inputProps={{ min: 1, max: 12 }}
+                    value={editForm.currentSemester || 1}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, currentSemester: Number(e.target.value) || 1 })
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    label={(editForm.ugStatus || editForm.studyStatus) === 'COMPLETED' ? 'Final CGPA (0-10)' : 'Current CGPA (0-10)'}
                     type="number"
                     fullWidth
                     size="small"
                     inputProps={{ step: 0.01, min: 0, max: 10 }}
-                    value={editForm.currentCgpa ?? ''}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, currentCgpa: Number(e.target.value) || null })
-                    }
-                    helperText="Calculated via university grading rules"
+                    value={editForm.ugCgpa ?? editForm.currentCgpa ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value !== '' ? Number(e.target.value) : null;
+                      setEditForm({ ...editForm, ugCgpa: val, currentCgpa: val });
+                    }}
                   />
                 </Grid>
-                <Grid item xs={4} sm={4}>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    label={(editForm.ugStatus || editForm.studyStatus) === 'COMPLETED' ? 'Final Percentage (%)' : 'Current Percentage (%)'}
+                    type="number"
+                    fullWidth
+                    size="small"
+                    inputProps={{ step: 0.01, min: 0, max: 100 }}
+                    value={editForm.ugPercentage ?? editForm.overallPercentage ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value !== '' ? Number(e.target.value) : null;
+                      setEditForm({ ...editForm, ugPercentage: val, overallPercentage: val });
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
                   <TextField
                     label="Active Backlogs / Arrears"
                     type="number"
@@ -987,7 +1167,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     }
                   />
                 </Grid>
-                <Grid item xs={4} sm={4}>
+                <Grid item xs={6} sm={3}>
                   <TextField
                     label="Backlog History"
                     type="number"
@@ -997,6 +1177,78 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     value={editForm.historyOfBacklogs ?? 0}
                     onChange={(e) =>
                       setEditForm({ ...editForm, historyOfBacklogs: Number(e.target.value) || 0 })
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Divider />
+
+            {/* Postgraduate (PG) Details (Optional) */}
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#1E293B' }}>
+                  Postgraduate (PG) Details (Optional)
+                </Typography>
+                <Chip label="Optional" size="small" variant="outlined" />
+              </Box>
+              <Alert severity="info" variant="outlined" sx={{ mb: 2, fontSize: '0.8125rem' }}>
+                Leave these fields empty if the student has not enrolled in a Postgraduate program.
+              </Alert>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    label="PG Degree (e.g. M.Tech / MBA)"
+                    fullWidth
+                    size="small"
+                    value={editForm.pgDegree || ''}
+                    onChange={(e) => setEditForm({ ...editForm, pgDegree: e.target.value })}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    select
+                    label="PG Education Status"
+                    fullWidth
+                    size="small"
+                    value={editForm.pgStatus || ''}
+                    onChange={(e) => setEditForm({ ...editForm, pgStatus: e.target.value })}
+                  >
+                    <MenuItem value="">Not Started / None</MenuItem>
+                    <MenuItem value="STUDYING">Studying (Ongoing)</MenuItem>
+                    <MenuItem value="COMPLETED">Completed (Graduated)</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    label={editForm.pgStatus === 'COMPLETED' ? 'Final CGPA (0-10)' : 'Current CGPA (0-10)'}
+                    type="number"
+                    fullWidth
+                    size="small"
+                    inputProps={{ step: 0.01, min: 0, max: 10 }}
+                    value={editForm.pgCgpa ?? ''}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        pgCgpa: e.target.value !== '' ? Number(e.target.value) : null,
+                      })
+                    }
+                  />
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    label={editForm.pgStatus === 'COMPLETED' ? 'Final Percentage (%)' : 'Current Percentage (%)'}
+                    type="number"
+                    fullWidth
+                    size="small"
+                    inputProps={{ step: 0.01, min: 0, max: 100 }}
+                    value={editForm.pgPercentage ?? ''}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        pgPercentage: e.target.value !== '' ? Number(e.target.value) : null,
+                      })
                     }
                   />
                 </Grid>

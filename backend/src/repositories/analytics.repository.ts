@@ -1363,7 +1363,7 @@ export class AnalyticsRepository {
           severity = 'LOW';
           break;
         case 'CAMERA_DISCONNECTED':
-          displayType = 'Camera / Video Feed Interrupted';
+          displayType = 'Camera Stream Disconnected / Hardware Interrupted';
           severity = 'HIGH';
           break;
         case 'WARNING':
@@ -1377,6 +1377,22 @@ export class AnalyticsRepository {
         case 'SCREENSHOT_ATTEMPT':
           displayType = 'PrintScreen / Key Capture Shortcut Event';
           severity = 'MEDIUM';
+          break;
+        case 'MOBILE_PHONE_DETECTED':
+          displayType = 'Suspected Mobile Phone Detected in Camera View';
+          severity = 'HIGH';
+          break;
+        case 'MULTIPLE_PERSONS_DETECTED':
+          displayType = 'Multiple Persons Detected in Camera View';
+          severity = 'HIGH';
+          break;
+        case 'LOOKING_AWAY':
+          displayType = 'Gaze / Head Turned Away Sustained';
+          severity = 'MEDIUM';
+          break;
+        case 'FACE_NOT_VISIBLE':
+          displayType = 'Candidate Face Not Visible / Candidate Left Seat';
+          severity = 'HIGH';
           break;
         default:
           displayType = vType.replace(/_/g, ' ');

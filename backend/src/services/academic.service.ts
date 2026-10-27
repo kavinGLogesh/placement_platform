@@ -45,7 +45,7 @@ export class AcademicService {
   constructor(
     private readonly academicRepo: AcademicRepository = academicRepository,
     private readonly managementRepo: ManagementRepository = managementRepository
-  ) {}
+  ) { }
 
   /**
    * Validates email format strictly
@@ -135,6 +135,30 @@ export class AcademicService {
     if (dto.currentCgpa !== undefined && dto.currentCgpa !== null) {
       if (dto.currentCgpa < 0 || dto.currentCgpa > 10) {
         throw new AppError('Current overall CGPA must be on a scale of 0 to 10', 400);
+      }
+    }
+
+    if (dto.ugCgpa !== undefined && dto.ugCgpa !== null) {
+      if (dto.ugCgpa < 0 || dto.ugCgpa > 10) {
+        throw new AppError('UG CGPA must be between 0 and 10', 400);
+      }
+    }
+
+    if (dto.ugPercentage !== undefined && dto.ugPercentage !== null) {
+      if (dto.ugPercentage < 0 || dto.ugPercentage > 100) {
+        throw new AppError('UG percentage must be between 0 and 100', 400);
+      }
+    }
+
+    if (dto.pgCgpa !== undefined && dto.pgCgpa !== null) {
+      if (dto.pgCgpa < 0 || dto.pgCgpa > 10) {
+        throw new AppError('PG CGPA must be between 0 and 10', 400);
+      }
+    }
+
+    if (dto.pgPercentage !== undefined && dto.pgPercentage !== null) {
+      if (dto.pgPercentage < 0 || dto.pgPercentage > 100) {
+        throw new AppError('PG percentage must be between 0 and 100', 400);
       }
     }
 

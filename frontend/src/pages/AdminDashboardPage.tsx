@@ -15,6 +15,7 @@ import {
   TableHead,
   TableRow,
   LinearProgress,
+  Tooltip,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -425,6 +426,7 @@ export const AdminDashboardPage: React.FC = () => {
                   <TableCell sx={{ fontWeight: 700, color: '#526584', fontSize: '0.78rem', py: 1.25 }}>Score</TableCell>
                   <TableCell sx={{ fontWeight: 700, color: '#526584', fontSize: '0.78rem', py: 1.25 }}>Accuracy</TableCell>
                   <TableCell sx={{ fontWeight: 700, color: '#526584', fontSize: '0.78rem', py: 1.25 }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#526584', fontSize: '0.78rem', py: 1.25 }}>Warning</TableCell>
                   <TableCell sx={{ fontWeight: 700, color: '#526584', fontSize: '0.78rem', py: 1.25 }} align="right">Action</TableCell>
                 </TableRow>
               </TableHead>
@@ -459,6 +461,61 @@ export const AdminDashboardPage: React.FC = () => {
                           borderColor: item.isPassed ? '#a7f3d0' : '#fecaca',
                         }}
                       />
+                    </TableCell>
+                    <TableCell>
+                      {item.violationCount && item.violationCount > 0 ? (
+                        <Tooltip
+                          title={
+                            item.violations && item.violations.length > 0
+                              ? item.violations
+                                  .map((v, i) => `Strike ${i + 1}: ${v.violationType.replace(/_/g, ' ')}`)
+                                  .join(', ')
+                              : `${item.violationCount} integrity warnings logged`
+                          }
+                          arrow
+                        >
+                          <Chip
+                            icon={
+                              <WarningAmberIcon
+                                sx={{
+                                  '&&': {
+                                    fontSize: 13,
+                                    color: item.violationCount >= 3 ? '#991B1B' : '#B45309',
+                                  },
+                                }}
+                              />
+                            }
+                            label={
+                              item.violationCount >= 3
+                                ? `${item.violationCount} (Terminated)`
+                                : `${item.violationCount} Warning${item.violationCount > 1 ? 's' : ''}`
+                            }
+                            size="small"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '0.7rem',
+                              borderRadius: '4px',
+                              bgcolor: item.violationCount >= 3 ? '#FEF2F2' : '#FEF3C7',
+                              color: item.violationCount >= 3 ? '#991B1B' : '#92400E',
+                              border: '1px solid',
+                              borderColor: item.violationCount >= 3 ? '#FECACA' : '#FDE68A',
+                            }}
+                          />
+                        </Tooltip>
+                      ) : (
+                        <Chip
+                          label="0 Warnings"
+                          size="small"
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: '0.7rem',
+                            borderRadius: '4px',
+                            bgcolor: '#F0FDF4',
+                            color: '#166534',
+                            border: '1px solid #BBF7D0',
+                          }}
+                        />
+                      )}
                     </TableCell>
                     <TableCell align="right">
                       <Button

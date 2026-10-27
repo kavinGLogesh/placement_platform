@@ -184,9 +184,9 @@ model Student {
   personalEmailVerificationToken String?
   personalEmailVerificationExpiry DateTime?
   departmentId   String
-  courseId       String
-  classId        String
-  sectionId      String
+  courseId       String?
+  classId        String?
+  sectionId      String?
   year           Int
   cgpa           Float?
   status         StudentStatus  @default(ACTIVE)
@@ -195,9 +195,9 @@ model Student {
 
   user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   department     Department     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  course         Course         @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  class          Class          @relation(fields: [classId], references: [id], onDelete: Restrict)
-  section        Section        @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  course         Course?        @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  class          Class?         @relation(fields: [classId], references: [id], onDelete: Restrict)
+  section        Section?       @relation(fields: [sectionId], references: [id], onDelete: Restrict)
   questionUsages QuestionUsage[]
   assessmentAssignments AssessmentAssignment[]
   attempts       AssessmentAttempt[]
@@ -488,6 +488,9 @@ model Assessment {
   totalMarks          Float                @default(0.0)
   totalQuestions      Int                  @default(0)
   numberOfPapers      Int                  @default(1)
+  enableMobileDetection Boolean            @default(true)
+  maxViolations       Int                  @default(3)
+  terminationAction   String               @default("AUTO_SUBMIT") @db.VarChar(32)
   createdById         String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -1153,6 +1156,17 @@ model StudentAcademicRecord {
   overallPercentage    Float?   // e.g. 84.5
   activeBacklogs       Int      @default(0)
   historyOfBacklogs    Int      @default(0)
+
+  // Undergraduate (UG) Explicit Records
+  ugStatus             String?  @default("STUDYING") // STUDYING / COMPLETED
+  ugCgpa               Float?   // Current CGPA if studying, Final CGPA if completed
+  ugPercentage         Float?   // Current Percentage if studying, Final Percentage if completed
+
+  // Postgraduate (PG) Records (Optional)
+  pgDegree             String?  // e.g. "M.E.", "M.Tech", "MCA", "MBA", "M.Sc"
+  pgStatus             String?  // STUDYING / COMPLETED
+  pgCgpa               Float?   // Current CGPA if studying, Final CGPA if completed
+  pgPercentage         Float?   // Current Percentage if studying, Final Percentage if completed
 
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

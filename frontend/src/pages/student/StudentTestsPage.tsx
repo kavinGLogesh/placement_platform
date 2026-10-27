@@ -31,6 +31,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import TimerIcon from '@mui/icons-material/Timer';
 import BusinessIcon from '@mui/icons-material/Business';
 import SecurityIcon from '@mui/icons-material/Security';
+import VideocamIcon from '@mui/icons-material/Videocam';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CloseIcon from '@mui/icons-material/Close';
 import SchoolIcon from '@mui/icons-material/School';
@@ -748,7 +749,14 @@ export const StudentTestsPage: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
                   <SecurityIcon sx={{ color: '#0284C7', fontSize: 18, mt: 0.2 }} />
                   <Typography variant="body2" sx={{ color: '#0C4A6E', fontSize: '0.875rem' }}>
-                    <strong>Secure Full-Screen Mode:</strong> The assessment runs in full-screen. Switching tabs, minimizing, or exiting full-screen is monitored and recorded.
+                    <strong>Secure Full-Screen & AI Proctoring:</strong> The assessment runs in full-screen lockdown. Switching tabs, minimizing, or exiting full-screen is monitored and recorded.
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
+                  <VideocamIcon sx={{ color: '#0284C7', fontSize: 18, mt: 0.2 }} />
+                  <Typography variant="body2" sx={{ color: '#0C4A6E', fontSize: '0.875rem' }}>
+                    <strong>AI Camera & Mobile Detection:</strong> Active webcam feed is monitored locally by on-device AI. Mobile phones, head turning, or absence are flagged. Zero video footage is recorded or transmitted externally.
                   </Typography>
                 </Box>
 

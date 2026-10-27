@@ -38,6 +38,10 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import DownloadIcon from '@mui/icons-material/Download';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import TimelineIcon from '@mui/icons-material/Timeline';
+import SmartphoneIcon from '@mui/icons-material/Smartphone';
+import PeopleIcon from '@mui/icons-material/People';
+import PersonOffIcon from '@mui/icons-material/PersonOff';
+import VideocamOffIcon from '@mui/icons-material/VideocamOff';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import LaunchIcon from '@mui/icons-material/Launch';
@@ -1222,9 +1226,28 @@ export const StudentDetailPage: React.FC = () => {
                               <TableCell sx={{ fontWeight: 600 }}>{evt.assessmentName}</TableCell>
                               <TableCell>
                                 <Chip
+                                  icon={
+                                    evt.violationType === 'MOBILE_PHONE_DETECTED' ? (
+                                      <SmartphoneIcon sx={{ fontSize: 16 }} />
+                                    ) : evt.violationType === 'MULTIPLE_PERSONS_DETECTED' ? (
+                                      <PeopleIcon sx={{ fontSize: 16 }} />
+                                    ) : evt.violationType === 'FACE_NOT_VISIBLE' ? (
+                                      <PersonOffIcon sx={{ fontSize: 16 }} />
+                                    ) : evt.violationType === 'CAMERA_DISCONNECTED' ? (
+                                      <VideocamOffIcon sx={{ fontSize: 16 }} />
+                                    ) : undefined
+                                  }
                                   label={evt.displayType}
                                   size="small"
                                   variant="outlined"
+                                  color={
+                                    evt.violationType === 'MOBILE_PHONE_DETECTED' ||
+                                    evt.violationType === 'MULTIPLE_PERSONS_DETECTED' ||
+                                    evt.violationType === 'FACE_NOT_VISIBLE' ||
+                                    evt.violationType === 'CAMERA_DISCONNECTED'
+                                      ? 'error'
+                                      : 'default'
+                                  }
                                   sx={{ fontWeight: 600 }}
                                 />
                               </TableCell>

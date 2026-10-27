@@ -46,6 +46,13 @@ export interface StudentAcademicRecordDto {
   currentSemester?: number | null; // e.g. 1 through 8
   ugDegree: string | null;
   ugBranch: string | null;
+  ugStatus?: string | null;
+  ugCgpa?: number | null;
+  ugPercentage?: number | null;
+  pgDegree?: string | null;
+  pgStatus?: string | null;
+  pgCgpa?: number | null;
+  pgPercentage?: number | null;
   currentCgpa: number | null;
   overallPercentage?: number | null;
   calculatedCgpa?: number | null;
@@ -84,6 +91,13 @@ export interface UpsertAcademicRecordDto {
   currentSemester?: number | null;
   ugDegree?: string | null;
   ugBranch?: string | null;
+  ugStatus?: string | null;
+  ugCgpa?: number | null;
+  ugPercentage?: number | null;
+  pgDegree?: string | null;
+  pgStatus?: string | null;
+  pgCgpa?: number | null;
+  pgPercentage?: number | null;
   currentCgpa?: number | null;
   overallPercentage?: number | null;
   activeBacklogs?: number;

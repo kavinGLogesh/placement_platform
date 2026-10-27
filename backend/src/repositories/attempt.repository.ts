@@ -593,11 +593,19 @@ export class AttemptRepository {
     const nowTime = now.getTime();
 
     // Deduplication / Anti-Spam:
-    // 1. If the exact same violationType occurred within 1000ms, ignore and return existing
+    // 1. If the exact same violationType occurred within 1000ms (or 2500ms for camera proctoring violation cooldown), ignore and return existing
     // 2. If WINDOW_BLUR occurs right after TAB_SWITCH within 1000ms, suppress to avoid duplicate penalty
     const recentDuplicate = existing.find((v) => {
       const vTime = new Date(v.timestamp).getTime();
       const diff = Math.abs(nowTime - vTime);
+      const isProctorViolation =
+        violationType === 'MOBILE_PHONE_DETECTED' ||
+        violationType === 'MULTIPLE_PERSONS_DETECTED' ||
+        violationType === 'FACE_NOT_VISIBLE' ||
+        violationType === 'CAMERA_DISCONNECTED';
+      if (isProctorViolation && v.violationType === violationType && diff < 2500) {
+        return true;
+      }
       if (v.violationType === violationType && diff < 1000) {
         return true;
       }

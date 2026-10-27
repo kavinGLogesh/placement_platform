@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "db:seed": "tsx src/config/seed.ts",
     "db:check": "tsx src/config/dbCheck.ts",
     "test:auth": "tsx --test --import ./tests/setup.ts tests/auth.test.ts",
     "test:management": "tsx --test --import ./tests/setup.ts tests/management.test.ts",
@@ -27,13 +28,16 @@
     "test:audit-gaps": "tsx --test --import ./tests/setup.ts tests/critical_audit_gaps.test.ts",
     "test:anti-cheating": "tsx --test --import ./tests/setup.ts tests/advanced_anti_cheating.test.ts",
     "test:three-warning": "tsx --test --import ./tests/setup.ts tests/three_warning_security.test.ts",
+    "test:mobile-phone": "tsx --test --import ./tests/setup.ts tests/mobile_phone_detection.test.ts",
+    "test:ai-proctoring": "tsx --test --import ./tests/setup.ts tests/ai_camera_proctoring.test.ts",
     "test:evaluation": "tsx --test --import ./tests/setup.ts tests/structured_evaluation.test.ts",
     "test:company": "tsx --test --import ./tests/setup.ts tests/company_assessment.test.ts",
     "test:company-intelligence": "tsx --test --import ./tests/setup.ts tests/company_intelligence.test.ts",
     "test:attendance": "tsx --test --import ./tests/setup.ts tests/assessment_attendance.test.ts",
     "test:academic": "tsx --test --import ./tests/setup.ts tests/student_academic_records.test.ts",
+    "test:direct-academic": "tsx --test --import ./tests/setup.ts tests/direct_academic_entry.test.ts",
     "test:placement-drive": "tsx --test --import ./tests/setup.ts tests/placement_drive.test.ts",
-    "test:all": "tsx --test --import ./tests/setup.ts tests/auth.test.ts tests/management.test.ts tests/question.test.ts tests/assessment.test.ts tests/attempt.test.ts tests/coding.test.ts tests/analytics.test.ts tests/report.test.ts tests/role_separation.test.ts tests/student_account_flow.test.ts tests/critical_audit_gaps.test.ts tests/advanced_anti_cheating.test.ts tests/structured_evaluation.test.ts tests/company_assessment.test.ts tests/company_intelligence.test.ts tests/assessment_attendance.test.ts tests/student_academic_records.test.ts tests/placement_drive.test.ts"
+    "test:all": "tsx --test --import ./tests/setup.ts tests/auth.test.ts tests/management.test.ts tests/question.test.ts tests/assessment.test.ts tests/attempt.test.ts tests/coding.test.ts tests/analytics.test.ts tests/report.test.ts tests/role_separation.test.ts tests/student_account_flow.test.ts tests/critical_audit_gaps.test.ts tests/advanced_anti_cheating.test.ts tests/structured_evaluation.test.ts tests/company_assessment.test.ts tests/company_intelligence.test.ts tests/assessment_attendance.test.ts tests/student_academic_records.test.ts tests/direct_academic_entry.test.ts tests/placement_drive.test.ts"
   },
   "keywords": [
     "express",

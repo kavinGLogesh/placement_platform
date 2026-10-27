@@ -317,10 +317,12 @@ export class AttemptService {
       typeof configuredMaxViolations === 'number' && configuredMaxViolations > 0
         ? configuredMaxViolations
         : (process.env.NODE_ENV === 'test' && !configuredMaxViolations ? 10 : 3);
+    const terminationAction = (assessment as any)?.terminationAction || 'AUTO_SUBMIT';
 
     if (
       attempt.status === 'IN_PROGRESS' &&
-      existingViolations.length >= maxAllowed
+      existingViolations.length >= maxAllowed &&
+      terminationAction === 'AUTO_SUBMIT'
     ) {
       const termReason = `Terminated: Maximum security violations reached (${existingViolations.length}/${maxAllowed})`;
       try {
@@ -378,6 +380,9 @@ export class AttemptService {
         negativeMarking: assessment.negativeMarking,
         totalMarks: assessment.totalMarks,
         totalQuestions: assessment.totalQuestions,
+        enableMobileDetection: assessment.enableMobileDetection !== false,
+        maxViolations: typeof assessment.maxViolations === 'number' ? assessment.maxViolations : 3,
+        terminationAction: (assessment.terminationAction as any) || 'AUTO_SUBMIT',
       },
       questions: sanitizedQuestions,
       answers,
@@ -694,6 +699,26 @@ export class AttemptService {
       throw new AppError('Attempt is no longer active and cannot accept violation logs', 400);
     }
 
+    // Auto-finalize & submit attempt if violation limit reached
+    const assessment = await this.assessmentRepo.getAssessmentById(attempt.assessmentId);
+
+    // If mobile phone detection is disabled for this assessment and violation is MOBILE_PHONE_DETECTED:
+    if (dto.violationType === 'MOBILE_PHONE_DETECTED' && assessment && (assessment as any).enableMobileDetection === false) {
+      const currentViolations = await this.attemptRepo.getViolationsByAttempt(attemptId);
+      return {
+        violation: {
+          id: `ignored-${Date.now()}`,
+          attemptId,
+          studentId,
+          violationType: 'MOBILE_PHONE_DETECTED',
+          timestamp: new Date().toISOString(),
+          details: 'Mobile detection disabled by administrator for this assessment',
+        },
+        violationCount: currentViolations.length,
+        isTerminated: false,
+      };
+    }
+
     const violation = await this.attemptRepo.recordViolation(
       attemptId,
       studentId,
@@ -702,13 +727,12 @@ export class AttemptService {
     );
     const violations = await this.attemptRepo.getViolationsByAttempt(attemptId);
 
-    // Auto-finalize & submit attempt if violation limit reached
-    const assessment = await this.assessmentRepo.getAssessmentById(attempt.assessmentId);
     const configuredMaxViolations = (assessment as any)?.maxViolations;
     const maxAllowed =
       typeof configuredMaxViolations === 'number' && configuredMaxViolations > 0
         ? configuredMaxViolations
         : (process.env.NODE_ENV === 'test' && !configuredMaxViolations ? 10 : 3);
+    const terminationAction = (assessment as any)?.terminationAction || 'AUTO_SUBMIT';
 
     let isTerminated = false;
     let terminationReason: string | null = null;
@@ -717,12 +741,16 @@ export class AttemptService {
       violations.length >= maxAllowed &&
       attempt.status === 'IN_PROGRESS'
     ) {
-      isTerminated = true;
-      terminationReason = `Terminated: Maximum security violations reached (${violations.length}/${maxAllowed})`;
-      try {
-        await this.submitAttempt(studentId, attemptId, terminationReason);
-      } catch (submitErr) {
-        console.warn('Auto-submit on configured violation limit encountered error:', submitErr);
+      if (terminationAction === 'AUTO_SUBMIT') {
+        isTerminated = true;
+        terminationReason = `Terminated: Maximum security violations reached (${violations.length}/${maxAllowed}) - ${dto.violationType}`;
+        try {
+          await this.submitAttempt(studentId, attemptId, terminationReason);
+        } catch (submitErr) {
+          console.warn('Auto-submit on configured violation limit encountered error:', submitErr);
+        }
+      } else {
+        terminationReason = `Security warning threshold reached (${violations.length}/${maxAllowed}) [Action: WARN_ONLY]`;
       }
     }
 

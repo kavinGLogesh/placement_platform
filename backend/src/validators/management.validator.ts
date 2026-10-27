@@ -104,17 +104,21 @@ export const validateSectionInput = (req: Request, _res: Response, next: NextFun
 };
 
 export const validateStudentInput = (req: Request, _res: Response, next: NextFunction): void => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  for (const field of ['courseId', 'classId', 'sectionId'] as const) {
+    if (typeof body[field] === 'string' && !body[field].trim()) {
+      delete body[field];
+    }
+  }
+
   const {
     registerNumber,
     name,
     collegeEmail,
     departmentId,
-    courseId,
-    classId,
-    sectionId,
     year,
     cgpa,
-  } = req.body || {};
+  } = body;
 
   if (!registerNumber || typeof registerNumber !== 'string' || !registerNumber.trim()) {
     return next(new AppError('Register Number is required', 400));
@@ -128,15 +132,6 @@ export const validateStudentInput = (req: Request, _res: Response, next: NextFun
   if (!departmentId || typeof departmentId !== 'string' || !departmentId.trim()) {
     return next(new AppError('Department ID is required', 400));
   }
-  if (courseId !== undefined && (typeof courseId !== 'string' || !courseId.trim())) {
-    return next(new AppError('Invalid Course ID', 400));
-  }
-  if (classId !== undefined && (typeof classId !== 'string' || !classId.trim())) {
-    return next(new AppError('Invalid Class ID', 400));
-  }
-  if (sectionId !== undefined && (typeof sectionId !== 'string' || !sectionId.trim())) {
-    return next(new AppError('Invalid Section ID', 400));
-  }
   if (!year || typeof year !== 'number' || year < 1 || year > 6) {
     return next(new AppError('Year must be between 1 and 6', 400));
   }
@@ -146,6 +141,101 @@ export const validateStudentInput = (req: Request, _res: Response, next: NextFun
   if (req.body?.password !== undefined && req.body?.password !== null && req.body?.password !== '') {
     if (typeof req.body.password !== 'string' || req.body.password.trim().length < 6) {
       return next(new AppError('Password must be at least 6 characters long', 400));
+    }
+  }
+
+  // 10th Standard Validations
+  const {
+    tenthObtainedMarks,
+    tenthTotalMarks,
+    tenthPercentage,
+    twelfthObtainedMarks,
+    twelfthTotalMarks,
+    twelfthPercentage,
+    ugCgpa,
+    ugPercentage,
+    pgCgpa,
+    pgPercentage,
+  } = body;
+
+  if (tenthTotalMarks !== undefined && tenthTotalMarks !== null && tenthTotalMarks !== '') {
+    const total = Number(tenthTotalMarks);
+    if (isNaN(total) || total <= 0) {
+      return next(new AppError('10th Total Marks must be greater than 0', 400));
+    }
+  }
+
+  if (tenthObtainedMarks !== undefined && tenthObtainedMarks !== null && tenthObtainedMarks !== '') {
+    const obtained = Number(tenthObtainedMarks);
+    const total = tenthTotalMarks ? Number(tenthTotalMarks) : undefined;
+    if (isNaN(obtained) || obtained < 0) {
+      return next(new AppError('10th Marks Obtained must be 0 or greater', 400));
+    }
+    if (total !== undefined && !isNaN(total) && obtained > total) {
+      return next(new AppError('10th Marks Obtained cannot exceed Total Marks', 400));
+    }
+  }
+
+  if (tenthPercentage !== undefined && tenthPercentage !== null && tenthPercentage !== '') {
+    const pct = Number(tenthPercentage);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      return next(new AppError('10th Percentage must be between 0 and 100', 400));
+    }
+  }
+
+  // 12th Standard Validations
+  if (twelfthTotalMarks !== undefined && twelfthTotalMarks !== null && twelfthTotalMarks !== '') {
+    const total = Number(twelfthTotalMarks);
+    if (isNaN(total) || total <= 0) {
+      return next(new AppError('12th Total Marks must be greater than 0', 400));
+    }
+  }
+
+  if (twelfthObtainedMarks !== undefined && twelfthObtainedMarks !== null && twelfthObtainedMarks !== '') {
+    const obtained = Number(twelfthObtainedMarks);
+    const total = twelfthTotalMarks ? Number(twelfthTotalMarks) : undefined;
+    if (isNaN(obtained) || obtained < 0) {
+      return next(new AppError('12th Marks Obtained must be 0 or greater', 400));
+    }
+    if (total !== undefined && !isNaN(total) && obtained > total) {
+      return next(new AppError('12th Marks Obtained cannot exceed Total Marks', 400));
+    }
+  }
+
+  if (twelfthPercentage !== undefined && twelfthPercentage !== null && twelfthPercentage !== '') {
+    const pct = Number(twelfthPercentage);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      return next(new AppError('12th Percentage must be between 0 and 100', 400));
+    }
+  }
+
+  // UG Validations
+  if (ugCgpa !== undefined && ugCgpa !== null && ugCgpa !== '') {
+    const cgpaVal = Number(ugCgpa);
+    if (isNaN(cgpaVal) || cgpaVal < 0 || cgpaVal > 10) {
+      return next(new AppError('UG CGPA must be between 0.00 and 10.00', 400));
+    }
+  }
+
+  if (ugPercentage !== undefined && ugPercentage !== null && ugPercentage !== '') {
+    const pct = Number(ugPercentage);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      return next(new AppError('UG Percentage must be between 0 and 100', 400));
+    }
+  }
+
+  // PG Validations (Optional)
+  if (pgCgpa !== undefined && pgCgpa !== null && pgCgpa !== '') {
+    const cgpaVal = Number(pgCgpa);
+    if (isNaN(cgpaVal) || cgpaVal < 0 || cgpaVal > 10) {
+      return next(new AppError('PG CGPA must be between 0.00 and 10.00', 400));
+    }
+  }
+
+  if (pgPercentage !== undefined && pgPercentage !== null && pgPercentage !== '') {
+    const pct = Number(pgPercentage);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      return next(new AppError('PG Percentage must be between 0 and 100', 400));
     }
   }
 

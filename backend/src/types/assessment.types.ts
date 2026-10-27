@@ -109,6 +109,9 @@ export interface AssessmentDto {
   totalMarks: number;
   totalQuestions: number;
   numberOfPapers: number;
+  enableMobileDetection?: boolean;
+  maxViolations?: number;
+  terminationAction?: 'AUTO_SUBMIT' | 'WARN_ONLY';
   createdById?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -134,6 +137,9 @@ export interface CreateAssessmentDto {
   startDate?: string | Date | null;
   endDate?: string | Date | null;
   numberOfPapers?: number;
+  enableMobileDetection?: boolean;
+  maxViolations?: number;
+  terminationAction?: 'AUTO_SUBMIT' | 'WARN_ONLY';
   departmentTargeting?: 'ALL' | 'SPECIFIC';
   departmentIds?: string[];
   sections: CreateAssessmentSectionDto[];
@@ -153,6 +159,9 @@ export interface UpdateAssessmentDto {
   startDate?: string | Date | null;
   endDate?: string | Date | null;
   numberOfPapers?: number;
+  enableMobileDetection?: boolean;
+  maxViolations?: number;
+  terminationAction?: 'AUTO_SUBMIT' | 'WARN_ONLY';
   departmentTargeting?: 'ALL' | 'SPECIFIC';
   departmentIds?: string[];
   sections?: CreateAssessmentSectionDto[];

@@ -839,6 +839,8 @@ export const AdminResultsPage: React.FC = () => {
               size="small"
               label="Department"
               value={selectedDeptId}
+              SelectProps={{ displayEmpty: true }}
+              InputLabelProps={{ shrink: true }}
               onChange={(e) => {
                 setSelectedDeptId(e.target.value);
                 setSelectedCourseId('');
@@ -864,6 +866,8 @@ export const AdminResultsPage: React.FC = () => {
               label="Course"
               value={selectedCourseId}
               disabled={!selectedDeptId || courses.length === 0}
+              SelectProps={{ displayEmpty: true }}
+              InputLabelProps={{ shrink: true }}
               onChange={(e) => {
                 setSelectedCourseId(e.target.value);
                 setSelectedClassId('');
@@ -887,6 +891,8 @@ export const AdminResultsPage: React.FC = () => {
               size="small"
               label="Academic Year"
               value={selectedAcademicYear}
+              SelectProps={{ displayEmpty: true }}
+              InputLabelProps={{ shrink: true }}
               onChange={(e) => {
                 setSelectedAcademicYear(e.target.value);
                 setPage(0);
@@ -908,6 +914,8 @@ export const AdminResultsPage: React.FC = () => {
               label="Class"
               value={selectedClassId}
               disabled={!selectedCourseId || classes.length === 0}
+              SelectProps={{ displayEmpty: true }}
+              InputLabelProps={{ shrink: true }}
               onChange={(e) => {
                 setSelectedClassId(e.target.value);
                 setSelectedSectionId('');
@@ -931,6 +939,8 @@ export const AdminResultsPage: React.FC = () => {
               label="Section"
               value={selectedSectionId}
               disabled={!selectedClassId || sections.length === 0}
+              SelectProps={{ displayEmpty: true }}
+              InputLabelProps={{ shrink: true }}
               onChange={(e) => {
                 setSelectedSectionId(e.target.value);
                 setPage(0);
@@ -1175,7 +1185,6 @@ export const AdminResultsPage: React.FC = () => {
                       <TableCell sx={{ fontWeight: 700, color: BRAND_MIDNIGHT }}>Student ID</TableCell>
                       <TableCell sx={{ fontWeight: 700, color: BRAND_MIDNIGHT }}>Candidate Name</TableCell>
                       <TableCell sx={{ fontWeight: 700, color: BRAND_MIDNIGHT }}>Department</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: BRAND_MIDNIGHT }}>Course / Class</TableCell>
                       <TableCell sx={{ fontWeight: 700, color: BRAND_MIDNIGHT }}>Assessment Name</TableCell>
                       <TableCell sx={{ fontWeight: 700, color: BRAND_MIDNIGHT }}>Attempt Status</TableCell>
                       <TableCell sx={{ fontWeight: 700, color: BRAND_MIDNIGHT }}>Score Obtained</TableCell>
@@ -1218,9 +1227,6 @@ export const AdminResultsPage: React.FC = () => {
                               variant="outlined"
                               sx={{ fontSize: '0.7rem', height: 20, borderColor: '#CBD5E1' }}
                             />
-                          </TableCell>
-                          <TableCell sx={{ fontSize: '0.78rem', color: '#64748B' }}>
-                            {r.courseCode || 'BE'} • {r.className || r.sectionName || 'Class'}
                           </TableCell>
                           <TableCell sx={{ fontWeight: 500, color: BRAND_MIDNIGHT }}>
                             {r.assessmentTitle}

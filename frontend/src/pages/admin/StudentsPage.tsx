@@ -28,6 +28,7 @@ import {
   TableRow,
   Tabs,
   Tab,
+  Divider,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
@@ -120,6 +121,20 @@ export const StudentsPage: React.FC = () => {
     year: 1,
     cgpa: 8.0,
     status: 'ACTIVE',
+    tenthObtainedMarks: undefined,
+    tenthTotalMarks: 500,
+    tenthPercentage: undefined,
+    twelfthObtainedMarks: undefined,
+    twelfthTotalMarks: 600,
+    twelfthPercentage: undefined,
+    ugDegree: 'B.Tech',
+    ugStatus: 'STUDYING',
+    ugCgpa: 8.0,
+    ugPercentage: undefined,
+    pgDegree: '',
+    pgStatus: 'STUDYING',
+    pgCgpa: undefined,
+    pgPercentage: undefined,
   });
 
   // Navigation Tabs State (0 = All Students, 1 = Add Student, 2 = AI Import, 3 = History, 4 = Accounts)
@@ -215,6 +230,7 @@ export const StudentsPage: React.FC = () => {
     setStudentDialogError(null);
     if (st) {
       setEditingStudent(st);
+      const acad = st.academicRecord;
       setStudentForm({
         registerNumber: st.registerNumber,
         name: st.name,
@@ -224,12 +240,26 @@ export const StudentsPage: React.FC = () => {
         dob: st.dob || '',
         password: '',
         departmentId: st.departmentId,
-        courseId: st.courseId,
-        classId: st.classId,
-        sectionId: st.sectionId,
+        courseId: st.courseId || '',
+        classId: st.classId || '',
+        sectionId: st.sectionId || '',
         year: st.year,
         cgpa: st.cgpa || 8.0,
         status: st.status,
+        tenthObtainedMarks: acad?.tenthObtainedMarks ?? undefined,
+        tenthTotalMarks: acad?.tenthTotalMarks ?? 500,
+        tenthPercentage: acad?.tenthPercentage ?? undefined,
+        twelfthObtainedMarks: acad?.twelfthObtainedMarks ?? undefined,
+        twelfthTotalMarks: acad?.twelfthTotalMarks ?? 600,
+        twelfthPercentage: acad?.twelfthPercentage ?? undefined,
+        ugDegree: acad?.ugDegree || st.course?.name || 'B.Tech',
+        ugStatus: acad?.ugStatus || 'STUDYING',
+        ugCgpa: acad?.ugCgpa ?? st.cgpa ?? 8.0,
+        ugPercentage: acad?.ugPercentage ?? undefined,
+        pgDegree: acad?.pgDegree ?? '',
+        pgStatus: acad?.pgStatus || 'STUDYING',
+        pgCgpa: acad?.pgCgpa ?? undefined,
+        pgPercentage: acad?.pgPercentage ?? undefined,
       });
     } else {
       setEditingStudent(null);
@@ -248,6 +278,20 @@ export const StudentsPage: React.FC = () => {
         year: 1,
         cgpa: 8.0,
         status: 'ACTIVE',
+        tenthObtainedMarks: undefined,
+        tenthTotalMarks: 500,
+        tenthPercentage: undefined,
+        twelfthObtainedMarks: undefined,
+        twelfthTotalMarks: 600,
+        twelfthPercentage: undefined,
+        ugDegree: 'B.Tech',
+        ugStatus: 'STUDYING',
+        ugCgpa: 8.0,
+        ugPercentage: undefined,
+        pgDegree: '',
+        pgStatus: 'STUDYING',
+        pgCgpa: undefined,
+        pgPercentage: undefined,
       });
     }
     setDialogOpen(true);
@@ -261,11 +305,106 @@ export const StudentsPage: React.FC = () => {
       return;
     }
 
+    // Academic Validations
+    if (studentForm.tenthTotalMarks != null && studentForm.tenthTotalMarks !== ('' as any)) {
+      const tot = Number(studentForm.tenthTotalMarks);
+      if (isNaN(tot) || tot <= 0) {
+        setStudentDialogError('10th Total Marks must be greater than 0');
+        return;
+      }
+    }
+
+    if (studentForm.tenthObtainedMarks != null && studentForm.tenthObtainedMarks !== ('' as any)) {
+      const obt = Number(studentForm.tenthObtainedMarks);
+      const tot = studentForm.tenthTotalMarks != null ? Number(studentForm.tenthTotalMarks) : undefined;
+      if (isNaN(obt) || obt < 0) {
+        setStudentDialogError('10th Marks Obtained must be 0 or greater');
+        return;
+      }
+      if (tot !== undefined && !isNaN(tot) && obt > tot) {
+        setStudentDialogError(`10th Marks Obtained (${obt}) cannot exceed Total Marks (${tot})`);
+        return;
+      }
+    }
+
+    if (studentForm.tenthPercentage != null && studentForm.tenthPercentage !== ('' as any)) {
+      const pct = Number(studentForm.tenthPercentage);
+      if (isNaN(pct) || pct < 0 || pct > 100) {
+        setStudentDialogError('10th Percentage must be between 0.00% and 100.00%');
+        return;
+      }
+    }
+
+    if (studentForm.twelfthTotalMarks != null && studentForm.twelfthTotalMarks !== ('' as any)) {
+      const tot = Number(studentForm.twelfthTotalMarks);
+      if (isNaN(tot) || tot <= 0) {
+        setStudentDialogError('12th Total Marks must be greater than 0');
+        return;
+      }
+    }
+
+    if (studentForm.twelfthObtainedMarks != null && studentForm.twelfthObtainedMarks !== ('' as any)) {
+      const obt = Number(studentForm.twelfthObtainedMarks);
+      const tot = studentForm.twelfthTotalMarks != null ? Number(studentForm.twelfthTotalMarks) : undefined;
+      if (isNaN(obt) || obt < 0) {
+        setStudentDialogError('12th Marks Obtained must be 0 or greater');
+        return;
+      }
+      if (tot !== undefined && !isNaN(tot) && obt > tot) {
+        setStudentDialogError(`12th Marks Obtained (${obt}) cannot exceed Total Marks (${tot})`);
+        return;
+      }
+    }
+
+    if (studentForm.twelfthPercentage != null && studentForm.twelfthPercentage !== ('' as any)) {
+      const pct = Number(studentForm.twelfthPercentage);
+      if (isNaN(pct) || pct < 0 || pct > 100) {
+        setStudentDialogError('12th Percentage must be between 0.00% and 100.00%');
+        return;
+      }
+    }
+
+    if (studentForm.ugCgpa != null && studentForm.ugCgpa !== ('' as any)) {
+      const cg = Number(studentForm.ugCgpa);
+      if (isNaN(cg) || cg < 0 || cg > 10) {
+        setStudentDialogError('UG CGPA must be between 0.00 and 10.00');
+        return;
+      }
+    }
+
+    if (studentForm.ugPercentage != null && studentForm.ugPercentage !== ('' as any)) {
+      const pct = Number(studentForm.ugPercentage);
+      if (isNaN(pct) || pct < 0 || pct > 100) {
+        setStudentDialogError('UG Percentage must be between 0.00% and 100.00%');
+        return;
+      }
+    }
+
+    if (studentForm.pgCgpa != null && studentForm.pgCgpa !== ('' as any)) {
+      const cg = Number(studentForm.pgCgpa);
+      if (isNaN(cg) || cg < 0 || cg > 10) {
+        setStudentDialogError('PG CGPA must be between 0.00 and 10.00');
+        return;
+      }
+    }
+
+    if (studentForm.pgPercentage != null && studentForm.pgPercentage !== ('' as any)) {
+      const pct = Number(studentForm.pgPercentage);
+      if (isNaN(pct) || pct < 0 || pct > 100) {
+        setStudentDialogError('PG Percentage must be between 0.00% and 100.00%');
+        return;
+      }
+    }
+
     setSaving(true);
     setDepartmentError(null);
     setStudentDialogError(null);
     setError(null);
     try {
+      const computedCgpa = studentForm.ugCgpa != null && studentForm.ugCgpa !== ('' as any)
+        ? Number(studentForm.ugCgpa)
+        : (studentForm.cgpa ? Number(studentForm.cgpa) : undefined);
+
       if (editingStudent) {
         const updatePayload: UpdateStudentInput = {
           name: studentForm.name,
@@ -277,18 +416,55 @@ export const StudentsPage: React.FC = () => {
           classId: studentForm.classId,
           sectionId: studentForm.sectionId,
           year: Number(studentForm.year),
-          cgpa: studentForm.cgpa ? Number(studentForm.cgpa) : undefined,
+          cgpa: computedCgpa,
           status: studentForm.status,
           password: studentForm.password ? studentForm.password.trim() : undefined,
+          tenthObtainedMarks: studentForm.tenthObtainedMarks != null && studentForm.tenthObtainedMarks !== ('' as any) ? Number(studentForm.tenthObtainedMarks) : null,
+          tenthTotalMarks: studentForm.tenthTotalMarks != null && studentForm.tenthTotalMarks !== ('' as any) ? Number(studentForm.tenthTotalMarks) : null,
+          tenthPercentage: studentForm.tenthPercentage != null && studentForm.tenthPercentage !== ('' as any) ? Number(studentForm.tenthPercentage) : null,
+          twelfthObtainedMarks: studentForm.twelfthObtainedMarks != null && studentForm.twelfthObtainedMarks !== ('' as any) ? Number(studentForm.twelfthObtainedMarks) : null,
+          twelfthTotalMarks: studentForm.twelfthTotalMarks != null && studentForm.twelfthTotalMarks !== ('' as any) ? Number(studentForm.twelfthTotalMarks) : null,
+          twelfthPercentage: studentForm.twelfthPercentage != null && studentForm.twelfthPercentage !== ('' as any) ? Number(studentForm.twelfthPercentage) : null,
+          ugDegree: studentForm.ugDegree ? studentForm.ugDegree.trim() : null,
+          ugStatus: studentForm.ugStatus || 'STUDYING',
+          ugCgpa: studentForm.ugCgpa != null && studentForm.ugCgpa !== ('' as any) ? Number(studentForm.ugCgpa) : null,
+          ugPercentage: studentForm.ugPercentage != null && studentForm.ugPercentage !== ('' as any) ? Number(studentForm.ugPercentage) : null,
+          pgDegree: studentForm.pgDegree ? studentForm.pgDegree.trim() : null,
+          pgStatus: studentForm.pgDegree?.trim() ? (studentForm.pgStatus || 'STUDYING') : null,
+          pgCgpa: studentForm.pgCgpa != null && studentForm.pgCgpa !== ('' as any) ? Number(studentForm.pgCgpa) : null,
+          pgPercentage: studentForm.pgPercentage != null && studentForm.pgPercentage !== ('' as any) ? Number(studentForm.pgPercentage) : null,
         };
         await managementService.updateStudent(editingStudent.id, updatePayload);
       } else {
         const created = await managementService.createStudent({
-          ...studentForm,
+          registerNumber: studentForm.registerNumber,
+          name: studentForm.name,
+          collegeEmail: studentForm.collegeEmail,
           personalEmail: studentForm.personalEmail ? studentForm.personalEmail.trim() : undefined,
+          phone: studentForm.phone,
+          dob: studentForm.dob,
+          password: studentForm.password,
+          departmentId: studentForm.departmentId,
+          courseId: studentForm.courseId || undefined,
+          classId: studentForm.classId || undefined,
+          sectionId: studentForm.sectionId || undefined,
           year: Number(studentForm.year),
-          cgpa: studentForm.cgpa ? Number(studentForm.cgpa) : undefined,
-          password: studentForm.password ? studentForm.password.trim() : undefined,
+          cgpa: computedCgpa,
+          status: studentForm.status,
+          tenthObtainedMarks: studentForm.tenthObtainedMarks != null && studentForm.tenthObtainedMarks !== ('' as any) ? Number(studentForm.tenthObtainedMarks) : undefined,
+          tenthTotalMarks: studentForm.tenthTotalMarks != null && studentForm.tenthTotalMarks !== ('' as any) ? Number(studentForm.tenthTotalMarks) : undefined,
+          tenthPercentage: studentForm.tenthPercentage != null && studentForm.tenthPercentage !== ('' as any) ? Number(studentForm.tenthPercentage) : undefined,
+          twelfthObtainedMarks: studentForm.twelfthObtainedMarks != null && studentForm.twelfthObtainedMarks !== ('' as any) ? Number(studentForm.twelfthObtainedMarks) : undefined,
+          twelfthTotalMarks: studentForm.twelfthTotalMarks != null && studentForm.twelfthTotalMarks !== ('' as any) ? Number(studentForm.twelfthTotalMarks) : undefined,
+          twelfthPercentage: studentForm.twelfthPercentage != null && studentForm.twelfthPercentage !== ('' as any) ? Number(studentForm.twelfthPercentage) : undefined,
+          ugDegree: studentForm.ugDegree ? studentForm.ugDegree.trim() : undefined,
+          ugStatus: studentForm.ugStatus || 'STUDYING',
+          ugCgpa: studentForm.ugCgpa != null && studentForm.ugCgpa !== ('' as any) ? Number(studentForm.ugCgpa) : undefined,
+          ugPercentage: studentForm.ugPercentage != null && studentForm.ugPercentage !== ('' as any) ? Number(studentForm.ugPercentage) : undefined,
+          pgDegree: studentForm.pgDegree ? studentForm.pgDegree.trim() : undefined,
+          pgStatus: studentForm.pgDegree?.trim() ? (studentForm.pgStatus || 'STUDYING') : undefined,
+          pgCgpa: studentForm.pgCgpa != null && studentForm.pgCgpa !== ('' as any) ? Number(studentForm.pgCgpa) : undefined,
+          pgPercentage: studentForm.pgPercentage != null && studentForm.pgPercentage !== ('' as any) ? Number(studentForm.pgPercentage) : undefined,
         });
         if (created.temporaryPassword) {
           setCredentialModalData({
@@ -467,23 +643,10 @@ export const StudentsPage: React.FC = () => {
     },
     {
       id: 'department',
-      label: 'Dept & Course',
+      label: 'Department',
       minWidth: 160,
       render: (s) => (
-        <div>
-          <Chip label={s.department?.code || '—'} size="small" sx={{ mr: 0.5, fontWeight: 600 }} />
-          <Chip label={s.course?.code || '—'} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
-        </div>
-      ),
-    },
-    {
-      id: 'class',
-      label: 'Class & Section',
-      minWidth: 140,
-      render: (s) => (
-        <Typography variant="body2" color="text.secondary">
-          {s.class?.name ? `${s.class.name} / Sec ${s.section?.name || ''}` : '—'}
-        </Typography>
+        <Chip label={s.department?.code || '—'} size="small" sx={{ fontWeight: 600 }} />
       ),
     },
     {
@@ -624,7 +787,7 @@ export const StudentsPage: React.FC = () => {
               '&:hover': { bgcolor: '#1e293b' },
             }}
           >
-            + Add Student
+             Add Student
           </Button>
 
           <Button
@@ -772,10 +935,16 @@ export const StudentsPage: React.FC = () => {
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Department</InputLabel>
+              <InputLabel shrink>Department</InputLabel>
               <Select
                 value={departmentId}
                 label="Department"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Departments';
+                  const d = departments.find((dept) => dept.id === val);
+                  return d ? d.name : 'All Departments';
+                }}
                 onChange={(e) => {
                   setDepartmentId(e.target.value);
                   setCourseId('');
@@ -796,10 +965,16 @@ export const StudentsPage: React.FC = () => {
 
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Course</InputLabel>
+              <InputLabel shrink>Course</InputLabel>
               <Select
                 value={courseId}
                 label="Course"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || val === '') return 'All Courses';
+                  const c = courses.find((course) => course.id === val);
+                  return c ? c.code : 'All Courses';
+                }}
                 onChange={(e) => {
                   setCourseId(e.target.value);
                   setClassId('');
@@ -821,10 +996,21 @@ export const StudentsPage: React.FC = () => {
 
           <Grid item xs={12} sm={4} md={2}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Academic Year</InputLabel>
+              <InputLabel shrink>Academic Year</InputLabel>
               <Select
                 value={yearFilter}
                 label="Academic Year"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || (val as any) === '') return 'All Years';
+                  const yearLabels: Record<number, string> = {
+                    1: '1st Year',
+                    2: '2nd Year',
+                    3: '3rd Year',
+                    4: '4th Year',
+                  };
+                  return yearLabels[Number(val)] || `${val} Year`;
+                }}
                 onChange={(e) => {
                   setYearFilter(e.target.value as number | '');
                   setPage(0);
@@ -841,10 +1027,15 @@ export const StudentsPage: React.FC = () => {
 
           <Grid item xs={12} sm={4} md={2.4}>
             <FormControl size="small" fullWidth>
-              <InputLabel>Placement Status</InputLabel>
+              <InputLabel shrink>Placement Status</InputLabel>
               <Select
                 value={statusFilter}
                 label="Placement Status"
+                displayEmpty
+                renderValue={(val) => {
+                  if (!val || (val as any) === '') return 'All Statuses';
+                  return String(val);
+                }}
                 onChange={(e) => {
                   setStatusFilter(e.target.value as StudentStatus | '');
                   setPage(0);
@@ -1126,7 +1317,8 @@ export const StudentsPage: React.FC = () => {
               </Grid>
 
               {/* Metrics: Year, CGPA, Phone */}
-              <Grid item xs={12} sm={4}>
+              {/* Metrics: Year, Phone, DOB, Status */}
+              <Grid item xs={12} sm={3}>
                 <TextField
                   label="Current Year"
                   type="number"
@@ -1138,19 +1330,7 @@ export const StudentsPage: React.FC = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Current CGPA"
-                  type="number"
-                  fullWidth
-                  inputProps={{ min: 0, max: 10, step: 0.01 }}
-                  value={studentForm.cgpa ?? ''}
-                  onChange={(e) => setStudentForm({ ...studentForm, cgpa: Number(e.target.value) })}
-                  helperText="0.00 to 10.00 scale"
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={3}>
                 <TextField
                   label="Contact Phone"
                   fullWidth
@@ -1160,18 +1340,18 @@ export const StudentsPage: React.FC = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={3}>
                 <TextField
                   label="Date of Birth (DOB)"
                   fullWidth
                   value={studentForm.dob || ''}
                   onChange={(e) => setStudentForm({ ...studentForm, dob: e.target.value })}
                   placeholder="DD-MM-YYYY (e.g. 15-08-2005)"
-                  helperText="Student date of birth (optional)"
+                  helperText="Date of birth (optional)"
                 />
               </Grid>
 
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={3}>
                 <TextField
                   select
                   label="Account Status"
@@ -1187,6 +1367,296 @@ export const StudentsPage: React.FC = () => {
                 </TextField>
               </Grid>
 
+              {/* Academic Credentials Section Divider */}
+              <Grid item xs={12}>
+                <Divider sx={{ my: 1 }}>
+                  <Chip
+                    icon={<SchoolIcon fontSize="small" />}
+                    label="Academic Marks & Percentages"
+                    color="primary"
+                    variant="outlined"
+                    sx={{ fontWeight: 700, fontSize: '0.85rem', px: 1 }}
+                  />
+                </Divider>
+                <Alert severity="info" variant="outlined" sx={{ mt: 1, mb: 1, py: 0.5, px: 2, fontSize: '0.8125rem' }}>
+                  Direct entry of marks, CGPA, and percentages for 10th, 12th, UG, and PG. Marksheet uploads are strictly optional and not required.
+                </Alert>
+              </Grid>
+
+              {/* 1. 10th Standard Section */}
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, borderColor: '#e2e8f0' }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="#1e293b" sx={{ mb: 1.5 }}>
+                    10th Standard Academic Marks
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Marks Obtained"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0, step: 0.5 }}
+                        value={studentForm.tenthObtainedMarks ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, tenthObtainedMarks: val });
+                        }}
+                        placeholder="e.g. 465"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Total Marks"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 1, step: 1 }}
+                        value={studentForm.tenthTotalMarks ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, tenthTotalMarks: val });
+                        }}
+                        placeholder="e.g. 500"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Percentage (%)"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0, max: 100, step: 0.01 }}
+                        value={studentForm.tenthPercentage ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, tenthPercentage: val });
+                        }}
+                        placeholder="e.g. 93.00"
+                        helperText="Admin entered percentage"
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* 2. 12th Standard Section */}
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, borderColor: '#e2e8f0' }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="#1e293b" sx={{ mb: 1.5 }}>
+                    12th Standard / Diploma Academic Marks
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Marks Obtained"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0, step: 0.5 }}
+                        value={studentForm.twelfthObtainedMarks ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, twelfthObtainedMarks: val });
+                        }}
+                        placeholder="e.g. 558"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Total Marks"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 1, step: 1 }}
+                        value={studentForm.twelfthTotalMarks ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, twelfthTotalMarks: val });
+                        }}
+                        placeholder="e.g. 600"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Percentage (%)"
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0, max: 100, step: 0.01 }}
+                        value={studentForm.twelfthPercentage ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, twelfthPercentage: val });
+                        }}
+                        placeholder="e.g. 93.00"
+                        helperText="Admin entered percentage"
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* 3. UG (Undergraduate) Section */}
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f0f9ff', borderRadius: 2, borderColor: '#bae6fd' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                    <Typography variant="subtitle2" fontWeight={700} color="#0369a1">
+                      UG (Undergraduate) Credentials
+                    </Typography>
+                    <Chip
+                      label={studentForm.ugStatus === 'COMPLETED' ? 'Completed' : 'Studying'}
+                      size="small"
+                      color={studentForm.ugStatus === 'COMPLETED' ? 'success' : 'info'}
+                      sx={{ fontWeight: 700 }}
+                    />
+                  </Box>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="UG Degree"
+                        fullWidth
+                        size="small"
+                        value={studentForm.ugDegree || ''}
+                        onChange={(e) => setStudentForm({ ...studentForm, ugDegree: e.target.value })}
+                        placeholder="e.g. B.E., B.Tech, B.Sc, BCA"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        select
+                        label="Education Status"
+                        fullWidth
+                        size="small"
+                        value={studentForm.ugStatus || 'STUDYING'}
+                        onChange={(e) => setStudentForm({ ...studentForm, ugStatus: e.target.value })}
+                      >
+                        <MenuItem value="STUDYING">Studying</MenuItem>
+                        <MenuItem value="COMPLETED">Completed</MenuItem>
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label={studentForm.ugStatus === 'COMPLETED' ? 'Final CGPA' : 'Current CGPA'}
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0, max: 10, step: 0.01 }}
+                        value={studentForm.ugCgpa ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, ugCgpa: val, cgpa: val });
+                        }}
+                        helperText="0.00 to 10.00 scale"
+                        placeholder="e.g. 8.45"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label={studentForm.ugStatus === 'COMPLETED' ? 'Final Percentage (%)' : 'Current Percentage (%)'}
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0, max: 100, step: 0.01 }}
+                        value={studentForm.ugPercentage ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, ugPercentage: val });
+                        }}
+                        helperText="Direct admin entered percentage"
+                        placeholder="e.g. 84.50"
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* 4. PG (Postgraduate) Section - Optional */}
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#faf5ff', borderRadius: 2, borderColor: '#e9d5ff' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="subtitle2" fontWeight={700} color="#7e22ce">
+                        PG (Postgraduate) Credentials
+                      </Typography>
+                      <Chip label="Optional" size="small" variant="outlined" color="secondary" sx={{ height: 20, fontSize: '0.7rem' }} />
+                    </Box>
+                    {studentForm.pgDegree && (
+                      <Chip
+                        label={studentForm.pgStatus === 'COMPLETED' ? 'Completed' : 'Studying'}
+                        size="small"
+                        color={studentForm.pgStatus === 'COMPLETED' ? 'success' : 'secondary'}
+                        sx={{ fontWeight: 700 }}
+                      />
+                    )}
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                    Optional for students who have not started PG. Leave blank if candidate has not started PG.
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="PG Degree (Optional)"
+                        fullWidth
+                        size="small"
+                        value={studentForm.pgDegree || ''}
+                        onChange={(e) => setStudentForm({ ...studentForm, pgDegree: e.target.value })}
+                        placeholder="e.g. M.Tech, MCA, MBA, M.Sc (Leave blank if none)"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        select
+                        label="Education Status"
+                        fullWidth
+                        size="small"
+                        value={studentForm.pgStatus || 'STUDYING'}
+                        onChange={(e) => setStudentForm({ ...studentForm, pgStatus: e.target.value })}
+                        disabled={!studentForm.pgDegree}
+                      >
+                        <MenuItem value="STUDYING">Studying</MenuItem>
+                        <MenuItem value="COMPLETED">Completed</MenuItem>
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label={studentForm.pgStatus === 'COMPLETED' ? 'Final CGPA' : 'Current CGPA'}
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0, max: 10, step: 0.01 }}
+                        value={studentForm.pgCgpa ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, pgCgpa: val });
+                        }}
+                        helperText="0.00 to 10.00 scale (optional)"
+                        placeholder="e.g. 8.70"
+                        disabled={!studentForm.pgDegree}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label={studentForm.pgStatus === 'COMPLETED' ? 'Final Percentage (%)' : 'Current Percentage (%)'}
+                        type="number"
+                        fullWidth
+                        size="small"
+                        inputProps={{ min: 0, max: 100, step: 0.01 }}
+                        value={studentForm.pgPercentage ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : Number(e.target.value);
+                          setStudentForm({ ...studentForm, pgPercentage: val });
+                        }}
+                        helperText="Direct admin entered percentage (optional)"
+                        placeholder="e.g. 87.00"
+                        disabled={!studentForm.pgDegree}
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              {/* Password */}
               <Grid item xs={12}>
                 <TextField
                   label={editingStudent ? "Update Login Password (Optional)" : "Login Password"}

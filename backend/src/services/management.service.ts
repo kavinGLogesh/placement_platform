@@ -317,48 +317,31 @@ export class ManagementService {
 
     // 2. Hierarchy validation & auto-resolution
     let departmentId = dto.departmentId;
-    let courseId = dto.courseId;
-    let classId = dto.classId;
-    let sectionId = dto.sectionId;
-
-    if (!departmentId || !courseId || !classId || !sectionId) {
-      const depts = await this.repo.findDepartments();
-      const firstDept = depts[0];
-      if (firstDept) {
-        departmentId = departmentId || firstDept.id;
-        const crsList = await this.repo.findCourses(departmentId);
-        const firstCrs = crsList[0];
-        if (firstCrs) {
-          courseId = courseId || firstCrs.id;
-          const clsList = await this.repo.findClasses(courseId, departmentId);
-          const firstCls = clsList[0];
-          if (firstCls) {
-            classId = classId || firstCls.id;
-            const secList = await this.repo.findSections(classId);
-            const firstSec = secList[0];
-            if (firstSec) {
-              sectionId = sectionId || firstSec.id;
-            }
-          }
-        }
-      }
-    }
-
-    if (!departmentId || !courseId || !classId || !sectionId) {
-      throw new AppError('Unable to assign department/course/class/section. Please ensure at least one department and class are created.', 400);
-    }
+    let courseId = typeof dto.courseId === 'string' && dto.courseId.trim() ? dto.courseId : undefined;
+    let classId = typeof dto.classId === 'string' && dto.classId.trim() ? dto.classId : undefined;
+    let sectionId = typeof dto.sectionId === 'string' && dto.sectionId.trim() ? dto.sectionId : undefined;
 
     const dept = await this.repo.findDepartmentById(departmentId);
     if (!dept) throw new AppError('Specified Department does not exist', 404);
 
-    const crs = await this.repo.findCourseById(courseId);
-    if (!crs) throw new AppError('Specified Course does not exist', 404);
+    courseId ||= (await this.repo.findCourses(departmentId))[0]?.id;
+    if (courseId && !(await this.repo.findCourseById(courseId))) {
+      throw new AppError('Specified Course does not exist', 404);
+    }
 
-    const cls = await this.repo.findClassById(classId);
-    if (!cls) throw new AppError('Specified Class does not exist', 404);
+    if (!classId && courseId) {
+      classId = (await this.repo.findClasses(courseId, departmentId))[0]?.id;
+    }
+    if (classId && !(await this.repo.findClassById(classId))) {
+      throw new AppError('Specified Class does not exist', 404);
+    }
 
-    const sec = await this.repo.findSectionById(sectionId);
-    if (!sec) throw new AppError('Specified Section does not exist', 404);
+    if (!sectionId && classId) {
+      sectionId = (await this.repo.findSections(classId))[0]?.id;
+    }
+    if (sectionId && !(await this.repo.findSectionById(sectionId))) {
+      throw new AppError('Specified Section does not exist', 404);
+    }
 
     // 3. Generate password or use provided password & create linked User account
     const customPassword = dto.password?.trim();
@@ -376,9 +359,9 @@ export class ManagementService {
       const student = await this.repo.createStudent({
         ...dto,
         departmentId,
-        courseId,
-        classId,
-        sectionId,
+        courseId: courseId ?? null,
+        classId: classId ?? null,
+        sectionId: sectionId ?? null,
         userId: user.id,
         status: dto.status || (customPassword ? StudentStatus.ACTIVE : StudentStatus.INACTIVE),
       });
@@ -675,8 +658,22 @@ export class ManagementService {
         classId: cls.id,
         sectionId: sec.id,
         year: row.year,
-        cgpa: row.cgpa,
+        cgpa: row.cgpa ?? row.ugCgpa,
         status: StudentStatus.INACTIVE,
+        tenthObtainedMarks: row.tenthObtainedMarks,
+        tenthTotalMarks: row.tenthTotalMarks,
+        tenthPercentage: row.tenthPercentage,
+        twelfthObtainedMarks: row.twelfthObtainedMarks,
+        twelfthTotalMarks: row.twelfthTotalMarks,
+        twelfthPercentage: row.twelfthPercentage,
+        ugDegree: row.ugDegree || crs.name,
+        ugStatus: row.ugStatus || 'STUDYING',
+        ugCgpa: row.ugCgpa ?? row.cgpa,
+        ugPercentage: row.ugPercentage,
+        pgDegree: row.pgDegree,
+        pgStatus: row.pgStatus,
+        pgCgpa: row.pgCgpa,
+        pgPercentage: row.pgPercentage,
       });
 
       createdCredentials.push({

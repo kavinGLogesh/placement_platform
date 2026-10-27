@@ -37,6 +37,8 @@ import QuizIcon from '@mui/icons-material/Quiz';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import SecurityIcon from '@mui/icons-material/Security';
+import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import { AdminNavTabs } from '../../components/management/AdminNavTabs.js';
 import { assessmentService } from '../../services/assessment.service.js';
 import { QuestionContentRenderer } from '../../components/common/QuestionContentRenderer.js';
@@ -717,6 +719,60 @@ export const AssessmentDetailPage: React.FC = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Proctoring & Security Controls Status */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          mb: 3,
+          borderRadius: 2.5,
+          backgroundColor: '#F8FAFC',
+          border: '1px solid #E2E8F0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <SecurityIcon sx={{ color: '#0284C7', fontSize: 24 }} />
+          <Box>
+            <Typography variant="subtitle2" fontWeight={700} color="#0F172A">
+              Secure Exam Mode & AI Proctoring Configuration
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              On-device camera monitoring, object detection, and sequential violation penalties
+            </Typography>
+          </Box>
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <Chip
+            icon={<SmartphoneIcon sx={{ fontSize: 16 }} />}
+            label={`Mobile Detection: ${assessment.enableMobileDetection !== false ? 'Active' : 'Disabled'}`}
+            size="small"
+            color={assessment.enableMobileDetection !== false ? 'success' : 'default'}
+            variant="outlined"
+            sx={{ fontWeight: 700 }}
+          />
+          <Chip
+            label={`Max Warnings: ${assessment.maxViolations || 3} Strikes`}
+            size="small"
+            sx={{ fontWeight: 700, bgcolor: '#EDF2FE', color: '#1E40AF' }}
+          />
+          <Chip
+            label={`Policy: ${assessment.terminationAction === 'WARN_ONLY' ? 'Log & Warn Only' : 'Auto-Submit on Limit'}`}
+            size="small"
+            sx={{
+              fontWeight: 700,
+              bgcolor: assessment.terminationAction === 'WARN_ONLY' ? '#FEF3C7' : '#FEE2E2',
+              color: assessment.terminationAction === 'WARN_ONLY' ? '#92400E' : '#991B1B',
+            }}
+          />
+        </Box>
+      </Paper>
 
       {/* Main Tab Navigation */}
       <Paper

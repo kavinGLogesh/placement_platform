@@ -93,6 +93,11 @@ const VALID_VIOLATION_TYPES = [
   'CLIPBOARD_CUT',
   'CLIPBOARD_PASTE',
   'RIGHT_CLICK',
+  'LOOKING_AWAY',
+  'FACE_NOT_VISIBLE',
+  'MOBILE_PHONE_DETECTED',
+  'MULTIPLE_PERSONS_DETECTED',
+  'CAMERA_DISCONNECTED',
 ] as const;
 
 export const validateRecordViolation = (body: unknown): RecordViolationDto => {
