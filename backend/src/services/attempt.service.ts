@@ -165,6 +165,44 @@ export class AttemptService {
     return items;
   }
 
+  async getStudentAttendanceStreak(studentId: string, timeZone: string): Promise<number> {
+    let dateFormatter: Intl.DateTimeFormat;
+    try {
+      dateFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+    } catch {
+      throw new AppError('Invalid time zone', 400);
+    }
+
+    const getDateKey = (date: Date): string => {
+      const parts = dateFormatter.formatToParts(date);
+      const year = parts.find((part) => part.type === 'year')?.value;
+      const month = parts.find((part) => part.type === 'month')?.value;
+      const day = parts.find((part) => part.type === 'day')?.value;
+      return `${year}-${month}-${day}`;
+    };
+
+    const now = new Date();
+    const attendedDates = new Set(
+      (await this.attemptRepo.getStudentAttemptStartTimes(studentId)).map(getDateKey)
+    );
+
+    let streak = 0;
+    const [year, month, date] = getDateKey(now).split('-').map(Number);
+    let day = Date.UTC(year, month - 1, date);
+    let dayKey = getDateKey(now);
+    while (attendedDates.has(dayKey)) {
+      streak += 1;
+      day -= 24 * 60 * 60 * 1000;
+      dayKey = new Date(day).toISOString().slice(0, 10);
+    }
+    return streak;
+  }
+
   // ===========================================================================
   // 2. START ASSESSMENT
   // ===========================================================================

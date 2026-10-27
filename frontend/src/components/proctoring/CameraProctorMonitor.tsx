@@ -23,6 +23,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import * as tf from '@tensorflow/tfjs';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import * as blazeface from '@tensorflow-models/blazeface';
 import { AttemptViolationType } from '../../types/attempt.types.js';
 
 export type HeadPoseStatus = 'CENTER' | 'TURNED_LEFT' | 'TURNED_RIGHT' | 'NO_FACE';
@@ -52,6 +53,11 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const isActiveRef = useRef(isActive);
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
 
   const isMobile = useMediaQuery('(max-width:600px)');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -85,8 +91,16 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
 
   // Model & Detection Refs
   const cocoModelRef = useRef<cocoSsd.ObjectDetection | null>(null);
+  const faceModelRef = useRef<Awaited<ReturnType<typeof blazeface.load>> | null>(null);
   const lastInferenceTimeRef = useRef<number>(0);
+  const lastFrameProcessingTimeRef = useRef<number>(0);
   const isInferringRef = useRef<boolean>(false);
+  const lastDetectionRef = useRef<{
+    phoneDetected: boolean;
+    phoneConfidence: number;
+    personCount: number;
+    faceVisible: boolean;
+  } | null>(null);
 
   // Timers and tracking refs for Head Pose
   const turnStartTimeRef = useRef<number | null>(null);
@@ -119,6 +133,7 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
   const PHONE_CONFIRMATION_THRESHOLD_MS = 500; // 500ms multi-frame temporal confirmation
   const MULTI_PERSON_CONFIRMATION_THRESHOLD_MS = 750; // 750ms multi-frame confirmation
   const FACE_ABSENT_THRESHOLD_MS = 3000; // 3.0s prolonged absence triggers warning (not brief blinks)
+  const DETECTION_INTERVAL_MS = 1000;
 
   const GENERAL_COOLDOWN_MS = 5000; // 5.0s deduplication cooldown for same incident
   const REPEAT_VIOLATION_INTERVAL_MS = 7000; // Repeat violation policy: re-triggers if condition remains visible
@@ -154,11 +169,18 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
   const loadDetectionModel = useCallback(async () => {
     setModelStatus('LOADING');
     setModelError(null);
+    cocoModelRef.current = null;
+    faceModelRef.current = null;
+    lastDetectionRef.current = null;
+    lastInferenceTimeRef.current = 0;
     try {
       await tf.ready();
-      // Load lightweight MobileNetV2 SSD model
-      const model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
-      cocoModelRef.current = model;
+      const [objectModel, faceModel] = await Promise.all([
+        cocoSsd.load({ base: 'lite_mobilenet_v2' }),
+        blazeface.load(),
+      ]);
+      cocoModelRef.current = objectModel;
+      faceModelRef.current = faceModel;
       setModelStatus('READY');
     } catch (err: any) {
       console.warn('AI Proctoring model load error:', err);
@@ -214,15 +236,16 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().catch(() => {});
-        };
+        await videoRef.current.play();
       }
 
       setHasPermission(true);
       onCameraReady?.(true);
     } catch (err: any) {
       console.warn('Camera access denied or failed:', err);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
       const errorMsg =
         err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError'
           ? 'Camera permission denied. Please allow camera access in your browser settings to proceed with this proctored assessment.'
@@ -273,9 +296,14 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
   useEffect(() => {
     if (videoRef.current && streamRef.current && !videoRef.current.srcObject) {
       videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(() => {});
+      videoRef.current.play().catch((err: unknown) => {
+        console.warn('Could not restart camera preview:', err);
+        setPermissionError(err instanceof Error ? err.message : 'Could not restart camera preview.');
+        setHasPermission(false);
+        onCameraReady?.(false);
+      });
     }
-  }, [isMinimized, hasPermission]);
+  }, [isMinimized, hasPermission, onCameraReady]);
 
   // Handle Camera Disconnect Violation
   useEffect(() => {
@@ -307,15 +335,27 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
 
   // Main Detection Loop (runs at ~10-12 FPS via requestAnimationFrame)
   const processFrame = useCallback(async () => {
+    if (!isActiveRef.current) return;
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    if (!video || !canvas || video.readyState < 2 || !isActive) {
-      animFrameRef.current = requestAnimationFrame(processFrame);
+    if (!video || !canvas || video.readyState < 2) {
+      if (isActiveRef.current) {
+        animFrameRef.current = requestAnimationFrame(processFrame);
+      }
       return;
     }
 
     const now = Date.now();
+    if (now - lastFrameProcessingTimeRef.current < 100) {
+      if (isActiveRef.current) {
+        animFrameRef.current = requestAnimationFrame(processFrame);
+      }
+      return;
+    }
+    lastFrameProcessingTimeRef.current = now;
+
     const effectiveModelError = modelStatus === 'ERROR' || isSimulatedModelError;
 
     // Check if camera disconnected
@@ -326,21 +366,30 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
       }
     }
 
-    // Run deep learning object detection inference every ~250ms when model is ready
-    let detectedPhone = false;
-    let detectedPhoneScore = 0;
-    let detectedPersons = 1;
-    let faceVisible = true;
+    // Keep the most recent detections between model runs so violation timers do not reset every frame.
+    let detection = lastDetectionRef.current;
+    let inferenceFailed = false;
     let currentPose: HeadPoseStatus = 'CENTER';
 
-    if (cocoModelRef.current && !effectiveModelError && !isInferringRef.current && now - lastInferenceTimeRef.current >= 240) {
+    if (
+      cocoModelRef.current &&
+      faceModelRef.current &&
+      !effectiveModelError &&
+      !isInferringRef.current &&
+      now - lastInferenceTimeRef.current >= DETECTION_INTERVAL_MS
+    ) {
       isInferringRef.current = true;
       lastInferenceTimeRef.current = now;
 
       try {
-        const predictions = await cocoModelRef.current.detect(video);
+        const [predictions, faces] = await Promise.all([
+          cocoModelRef.current.detect(video),
+          faceModelRef.current.estimateFaces(video, false),
+        ]);
 
         // 1. Mobile Phone Detection
+        let detectedPhone = false;
+        let detectedPhoneScore = 0;
         if (enableMobileDetection) {
           const phonePred = predictions.find(
             (p) => (p.class === 'cell phone' || p.class === 'remote') && p.score >= 0.48
@@ -353,18 +402,30 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
 
         // 2. Person Count Detection
         const personPreds = predictions.filter((p) => p.class === 'person' && p.score >= 0.42);
-        detectedPersons = personPreds.length;
+        const detectedPersons = personPreds.length;
 
-        // 3. Face / Student Absence check
-        if (detectedPersons === 0) {
-          faceVisible = false;
-        }
+        // Face detection is more reliable for attendance than inferring a face from skin color.
+        detection = {
+          phoneDetected: detectedPhone,
+          phoneConfidence: detectedPhoneScore,
+          personCount: detectedPersons,
+          faceVisible: faces.length > 0,
+        };
+        lastDetectionRef.current = detection;
       } catch (err) {
         console.warn('Inference error in proctor monitor:', err);
+        inferenceFailed = true;
+        setModelStatus('ERROR');
+        setModelError(err instanceof Error ? err.message : 'Camera frame analysis failed.');
       } finally {
         isInferringRef.current = false;
       }
     }
+
+    let detectedPhone = detection?.phoneDetected ?? false;
+    let detectedPhoneScore = detection?.phoneConfidence ?? 0;
+    let detectedPersons = detection?.personCount ?? 1;
+    let faceVisible = detection?.faceVisible ?? true;
 
     // Assistive Local Canvas & Head Pose Tracking
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -411,12 +472,7 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
 
         if (skinPixels < 110 || faceBoxWidth < 24 || faceBoxHeight < 24) {
           currentPose = 'NO_FACE';
-          // If no skin cluster found and person count is 0, candidate is definitely absent
-          if (detectedPersons === 0) {
-            faceVisible = false;
-          }
         } else {
-          faceVisible = true;
           const faceCenterX = skinSumX / (skinPixels || 1);
           const faceMidX = (minX + maxX) / 2;
           const centroidOffset = (faceCenterX - faceMidX) / (faceBoxWidth || 1);
@@ -456,8 +512,10 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
     setHeadPose(currentPose);
 
     // Skip violations if warning modal is currently open or proctor inactive
-    if (isWarningModalOpen || effectiveModelError) {
-      animFrameRef.current = requestAnimationFrame(processFrame);
+    if (isWarningModalOpen || effectiveModelError || inferenceFailed) {
+      if (isActiveRef.current) {
+        animFrameRef.current = requestAnimationFrame(processFrame);
+      }
       return;
     }
 
@@ -653,9 +711,10 @@ export const CameraProctorMonitor: React.FC<CameraProctorMonitorProps> = ({
       setTurnHoldDurationMs(0);
     }
 
-    animFrameRef.current = requestAnimationFrame(processFrame);
+    if (isActiveRef.current) {
+      animFrameRef.current = requestAnimationFrame(processFrame);
+    }
   }, [
-    isActive,
     enableMobileDetection,
     isWarningModalOpen,
     modelStatus,

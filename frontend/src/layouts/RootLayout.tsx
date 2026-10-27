@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Outlet, Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Typography,
@@ -39,6 +40,7 @@ import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import SpeedIcon from '@mui/icons-material/Speed';
 import { useHealthCheck } from '../hooks/useHealthCheck.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { attemptService } from '../services/attempt.service.js';
 
 interface NavItem {
   label: string;
@@ -60,6 +62,14 @@ export const RootLayout: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { isLoading: isHealthLoading, isError: isHealthError } = useHealthCheck();
   const { user, isAuthenticated, logout } = useAuth();
+  const isStudent = user?.role === 'STUDENT';
+  const { data: attendanceStreak, isError: isAttendanceStreakError } = useQuery({
+    queryKey: ['studentAttendanceStreak', user?.student?.id],
+    queryFn: () => attemptService.getStudentAttendanceStreak(),
+    enabled: isAuthenticated && isStudent,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -300,10 +310,7 @@ export const RootLayout: React.FC = () => {
     return <Outlet />;
   }
 
-  const isStudent = user?.role === 'STUDENT';
-  const studentDisplayName = user?.email
-    ? user.email.split('@')[0].replace(/[._-]/g, ' ')
-    : 'Student';
+  const studentDisplayName = user?.student?.name?.trim() || 'Student';
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -689,7 +696,7 @@ export const RootLayout: React.FC = () => {
                     fontSize: '0.7rem',
                   }}
                 >
-                  {isStudent ? 'Candidate' : 'Staff Admin'}
+                  {isStudent ? 'Student' : 'Staff Admin'}
                 </Typography>
               </Box>
             </Box>
@@ -819,7 +826,7 @@ export const RootLayout: React.FC = () => {
               >
                 {getGreeting()},{' '}
                 <Box component="span" sx={{ fontWeight: 700, color: '#111827' }}>
-                  {studentDisplayName.toUpperCase()}!
+                  {studentDisplayName}!
                 </Box>
               </Typography>
             ) : (
@@ -860,24 +867,27 @@ export const RootLayout: React.FC = () => {
           {/* Right Header Controls */}
           {isStudent ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {/* Flame streak badge */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.75,
-                  bgcolor: '#FFF0E6',
-                  borderRadius: '20px',
-                  px: 1.5,
-                  py: 0.5,
-                  border: '1px solid #FFE4D6',
-                }}
-              >
-                <LocalFireDepartmentIcon sx={{ color: '#FF5722', fontSize: 18 }} />
-                <Typography sx={{ color: '#E65100', fontWeight: 700, fontSize: '0.85rem' }}>
-                  0
-                </Typography>
-              </Box>
+              <Tooltip title={isAttendanceStreakError
+                ? 'Could not load your attendance streak'
+                : 'Consecutive days you have started an assessment'}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    bgcolor: '#FFF0E6',
+                    borderRadius: '20px',
+                    px: 1.5,
+                    py: 0.5,
+                    border: '1px solid #FFE4D6',
+                  }}
+                >
+                  <LocalFireDepartmentIcon sx={{ color: '#FF5722', fontSize: 18 }} />
+                  <Typography sx={{ color: '#E65100', fontWeight: 700, fontSize: '0.85rem' }}>
+                    {isAttendanceStreakError ? '—' : attendanceStreak ?? 0}
+                  </Typography>
+                </Box>
+              </Tooltip>
 
               {/* Avatar */}
               <Avatar

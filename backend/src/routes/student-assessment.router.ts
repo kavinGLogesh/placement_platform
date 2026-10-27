@@ -261,6 +261,7 @@ studentAssessmentRouter.get('/performance', analyticsController.getStudentPerfor
 
 // 1. Student Tests listing & filtering
 studentAssessmentRouter.get('/tests', attemptController.getStudentTests);
+studentAssessmentRouter.get('/streak', attemptController.getStudentAttendanceStreak);
 studentAssessmentRouter.get('/tests/available', (req, res, next) => {
   req.query.status = 'AVAILABLE';
   attemptController.getStudentTests(req, res, next);

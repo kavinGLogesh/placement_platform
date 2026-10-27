@@ -45,6 +45,17 @@ export class AttemptController {
     }
   };
 
+  getStudentAttendanceStreak = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const studentId = await resolveStudentId(req);
+      const timeZone = typeof req.query.timeZone === 'string' ? req.query.timeZone : 'UTC';
+      const streak = await this.service.getStudentAttendanceStreak(studentId, timeZone);
+      sendSuccess(res, 'Student attendance streak retrieved successfully', { streak });
+    } catch (err) {
+      next(err);
+    }
+  };
+
   // POST /api/student/assessments/:assessmentId/start
   startAssessment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
