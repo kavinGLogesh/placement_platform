@@ -70,18 +70,46 @@ export const QuestionsPage: React.FC = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const urlCompanyId = searchParams.get('companyId') || '';
+  const urlCategory = searchParams.get('category') as QuestionCategory | null;
+  const initialCategory = urlCategory && ['QUANTITATIVE_APTITUDE', 'LOGICAL_REASONING', 'VERBAL_ABILITY', 'TECHNICAL_MCQ', 'CODING'].includes(urlCategory)
+    ? urlCategory
+    : '';
+
   const [companyFilter, setCompanyFilter] = useState<string>(urlCompanyId);
 
   // Search, Filters & Sorting
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<QuestionCategory | ''>('');
-  const [topicFilter, setTopicFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<QuestionCategory | ''>(initialCategory);
+  const [topicFilter, setTopicFilter] = useState(searchParams.get('topic') || '');
   const [difficultyFilter, setDifficultyFilter] = useState<QuestionDifficulty | ''>('');
   const [typeFilter, setTypeFilter] = useState<QuestionType | ''>('');
   const [statusFilter, setStatusFilter] = useState<QuestionStatus | ''>('');
   const [aiStatusFilter, setAiStatusFilter] = useState<AiClassificationStatus | ''>('');
   const [sortBy, setSortBy] = useState<string>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Synchronize category/topic filters when navigating via sidebar submenus
+  useEffect(() => {
+    const cat = searchParams.get('category') as QuestionCategory | null;
+    if (cat && ['QUANTITATIVE_APTITUDE', 'LOGICAL_REASONING', 'VERBAL_ABILITY', 'TECHNICAL_MCQ', 'CODING'].includes(cat)) {
+      setCategoryFilter(cat);
+    } else if (!cat) {
+      setCategoryFilter('');
+    }
+
+    const top = searchParams.get('topic');
+    if (top) {
+      setTopicFilter(top);
+    } else if (!top && topicFilter) {
+      setTopicFilter('');
+    }
+
+    const comp = searchParams.get('companyId');
+    if (comp) {
+      setCompanyFilter(comp);
+    }
+    setPage(0);
+  }, [searchParams]);
 
   // AI Review & Intelligence State
   const [reviewQuestion, setReviewQuestion] = useState<Question | null>(null);

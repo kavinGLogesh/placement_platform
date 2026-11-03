@@ -76,9 +76,9 @@ const authenticateImageAccess = (req: any, _res: any, next: any) => {
 // 1. Secure Image Serving (Accessible to Admins and Students with valid token)
 questionRouter.get('/images/:filename', authenticateImageAccess, questionController.serveImage);
 
-// 2. Question bank management routes are strictly restricted to operational PLACEMENT_ADMIN
+// 2. Question bank management routes are accessible to operational PLACEMENT_ADMIN & SUPER_ADMIN
 questionRouter.use(authenticateToken);
-questionRouter.use(requireRole(Role.PLACEMENT_ADMIN));
+questionRouter.use(requireRole(Role.SUPER_ADMIN, Role.PLACEMENT_ADMIN));
 
 // Diagram / Image Upload for Admin Question Bank
 questionRouter.post('/upload-image', upload.single('image'), questionController.uploadImage);

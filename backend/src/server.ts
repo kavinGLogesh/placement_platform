@@ -3,7 +3,7 @@ import { env } from './config/env.config.js';
 import { logger } from './utils/logger.util.js';
 import { disconnectPrisma } from './config/prisma.config.js';
 
-const server = app.listen(env.PORT, () => {
+const server = app.listen(env.PORT, '0.0.0.0', () => {
   logger.info('====================================================');
   logger.info(`🚀 College Placement API Server running on port ${env.PORT}`);
   logger.info(`🌐 Environment: ${env.NODE_ENV}`);

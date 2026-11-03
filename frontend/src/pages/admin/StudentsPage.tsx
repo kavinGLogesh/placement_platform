@@ -30,7 +30,7 @@ import {
   Tab,
   Divider,
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -138,7 +138,17 @@ export const StudentsPage: React.FC = () => {
   });
 
   // Navigation Tabs State (0 = All Students, 1 = Add Student, 2 = AI Import, 3 = History, 4 = Accounts)
-  const [activeTab, setActiveTab] = useState<number>(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
+  const initialTab = urlTab === 'history' ? 1 : urlTab === 'accounts' ? 2 : 0;
+  const [activeTab, setActiveTab] = useState<number>(initialTab);
+
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t === 'history') setActiveTab(1);
+    else if (t === 'accounts') setActiveTab(2);
+    else if (!t) setActiveTab(0);
+  }, [searchParams]);
   const [aiImportDialogOpen, setAiImportDialogOpen] = useState<boolean>(false);
   const [academicImportDialogOpen, setAcademicImportDialogOpen] = useState<boolean>(false);
 
@@ -851,6 +861,13 @@ export const StudentsPage: React.FC = () => {
           value={activeTab}
           onChange={(_e, newTab) => {
             setActiveTab(newTab);
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              if (newTab === 1) next.set('tab', 'history');
+              else if (newTab === 2) next.set('tab', 'accounts');
+              else next.delete('tab');
+              return next;
+            });
           }}
           sx={{
             px: 2,

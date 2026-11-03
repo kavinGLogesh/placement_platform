@@ -44,13 +44,14 @@ export const createApp = (): Express => {
         if (Array.isArray(configuredOrigins) && configuredOrigins.includes(requestOrigin)) {
           return callback(null, true);
         }
-        if (defaultAllowedOrigins.includes(requestOrigin)) {
+        const cleanOrigin = requestOrigin.replace(/\/$/, '');
+        if (defaultAllowedOrigins.some(d => d.replace(/\/$/, '') === cleanOrigin) || cleanOrigin.includes('devtunnels.ms') || cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1')) {
           return callback(null, true);
         }
-        // In non-production environments, allow any localhost/127.0.0.1 port (e.g., dynamic Vite ports)
+        // In non-production environments, allow any localhost, loopback, or private LAN IP (10.x, 192.168.x, 172.16-31.x)
         if (env.NODE_ENV !== 'production') {
-          const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestOrigin);
-          if (isLocalhost) {
+          const isLocalOrLan = /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$/.test(cleanOrigin);
+          if (isLocalOrLan) {
             return callback(null, true);
           }
         }

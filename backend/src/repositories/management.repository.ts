@@ -1155,7 +1155,7 @@ export class ManagementRepository {
 
   async findStudents(filters: StudentQueryFilters): Promise<PaginatedResult<StudentDto>> {
     const page = Math.max(1, filters.page || 1);
-    const limit = Math.min(100, Math.max(1, filters.limit || 10));
+    const limit = Math.min(10000, Math.max(1, filters.limit || 10));
     const skip = (page - 1) * limit;
 
     const search = filters.search?.trim();

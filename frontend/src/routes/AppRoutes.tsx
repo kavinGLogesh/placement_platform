@@ -186,7 +186,7 @@ export const AppRoutes: React.FC = () => {
           <Route
             path="admin/questions"
             element={
-              <ProtectedRoute allowedRoles={['PLACEMENT_ADMIN']}>
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
                 <QuestionsPage />
               </ProtectedRoute>
             }
@@ -194,7 +194,7 @@ export const AppRoutes: React.FC = () => {
           <Route
             path="admin/assessments"
             element={
-              <ProtectedRoute allowedRoles={['PLACEMENT_ADMIN']}>
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
                 <AssessmentsPage />
               </ProtectedRoute>
             }
@@ -202,7 +202,7 @@ export const AppRoutes: React.FC = () => {
           <Route
             path="admin/assessments/create"
             element={
-              <ProtectedRoute allowedRoles={['PLACEMENT_ADMIN']}>
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
                 <AssessmentBuilderPage />
               </ProtectedRoute>
             }
@@ -210,7 +210,15 @@ export const AppRoutes: React.FC = () => {
           <Route
             path="admin/assessments/:id"
             element={
-              <ProtectedRoute allowedRoles={['PLACEMENT_ADMIN']}>
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
+                <AssessmentDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/assessments/:id/edit"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
                 <AssessmentDetailPage />
               </ProtectedRoute>
             }

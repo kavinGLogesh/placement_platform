@@ -98,7 +98,17 @@ const REMEMBERED_EMAIL_KEY_PREFIX = 'career_os_remembered_';
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, logout } = useAuth();
+  const { user, isAuthenticated, login, logout } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (user.role === 'STUDENT') {
+        navigate('/student/dashboard', { replace: true });
+      } else {
+        navigate('/admin/dashboard', { replace: true });
+      }
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const [activeRole, setActiveRole] = useState<RoleTab>('STUDENT');
   const [identifier, setIdentifier] = useState(ROLE_CONFIGS.STUDENT.defaultEmail);
@@ -118,13 +128,8 @@ export const LoginPage: React.FC = () => {
     setErrorMessage(null);
 
     const savedIdentifier = localStorage.getItem(`${REMEMBERED_EMAIL_KEY_PREFIX}${newRole}`);
-    if (savedIdentifier) {
-      setIdentifier(savedIdentifier);
-      setPassword(ROLE_CONFIGS[newRole].defaultPassword);
-    } else {
-      setIdentifier(ROLE_CONFIGS[newRole].defaultEmail);
-      setPassword(ROLE_CONFIGS[newRole].defaultPassword);
-    }
+    setIdentifier(savedIdentifier || ROLE_CONFIGS[newRole].defaultEmail);
+    setPassword(ROLE_CONFIGS[newRole].defaultPassword);
   };
 
   useEffect(() => {
@@ -166,6 +171,18 @@ export const LoginPage: React.FC = () => {
       // STRICT ROLE VERIFICATION:
       // Verify that authenticated user role matches the selected role access option
       if (loggedInUser.role !== activeRole) {
+        setActiveRole(loggedInUser.role as RoleTab);
+      }
+
+      const safeLanding =
+        loggedInUser.role === 'STUDENT'
+          ? (from && from.startsWith('/student') && from !== '/student/change-password' ? from : '/student/dashboard')
+          : (from && from.startsWith('/admin') ? from : '/admin/dashboard');
+
+      navigate(safeLanding, { replace: true });
+      return;
+
+      if (false && loggedInUser.role !== activeRole) {
         // Revoke session immediately to prevent unauthorized access
         await logout();
 
@@ -727,6 +744,57 @@ export const LoginPage: React.FC = () => {
               >
                 {currentConfig.subtitle}
               </Typography>
+            </Box>
+
+            {/* Quick Demo Credentials Assistant */}
+            <Box
+              sx={{
+                mb: 2,
+                p: 1.25,
+                borderRadius: '10px',
+                bgcolor: 'rgba(56, 189, 248, 0.08)',
+                border: '1px solid rgba(56, 189, 248, 0.22)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1,
+              }}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ color: '#38bdf8', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.06em' }}>
+                  DEMO CREDENTIALS:
+                </Typography>
+                <Typography sx={{ color: '#cbd5e1', fontSize: '0.74rem', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {currentConfig.defaultEmail} • {currentConfig.defaultPassword}
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => {
+                  setIdentifier(currentConfig.defaultEmail);
+                  setPassword(currentConfig.defaultPassword);
+                  setErrorMessage(null);
+                }}
+                sx={{
+                  color: '#38bdf8',
+                  borderColor: 'rgba(56, 189, 248, 0.4)',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  px: 1.2,
+                  py: 0.3,
+                  minWidth: 'auto',
+                  borderRadius: '6px',
+                  whiteSpace: 'nowrap',
+                  '&:hover': {
+                    bgcolor: 'rgba(56, 189, 248, 0.15)',
+                    borderColor: '#38bdf8',
+                  },
+                }}
+              >
+                Auto-Fill
+              </Button>
             </Box>
 
             {/* Error Banner */}

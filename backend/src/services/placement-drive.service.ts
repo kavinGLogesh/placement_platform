@@ -110,7 +110,7 @@ export class PlacementDriveService {
     dto: UpdatePlacementDriveDto,
     _adminUser: { id: string; email: string }
   ): Promise<PlacementDriveDto> {
-    await this.getDriveById(id);
+    const existing = await this.getDriveById(id);
 
     if (dto.companyName !== undefined && !dto.companyName.trim()) {
       throw new AppError('Company name cannot be empty', 400);
@@ -137,6 +137,15 @@ export class PlacementDriveService {
     if (dto.maxActiveBacklogs !== undefined && dto.maxActiveBacklogs !== null) {
       if (dto.maxActiveBacklogs < 0) {
         throw new AppError('Maximum active backlogs cannot be negative', 400);
+      }
+    }
+
+    // Validate registration deadline cannot be after drive date
+    if (dto.driveDate || dto.registrationDeadline) {
+      const effectiveDriveDate = dto.driveDate ? new Date(dto.driveDate) : new Date(existing.driveDate);
+      const effectiveDeadline = dto.registrationDeadline ? new Date(dto.registrationDeadline) : new Date(existing.registrationDeadline);
+      if (effectiveDeadline.getTime() > effectiveDriveDate.getTime()) {
+        throw new AppError('Registration deadline cannot be after the drive date', 400);
       }
     }
 
@@ -179,23 +188,14 @@ export class PlacementDriveService {
       const missingDetails: string[] = [];
       const failureReasons: string[] = [];
 
-      // Check missing mandatory academic info
+      // Extract academic info
       let tenthPercentage: number | null = null;
       let twelfthPercentage: number | null = null;
       let cgpa: number | null = null;
       let overallPercentage: number | null = null;
       let activeBacklogs = 0;
 
-      if (!academicRecord) {
-        missingDetails.push('10th percentage/marks record not found');
-        missingDetails.push('12th percentage/marks record not found');
-        if (student.cgpa !== null && student.cgpa !== undefined) {
-          cgpa = student.cgpa;
-          overallPercentage = calculateUniversityPercentage(cgpa);
-        } else {
-          missingDetails.push('Current CGPA record not found');
-        }
-      } else {
+      if (academicRecord) {
         // 10th Standard
         if (
           academicRecord.tenthPercentage !== null &&
@@ -210,8 +210,6 @@ export class PlacementDriveService {
           tenthPercentage = parseFloat(
             ((academicRecord.tenthObtainedMarks / academicRecord.tenthTotalMarks) * 100).toFixed(2)
           );
-        } else {
-          missingDetails.push('10th percentage not provided');
         }
 
         // 12th Standard
@@ -228,11 +226,9 @@ export class PlacementDriveService {
           twelfthPercentage = parseFloat(
             ((academicRecord.twelfthObtainedMarks / academicRecord.twelfthTotalMarks) * 100).toFixed(2)
           );
-        } else {
-          missingDetails.push('12th percentage not provided');
         }
 
-        // Current CGPA
+        // Current CGPA: academicRecord first, fallback to student.cgpa
         if (
           academicRecord.currentCgpa !== null &&
           academicRecord.currentCgpa !== undefined
@@ -240,8 +236,6 @@ export class PlacementDriveService {
           cgpa = Number(academicRecord.currentCgpa);
         } else if (student.cgpa !== null && student.cgpa !== undefined) {
           cgpa = Number(student.cgpa);
-        } else {
-          missingDetails.push('Current CGPA not recorded');
         }
 
         // Overall Percentage
@@ -255,28 +249,43 @@ export class PlacementDriveService {
         }
 
         activeBacklogs = academicRecord.activeBacklogs || 0;
+      } else {
+        // Fallback when no academic record entity exists
+        if (student.cgpa !== null && student.cgpa !== undefined) {
+          cgpa = Number(student.cgpa);
+          overallPercentage = calculateUniversityPercentage(cgpa);
+        }
+        activeBacklogs = 0;
       }
 
       // Department Match
       const eligibleDepts = drive.eligibleDepartments || [];
+      const studentDept = studentFull?.department || student.department;
       if (eligibleDepts.length > 0) {
-        const studentDeptCode = student.department?.code?.toUpperCase() || '';
+        const studentDeptCode = studentDept?.code?.toUpperCase() || '';
         const studentDeptId = student.departmentId;
+        const studentDeptName = studentDept?.name?.toUpperCase() || '';
         const matchesDept = eligibleDepts.some((d) => {
           const upper = String(d).toUpperCase().trim();
-          return upper === studentDeptCode || upper === studentDeptId || upper === student.department?.name?.toUpperCase();
+          return (
+            upper === studentDeptCode ||
+            upper === studentDeptId ||
+            upper === studentDeptName ||
+            (studentDeptName && (studentDeptName.includes(upper) || upper.includes(studentDeptName)))
+          );
         });
         if (!matchesDept) {
           failureReasons.push(
-            `Department "${student.department?.code || student.department?.name || student.departmentId}" is not eligible for this drive`
+            `Department "${studentDept?.name || studentDept?.code || student.departmentId}" is not eligible for this drive`
           );
         }
       }
 
       // Graduation Year / Batch Year Match
       const eligibleBatches = drive.eligibleBatchYears || [];
+      const studentClass = studentFull?.class || student.class;
       if (eligibleBatches.length > 0) {
-        const studentBatch = student.class?.batchYear;
+        const studentBatch = studentClass?.batchYear;
         const matchesBatch = eligibleBatches.some((b) => Number(b) === Number(studentBatch));
         if (!matchesBatch) {
           failureReasons.push(
@@ -285,27 +294,33 @@ export class PlacementDriveService {
         }
       }
 
-      // 10th Requirement Check
-      if (drive.minTenthPercentage !== null && drive.minTenthPercentage !== undefined) {
-        if (tenthPercentage !== null && tenthPercentage < drive.minTenthPercentage) {
+      // 10th Requirement Check: only check missing if required by drive
+      if (drive.minTenthPercentage !== null && drive.minTenthPercentage !== undefined && drive.minTenthPercentage > 0) {
+        if (tenthPercentage === null) {
+          missingDetails.push('10th percentage/marks record not found');
+        } else if (tenthPercentage < drive.minTenthPercentage) {
           failureReasons.push(
             `10th percentage (${tenthPercentage}%) is below minimum requirement (${drive.minTenthPercentage}%)`
           );
         }
       }
 
-      // 12th Requirement Check
-      if (drive.minTwelfthPercentage !== null && drive.minTwelfthPercentage !== undefined) {
-        if (twelfthPercentage !== null && twelfthPercentage < drive.minTwelfthPercentage) {
+      // 12th Requirement Check: only check missing if required by drive
+      if (drive.minTwelfthPercentage !== null && drive.minTwelfthPercentage !== undefined && drive.minTwelfthPercentage > 0) {
+        if (twelfthPercentage === null) {
+          missingDetails.push('12th percentage/marks record not found');
+        } else if (twelfthPercentage < drive.minTwelfthPercentage) {
           failureReasons.push(
             `12th percentage (${twelfthPercentage}%) is below minimum requirement (${drive.minTwelfthPercentage}%)`
           );
         }
       }
 
-      // CGPA Requirement Check
-      if (drive.minCgpa !== null && drive.minCgpa !== undefined) {
-        if (cgpa !== null && cgpa < drive.minCgpa) {
+      // CGPA Requirement Check: only check missing if required by drive
+      if (drive.minCgpa !== null && drive.minCgpa !== undefined && drive.minCgpa > 0) {
+        if (cgpa === null) {
+          missingDetails.push('Current CGPA record not found');
+        } else if (cgpa < drive.minCgpa) {
           failureReasons.push(
             `Current CGPA (${cgpa.toFixed(2)}) is below minimum requirement (${drive.minCgpa.toFixed(2)})`
           );

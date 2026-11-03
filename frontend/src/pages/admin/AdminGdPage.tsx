@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -74,7 +75,22 @@ export const AdminGdPage: React.FC = () => {
   const [rounds, setRounds] = useState<GdRoundDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusTab, setStatusTab] = useState<string>('ALL');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlStatus = searchParams.get('status');
+  const initialStatus =
+    urlStatus && ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED'].includes(urlStatus.toUpperCase())
+      ? urlStatus.toUpperCase()
+      : 'ALL';
+  const [statusTab, setStatusTab] = useState<string>(initialStatus);
+
+  useEffect(() => {
+    const s = searchParams.get('status');
+    if (s && ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED'].includes(s.toUpperCase())) {
+      setStatusTab(s.toUpperCase());
+    } else if (!s) {
+      setStatusTab('ALL');
+    }
+  }, [searchParams]);
 
   // Institutional Hierarchy Data
   const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
@@ -1695,7 +1711,18 @@ export const AdminGdPage: React.FC = () => {
       <Paper elevation={0} sx={{ mb: 3, border: '1px solid #DCE6F5', borderRadius: '8px', bgcolor: '#ffffff' }}>
         <Tabs
           value={statusTab}
-          onChange={(_, val) => setStatusTab(val)}
+          onChange={(_, val) => {
+            setStatusTab(val);
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              if (val === 'ALL') {
+                next.delete('status');
+              } else {
+                next.set('status', val);
+              }
+              return next;
+            });
+          }}
           textColor="primary"
           indicatorColor="primary"
           sx={{

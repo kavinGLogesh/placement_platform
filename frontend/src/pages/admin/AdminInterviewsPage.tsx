@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -66,7 +67,22 @@ export const AdminInterviewsPage: React.FC = () => {
   const [rounds, setRounds] = useState<InterviewRoundDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<string>('ALL');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlType = searchParams.get('type');
+  const initialType =
+    urlType && ['TECHNICAL', 'HR', 'MOCK', 'MANAGERIAL'].includes(urlType.toUpperCase())
+      ? urlType.toUpperCase()
+      : 'ALL';
+  const [typeFilter, setTypeFilter] = useState<string>(initialType);
+
+  useEffect(() => {
+    const t = searchParams.get('type');
+    if (t && ['TECHNICAL', 'HR', 'MOCK', 'MANAGERIAL'].includes(t.toUpperCase())) {
+      setTypeFilter(t.toUpperCase());
+    } else if (!t) {
+      setTypeFilter('ALL');
+    }
+  }, [searchParams]);
 
   // Create Interview Round Dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -465,7 +481,18 @@ export const AdminInterviewsPage: React.FC = () => {
       <Paper elevation={0} sx={{ mb: 3, border: '1px solid #DCE6F5', borderRadius: '8px', bgcolor: '#ffffff' }}>
         <Tabs
           value={typeFilter}
-          onChange={(_, val) => setTypeFilter(val)}
+          onChange={(_, val) => {
+            setTypeFilter(val);
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              if (val === 'ALL') {
+                next.delete('type');
+              } else {
+                next.set('type', val);
+              }
+              return next;
+            });
+          }}
           textColor="primary"
           indicatorColor="primary"
           sx={{

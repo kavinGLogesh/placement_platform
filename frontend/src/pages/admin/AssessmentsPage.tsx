@@ -19,7 +19,7 @@ import {
   InputLabel,
   Select,
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -41,6 +41,12 @@ import { CompanyDto } from '../../types/company.types.js';
 
 export const AssessmentsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const urlStatus = searchParams.get('status') as AssessmentStatus | null;
+  const initialStatusTab = urlStatus && ['DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED'].includes(urlStatus)
+    ? urlStatus
+    : 'ALL';
 
   // Data & Pagination
   const [assessments, setAssessments] = useState<AssessmentDto[]>([]);
@@ -52,11 +58,27 @@ export const AssessmentsPage: React.FC = () => {
 
   // Filters & Tabs
   const [search, setSearch] = useState('');
-  const [statusTab, setStatusTab] = useState<AssessmentStatus | 'ALL'>('ALL');
-  const [companyFilter, setCompanyFilter] = useState<string>('ALL');
+  const [statusTab, setStatusTab] = useState<AssessmentStatus | 'ALL'>(initialStatusTab);
+  const [companyFilter, setCompanyFilter] = useState<string>(searchParams.get('companyId') || 'ALL');
   const [companies, setCompanies] = useState<CompanyDto[]>([]);
   const sortBy = 'createdAt';
   const sortOrder: 'asc' | 'desc' = 'desc';
+
+  // Synchronize state when URL query params change (e.g. from sidebar navigation)
+  useEffect(() => {
+    const s = searchParams.get('status') as AssessmentStatus | null;
+    if (s && ['DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED'].includes(s)) {
+      setStatusTab(s);
+    } else if (!s) {
+      setStatusTab('ALL');
+    }
+
+    const c = searchParams.get('companyId');
+    if (c) {
+      setCompanyFilter(c);
+    }
+    setPage(0);
+  }, [searchParams]);
 
   // Load Companies for Filter
   useEffect(() => {
@@ -500,6 +522,13 @@ export const AssessmentsPage: React.FC = () => {
               onChange={(_, val) => {
                 setStatusTab(val);
                 setPage(0);
+                const params = new URLSearchParams(searchParams);
+                if (val === 'ALL') {
+                  params.delete('status');
+                } else {
+                  params.set('status', val);
+                }
+                setSearchParams(params);
               }}
               variant="scrollable"
               scrollButtons="auto"

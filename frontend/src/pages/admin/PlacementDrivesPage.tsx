@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -21,8 +21,15 @@ import {
   Tabs,
   Tab,
   InputAdornment,
+  FormControl,
+  Select,
+  OutlinedInput,
+  Checkbox,
+  ListItemText,
+  SelectChangeEvent,
+  Snackbar,
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import WorkIcon from '@mui/icons-material/Work';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
@@ -39,23 +46,13 @@ import BusinessIcon from '@mui/icons-material/Business';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
 import { placementDriveService } from '../../services/placement-drive.service.js';
+import { managementService } from '../../services/management.service.js';
 import {
   PlacementDrive,
   CreatePlacementDriveInput,
   DriveStatus,
   RequiredSkillCriterion,
 } from '../../types/placement-drive.types.js';
-
-const AVAILABLE_DEPARTMENTS = [
-  { code: 'CSE', name: 'Computer Science and Engineering' },
-  { code: 'ECE', name: 'Electronics and Communication Engineering' },
-  { code: 'IT', name: 'Information Technology' },
-  { code: 'MECH', name: 'Mechanical Engineering' },
-  { code: 'EEE', name: 'Electrical & Electronics Engineering' },
-  { code: 'CIVIL', name: 'Civil Engineering' },
-];
-
-const AVAILABLE_BATCHES = [2024, 2025, 2026, 2027];
 
 const DEFAULT_STAGES = [
   'Online Coding Assessment',
@@ -68,7 +65,22 @@ export const PlacementDrivesPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<string>('ALL');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlStatus = searchParams.get('status');
+  const initialStatus =
+    urlStatus && ['UPCOMING', 'ONGOING', 'COMPLETED', 'CANCELLED'].includes(urlStatus.toUpperCase())
+      ? urlStatus.toUpperCase()
+      : 'ALL';
+  const [activeTab, setActiveTab] = useState<string>(initialStatus);
+
+  useEffect(() => {
+    const s = searchParams.get('status');
+    if (s && ['UPCOMING', 'ONGOING', 'COMPLETED', 'CANCELLED'].includes(s.toUpperCase())) {
+      setActiveTab(s.toUpperCase());
+    } else if (!s) {
+      setActiveTab('ALL');
+    }
+  }, [searchParams]);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Dialog State
@@ -76,22 +88,31 @@ export const PlacementDrivesPage: React.FC = () => {
   const [editingDrive, setEditingDrive] = useState<PlacementDrive | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Delete Confirmation & Feedback State
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [driveToDelete, setDriveToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
   // Form Fields State
   const [companyName, setCompanyName] = useState('');
   const [jobRole, setJobRole] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [location, setLocation] = useState('');
   const [packageDetails, setPackageDetails] = useState('');
-  const [vacancies, setVacancies] = useState<number>(5);
+  const [vacancies, setVacancies] = useState<number | ''>(5);
   const [driveDate, setDriveDate] = useState('2026-11-20');
   const [registrationDeadline, setRegistrationDeadline] = useState('2026-11-15');
   const [status, setStatus] = useState<DriveStatus>('UPCOMING');
-  const [minTenthPercentage, setMinTenthPercentage] = useState<number>(75);
-  const [minTwelfthPercentage, setMinTwelfthPercentage] = useState<number>(75);
-  const [minCgpa, setMinCgpa] = useState<number>(7.5);
-  const [maxActiveBacklogs, setMaxActiveBacklogs] = useState<number>(0);
-  const [selectedDepts, setSelectedDepts] = useState<string[]>(['CSE', 'ECE', 'IT']);
-  const [selectedBatches, setSelectedBatches] = useState<number[]>([2026]);
+  const [minTenthPercentage, setMinTenthPercentage] = useState<number | ''>('');
+  const [minTwelfthPercentage, setMinTwelfthPercentage] = useState<number | ''>('');
+  const [minCgpa, setMinCgpa] = useState<number | ''>(7.0);
+  const [maxActiveBacklogs, setMaxActiveBacklogs] = useState<number | ''>(0);
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [selectedBatches, setSelectedBatches] = useState<number[]>([]);
 
   // Required skills list
   const [requiredSkills, setRequiredSkills] = useState<RequiredSkillCriterion[]>([
@@ -111,6 +132,88 @@ export const PlacementDrivesPage: React.FC = () => {
       }),
   });
 
+  // Fetch departments dynamically from College Settings
+  const {
+    data: departments = [],
+    isLoading: isLoadingDepartments,
+    refetch: refetchDepartments,
+  } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => managementService.getDepartments(),
+    staleTime: 0,
+  });
+
+  // Fetch classes dynamically from College Settings (to extract graduation batch years)
+  const {
+    data: classes = [],
+    isLoading: isLoadingClasses,
+    refetch: refetchClasses,
+  } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => managementService.getClasses(),
+    staleTime: 0,
+  });
+
+  // Dynamically derive department options from College Settings, preserving any existing selected values
+  const departmentOptions = useMemo(() => {
+    const map = new Map<string, { code: string; name: string }>();
+
+    // 1. All departments configured in College Settings
+    for (const dept of departments) {
+      if (dept && dept.code) {
+        const codeUpper = dept.code.toUpperCase().trim();
+        map.set(codeUpper, {
+          code: codeUpper,
+          name: dept.name || codeUpper,
+        });
+      }
+    }
+
+    // 2. Preserve any existing selected values
+    for (const code of selectedDepts) {
+      if (code) {
+        const codeUpper = code.toUpperCase().trim();
+        if (!map.has(codeUpper)) {
+          map.set(codeUpper, {
+            code: codeUpper,
+            name: codeUpper,
+          });
+        }
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+  }, [departments, selectedDepts]);
+
+  // Dynamically derive graduation batch year options from College Settings, preserving any existing selected values
+  const batchOptions = useMemo(() => {
+    const set = new Set<number>();
+
+    // 1. All graduation batch years configured in College Settings classes
+    for (const cls of classes) {
+      if (cls && typeof cls.batchYear === 'number' && !isNaN(cls.batchYear) && cls.batchYear > 0) {
+        set.add(cls.batchYear);
+      }
+    }
+
+    // 2. Preserve any existing selected batch years
+    for (const batch of selectedBatches) {
+      if (typeof batch === 'number' && !isNaN(batch) && batch > 0) {
+        set.add(batch);
+      }
+    }
+
+    // Fallback if College Settings has no classes configured yet
+    if (set.size === 0) {
+      const currentYear = new Date().getFullYear();
+      for (let y = currentYear - 1; y <= currentYear + 3; y++) {
+        set.add(y);
+      }
+    }
+
+    return Array.from(set).sort((a, b) => b - a);
+  }, [classes, selectedBatches]);
+
   // Create / Update Mutation
   const saveMutation = useMutation({
     mutationFn: (payload: CreatePlacementDriveInput) => {
@@ -119,8 +222,19 @@ export const PlacementDrivesPage: React.FC = () => {
       }
       return placementDriveService.createDrive(payload);
     },
-    onSuccess: () => {
+    onSuccess: (savedDrive) => {
       queryClient.invalidateQueries({ queryKey: ['placement-drives'] });
+      if (editingDrive) {
+        queryClient.invalidateQueries({ queryKey: ['placement-drive', editingDrive.id] });
+        queryClient.invalidateQueries({ queryKey: ['placement-drive-eligibility', editingDrive.id] });
+      }
+      setSnackbar({
+        open: true,
+        message: editingDrive
+          ? `Placement drive for "${savedDrive.companyName}" successfully updated!`
+          : `Placement drive for "${savedDrive.companyName}" successfully created!`,
+        severity: 'success',
+      });
       handleCloseModal();
     },
     onError: (err: any) => {
@@ -133,10 +247,27 @@ export const PlacementDrivesPage: React.FC = () => {
     mutationFn: (id: string) => placementDriveService.deleteDrive(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['placement-drives'] });
+      setSnackbar({
+        open: true,
+        message: `Placement drive "${driveToDelete?.name || ''}" was successfully deleted.`,
+        severity: 'success',
+      });
+      setDeleteConfirmOpen(false);
+      setDriveToDelete(null);
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err?.response?.data?.message || err?.message || 'Failed to delete placement drive',
+        severity: 'error',
+      });
+      setDeleteConfirmOpen(false);
     },
   });
 
   const handleOpenCreate = () => {
+    refetchDepartments();
+    refetchClasses();
     setEditingDrive(null);
     setCompanyName('');
     setJobRole('');
@@ -147,12 +278,12 @@ export const PlacementDrivesPage: React.FC = () => {
     setDriveDate(new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0]);
     setRegistrationDeadline(new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0]);
     setStatus('UPCOMING');
-    setMinTenthPercentage(70);
-    setMinTwelfthPercentage(70);
-    setMinCgpa(7.5);
+    setMinTenthPercentage('');
+    setMinTwelfthPercentage('');
+    setMinCgpa(7.0);
     setMaxActiveBacklogs(0);
-    setSelectedDepts(['CSE', 'ECE', 'IT']);
-    setSelectedBatches([2026]);
+    setSelectedDepts([]);
+    setSelectedBatches(batchOptions.length > 0 ? [batchOptions[0]] : [new Date().getFullYear()]);
     setRequiredSkills([
       { name: 'Python Programming', minLevel: 'INTERMEDIATE' },
       { name: 'Data Structures & Algorithms', minLevel: 'INTERMEDIATE' },
@@ -162,23 +293,25 @@ export const PlacementDrivesPage: React.FC = () => {
   };
 
   const handleOpenEdit = (drive: PlacementDrive) => {
+    refetchDepartments();
+    refetchClasses();
     setEditingDrive(drive);
     setCompanyName(drive.companyName);
     setJobRole(drive.jobRole);
     setJobDescription(drive.jobDescription || '');
     setLocation(drive.location || '');
     setPackageDetails(drive.packageDetails || '');
-    setVacancies(drive.vacancies || 1);
+    setVacancies(drive.vacancies != null ? drive.vacancies : 1);
     setDriveDate(new Date(drive.driveDate).toISOString().split('T')[0]);
     setRegistrationDeadline(new Date(drive.registrationDeadline).toISOString().split('T')[0]);
     setStatus(drive.status);
-    setMinTenthPercentage(drive.minTenthPercentage ?? 70);
-    setMinTwelfthPercentage(drive.minTwelfthPercentage ?? 70);
-    setMinCgpa(drive.minCgpa ?? 7.5);
-    setMaxActiveBacklogs(drive.maxActiveBacklogs ?? 0);
-    setSelectedDepts(drive.eligibleDepartments || ['CSE']);
-    setSelectedBatches(drive.eligibleBatchYears || [2026]);
-    setRequiredSkills(drive.requiredSkills || []);
+    setMinTenthPercentage(drive.minTenthPercentage != null ? drive.minTenthPercentage : '');
+    setMinTwelfthPercentage(drive.minTwelfthPercentage != null ? drive.minTwelfthPercentage : '');
+    setMinCgpa(drive.minCgpa != null ? drive.minCgpa : '');
+    setMaxActiveBacklogs(drive.maxActiveBacklogs != null ? drive.maxActiveBacklogs : 0);
+    setSelectedDepts(drive.eligibleDepartments || []);
+    setSelectedBatches(drive.eligibleBatchYears || []);
+    setRequiredSkills(drive.requiredSkills ? [...drive.requiredSkills] : []);
     setFormError(null);
     setModalOpen(true);
   };
@@ -216,32 +349,42 @@ export const PlacementDrivesPage: React.FC = () => {
       return;
     }
 
+    if (new Date(registrationDeadline) > new Date(driveDate)) {
+      setFormError('Registration deadline cannot be after the drive date');
+      return;
+    }
+
     const payload: CreatePlacementDriveInput = {
       companyName: companyName.trim(),
       jobRole: jobRole.trim(),
       jobDescription: jobDescription.trim() || undefined,
       location: location.trim() || undefined,
       packageDetails: packageDetails.trim() || undefined,
-      vacancies: Number(vacancies),
+      vacancies: vacancies === '' ? 1 : Number(vacancies),
       driveDate: new Date(driveDate).toISOString(),
       registrationDeadline: new Date(registrationDeadline).toISOString(),
       status,
-      minTenthPercentage: Number(minTenthPercentage),
-      minTwelfthPercentage: Number(minTwelfthPercentage),
-      minCgpa: Number(minCgpa),
-      maxActiveBacklogs: Number(maxActiveBacklogs),
+      minTenthPercentage: minTenthPercentage === '' ? null : Number(minTenthPercentage),
+      minTwelfthPercentage: minTwelfthPercentage === '' ? null : Number(minTwelfthPercentage),
+      minCgpa: minCgpa === '' ? null : Number(minCgpa),
+      maxActiveBacklogs: maxActiveBacklogs === '' ? 0 : Number(maxActiveBacklogs),
       eligibleDepartments: selectedDepts,
       eligibleBatchYears: selectedBatches,
       requiredSkills,
-      selectionProcess: DEFAULT_STAGES,
+      selectionProcess: editingDrive?.selectionProcess || DEFAULT_STAGES,
     };
 
     saveMutation.mutate(payload);
   };
 
-  const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete the placement drive for "${name}"?`)) {
-      deleteMutation.mutate(id);
+  const handleDeleteClick = (id: string, name: string) => {
+    setDriveToDelete({ id, name });
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (driveToDelete) {
+      deleteMutation.mutate(driveToDelete.id);
     }
   };
 
@@ -482,7 +625,18 @@ export const PlacementDrivesPage: React.FC = () => {
       >
         <Tabs
           value={activeTab}
-          onChange={(_, val) => setActiveTab(val)}
+          onChange={(_, val) => {
+            setActiveTab(val);
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              if (val === 'ALL') {
+                next.delete('status');
+              } else {
+                next.set('status', val);
+              }
+              return next;
+            });
+          }}
           sx={{
             '& .MuiTab-root': {
               textTransform: 'none',
@@ -716,7 +870,7 @@ export const PlacementDrivesPage: React.FC = () => {
                       <Tooltip title="Delete Drive">
                         <IconButton
                           size="small"
-                          onClick={() => handleDelete(drive.id, drive.companyName)}
+                          onClick={() => handleDeleteClick(drive.id, drive.companyName)}
                           sx={{ color: '#ef4444' }}
                         >
                           <DeleteOutlineIcon fontSize="small" />
@@ -801,8 +955,9 @@ export const PlacementDrivesPage: React.FC = () => {
                   type="number"
                   fullWidth
                   size="small"
+                  inputProps={{ min: 1 }}
                   value={vacancies}
-                  onChange={(e) => setVacancies(Number(e.target.value))}
+                  onChange={(e) => setVacancies(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value, 10)))}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
@@ -890,8 +1045,10 @@ export const PlacementDrivesPage: React.FC = () => {
                   type="number"
                   fullWidth
                   size="small"
+                  placeholder="Leave empty for none"
+                  inputProps={{ min: 0, max: 100, step: 0.1 }}
                   value={minTenthPercentage}
-                  onChange={(e) => setMinTenthPercentage(Number(e.target.value))}
+                  onChange={(e) => setMinTenthPercentage(e.target.value === '' ? '' : Number(e.target.value))}
                 />
               </Grid>
               <Grid item xs={12} sm={3}>
@@ -900,8 +1057,10 @@ export const PlacementDrivesPage: React.FC = () => {
                   type="number"
                   fullWidth
                   size="small"
+                  placeholder="Leave empty for none"
+                  inputProps={{ min: 0, max: 100, step: 0.1 }}
                   value={minTwelfthPercentage}
-                  onChange={(e) => setMinTwelfthPercentage(Number(e.target.value))}
+                  onChange={(e) => setMinTwelfthPercentage(e.target.value === '' ? '' : Number(e.target.value))}
                 />
               </Grid>
               <Grid item xs={12} sm={3}>
@@ -911,8 +1070,9 @@ export const PlacementDrivesPage: React.FC = () => {
                   inputProps={{ step: 0.1, min: 0, max: 10 }}
                   fullWidth
                   size="small"
+                  placeholder="e.g. 7.5 (Empty = none)"
                   value={minCgpa}
-                  onChange={(e) => setMinCgpa(Number(e.target.value))}
+                  onChange={(e) => setMinCgpa(e.target.value === '' ? '' : Number(e.target.value))}
                 />
               </Grid>
               <Grid item xs={12} sm={3}>
@@ -921,65 +1081,333 @@ export const PlacementDrivesPage: React.FC = () => {
                   type="number"
                   fullWidth
                   size="small"
+                  inputProps={{ min: 0, step: 1 }}
                   value={maxActiveBacklogs}
-                  onChange={(e) => setMaxActiveBacklogs(Number(e.target.value))}
+                  onChange={(e) => setMaxActiveBacklogs(e.target.value === '' ? '' : Number(e.target.value))}
                 />
               </Grid>
 
-              {/* Department Checkboxes */}
+              {/* Eligible Departments Dropdown Multi-Select */}
               <Grid item xs={12}>
-                <Typography variant="caption" fontWeight={700} sx={{ color: '#475569', display: 'block', mb: 0.5 }}>
-                  Eligible Departments:
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  {AVAILABLE_DEPARTMENTS.map((dept) => {
-                    const isSelected = selectedDepts.includes(dept.code);
-                    return (
-                      <Chip
-                        key={dept.code}
-                        label={`${dept.code} - ${dept.name}`}
-                        clickable
-                        color={isSelected ? 'primary' : 'default'}
-                        variant={isSelected ? 'filled' : 'outlined'}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedDepts(selectedDepts.filter((c) => c !== dept.code));
-                          } else {
-                            setSelectedDepts([...selectedDepts, dept.code]);
-                          }
-                        }}
-                      />
-                    );
-                  })}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
+                  <Typography variant="caption" fontWeight={700} sx={{ color: '#475569', display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    Eligible Departments:
+                    {isLoadingDepartments && <CircularProgress size={12} sx={{ color: '#0284c7' }} />}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    {departmentOptions.length > 0 && (
+                      <>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => setSelectedDepts(departmentOptions.map((d) => d.code))}
+                          sx={{ p: 0, minWidth: 'auto', fontSize: '0.72rem', textTransform: 'none', color: '#0284c7', fontWeight: 600 }}
+                        >
+                          Select All ({departmentOptions.length})
+                        </Button>
+                        {selectedDepts.length > 0 && (
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={() => setSelectedDepts([])}
+                            sx={{ p: 0, minWidth: 'auto', fontSize: '0.72rem', textTransform: 'none', color: '#64748b', fontWeight: 600 }}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </Box>
                 </Box>
+
+                <FormControl fullWidth size="small">
+                  <Select
+                    id="eligible-departments-dropdown"
+                    multiple
+                    displayEmpty
+                    value={selectedDepts}
+                    onChange={(e: SelectChangeEvent<string[]>) => {
+                      const val = e.target.value;
+                      setSelectedDepts(typeof val === 'string' ? val.split(',') : val);
+                    }}
+                    input={<OutlinedInput />}
+                    renderValue={(selected) => {
+                      if (selected.length === 0) {
+                        return (
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                            Choose eligible departments from College Settings...
+                          </Typography>
+                        );
+                      }
+                      return (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, py: 0.25 }}>
+                          {selected.map((code) => {
+                            const dept = departmentOptions.find((d) => d.code === code);
+                            const label = dept ? `${dept.code} - ${dept.name}` : code;
+                            return (
+                              <Chip
+                                key={code}
+                                label={label}
+                                size="small"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onDelete={() => setSelectedDepts(selectedDepts.filter((c) => c !== code))}
+                                sx={{
+                                  height: 24,
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  bgcolor: '#e0f2fe',
+                                  color: '#0369a1',
+                                  borderColor: '#bae6fd',
+                                  '& .MuiChip-deleteIcon': {
+                                    color: '#0284c7',
+                                    fontSize: 16,
+                                    '&:hover': { color: '#0369a1' },
+                                  },
+                                }}
+                              />
+                            );
+                          })}
+                        </Box>
+                      );
+                    }}
+                    MenuProps={{
+                      PaperProps: {
+                        sx: {
+                          maxHeight: 320,
+                          borderRadius: 2,
+                          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08)',
+                          border: '1px solid #e2e8f0',
+                        },
+                      },
+                    }}
+                  >
+                    {departmentOptions.length === 0 ? (
+                      <MenuItem disabled value="">
+                        <Typography variant="body2" color="text.secondary">
+                          No departments configured in College Settings.
+                        </Typography>
+                      </MenuItem>
+                    ) : (
+                      departmentOptions.map((dept) => {
+                        const isSelected = selectedDepts.includes(dept.code);
+                        return (
+                          <MenuItem
+                            key={dept.code}
+                            value={dept.code}
+                            sx={{
+                              py: 0.75,
+                              px: 1.5,
+                              bgcolor: isSelected ? 'rgba(2, 132, 199, 0.08)' : 'transparent',
+                              '&:hover': {
+                                bgcolor: isSelected ? 'rgba(2, 132, 199, 0.14)' : 'rgba(0, 0, 0, 0.04)',
+                              },
+                            }}
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              size="small"
+                              sx={{
+                                mr: 1,
+                                p: 0.5,
+                                color: '#94a3b8',
+                                '&.Mui-checked': { color: '#0284c7' },
+                              }}
+                            />
+                            <ListItemText
+                              primary={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Chip
+                                    label={dept.code}
+                                    size="small"
+                                    sx={{
+                                      height: 20,
+                                      fontSize: '0.7rem',
+                                      fontWeight: 700,
+                                      bgcolor: isSelected ? '#0284c7' : '#f1f5f9',
+                                      color: isSelected ? '#ffffff' : '#475569',
+                                    }}
+                                  />
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      fontWeight: isSelected ? 700 : 500,
+                                      color: isSelected ? '#0f172a' : '#334155',
+                                    }}
+                                  >
+                                    {dept.name}
+                                  </Typography>
+                                </Box>
+                              }
+                            />
+                          </MenuItem>
+                        );
+                      })
+                    )}
+                  </Select>
+                </FormControl>
+                <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5 }}>
+                  {selectedDepts.length} of {departmentOptions.length} departments selected • Dynamically synced with College Settings
+                </Typography>
               </Grid>
 
-              {/* Batch Years */}
+              {/* Eligible Graduation Batch Years Dropdown Multi-Select */}
               <Grid item xs={12}>
-                <Typography variant="caption" fontWeight={700} sx={{ color: '#475569', display: 'block', mb: 0.5 }}>
-                  Eligible Graduation Batch Years:
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  {AVAILABLE_BATCHES.map((batch) => {
-                    const isSelected = selectedBatches.includes(batch);
-                    return (
-                      <Chip
-                        key={batch}
-                        label={`Class of ${batch}`}
-                        clickable
-                        color={isSelected ? 'primary' : 'default'}
-                        variant={isSelected ? 'filled' : 'outlined'}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedBatches(selectedBatches.filter((b) => b !== batch));
-                          } else {
-                            setSelectedBatches([...selectedBatches, batch]);
-                          }
-                        }}
-                      />
-                    );
-                  })}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
+                  <Typography variant="caption" fontWeight={700} sx={{ color: '#475569', display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    Eligible Graduation Batch Years:
+                    {isLoadingClasses && <CircularProgress size={12} sx={{ color: '#0284c7' }} />}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    {batchOptions.length > 0 && (
+                      <>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => setSelectedBatches(batchOptions)}
+                          sx={{ p: 0, minWidth: 'auto', fontSize: '0.72rem', textTransform: 'none', color: '#0284c7', fontWeight: 600 }}
+                        >
+                          Select All ({batchOptions.length})
+                        </Button>
+                        {selectedBatches.length > 0 && (
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={() => setSelectedBatches([])}
+                            sx={{ p: 0, minWidth: 'auto', fontSize: '0.72rem', textTransform: 'none', color: '#64748b', fontWeight: 600 }}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </Box>
                 </Box>
+
+                <FormControl fullWidth size="small">
+                  <Select
+                    id="eligible-batches-dropdown"
+                    multiple
+                    displayEmpty
+                    value={selectedBatches}
+                    onChange={(e: SelectChangeEvent<number[]>) => {
+                      const val = e.target.value;
+                      const nums = (typeof val === 'string' ? val.split(',') : (val as number[])).map(Number);
+                      setSelectedBatches(nums);
+                    }}
+                    input={<OutlinedInput />}
+                    renderValue={(selected) => {
+                      if (selected.length === 0) {
+                        return (
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                            Choose graduation batch years from College Settings...
+                          </Typography>
+                        );
+                      }
+                      return (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, py: 0.25 }}>
+                          {selected.map((batch) => (
+                            <Chip
+                              key={batch}
+                              label={`Class of ${batch}`}
+                              size="small"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onDelete={() => setSelectedBatches(selectedBatches.filter((b) => b !== batch))}
+                              sx={{
+                                height: 24,
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                bgcolor: '#f1f5f9',
+                                color: '#1e293b',
+                                borderColor: '#cbd5e1',
+                                '& .MuiChip-deleteIcon': {
+                                  color: '#64748b',
+                                  fontSize: 16,
+                                  '&:hover': { color: '#0f172a' },
+                                },
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      );
+                    }}
+                    MenuProps={{
+                      PaperProps: {
+                        sx: {
+                          maxHeight: 280,
+                          borderRadius: 2,
+                          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08)',
+                          border: '1px solid #e2e8f0',
+                        },
+                      },
+                    }}
+                  >
+                    {batchOptions.length === 0 ? (
+                      <MenuItem disabled value="">
+                        <Typography variant="body2" color="text.secondary">
+                          No graduation batch years configured in College Settings.
+                        </Typography>
+                      </MenuItem>
+                    ) : (
+                      batchOptions.map((batch) => {
+                        const isSelected = selectedBatches.includes(batch);
+                        return (
+                          <MenuItem
+                            key={batch}
+                            value={batch}
+                            sx={{
+                              py: 0.75,
+                              px: 1.5,
+                              bgcolor: isSelected ? 'rgba(2, 132, 199, 0.08)' : 'transparent',
+                              '&:hover': {
+                                bgcolor: isSelected ? 'rgba(2, 132, 199, 0.14)' : 'rgba(0, 0, 0, 0.04)',
+                              },
+                            }}
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              size="small"
+                              sx={{
+                                mr: 1,
+                                p: 0.5,
+                                color: '#94a3b8',
+                                '&.Mui-checked': { color: '#0284c7' },
+                              }}
+                            />
+                            <ListItemText
+                              primary={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Chip
+                                    label={batch}
+                                    size="small"
+                                    sx={{
+                                      height: 20,
+                                      fontSize: '0.7rem',
+                                      fontWeight: 700,
+                                      bgcolor: isSelected ? '#0284c7' : '#f1f5f9',
+                                      color: isSelected ? '#ffffff' : '#475569',
+                                    }}
+                                  />
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      fontWeight: isSelected ? 700 : 500,
+                                      color: isSelected ? '#0f172a' : '#334155',
+                                    }}
+                                  >
+                                    Class of {batch}
+                                  </Typography>
+                                </Box>
+                              }
+                            />
+                          </MenuItem>
+                        );
+                      })
+                    )}
+                  </Select>
+                </FormControl>
+                <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5 }}>
+                  {selectedBatches.length} of {batchOptions.length} graduation years selected • Dynamically synced with College Settings
+                </Typography>
               </Grid>
             </Grid>
 
@@ -1060,6 +1488,62 @@ export const PlacementDrivesPage: React.FC = () => {
           </DialogActions>
         </form>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => !deleteMutation.isPending && setDeleteConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <DeleteOutlineIcon color="error" />
+          Delete Placement Drive
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ color: '#334155', mb: 1.5 }}>
+            Are you sure you want to permanently delete the placement drive for <strong>{driveToDelete?.name}</strong>?
+          </Typography>
+          <Alert severity="warning" sx={{ fontSize: '0.8rem' }}>
+            This will remove this drive and all associated candidate registrations. This action cannot be undone.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() => setDeleteConfirmOpen(false)}
+            disabled={deleteMutation.isPending}
+            sx={{ textTransform: 'none' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={deleteMutation.isPending}
+            onClick={handleConfirmDelete}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            {deleteMutation.isPending ? <CircularProgress size={20} color="inherit" /> : 'Yes, Delete Drive'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar Notification */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%', fontWeight: 600 }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

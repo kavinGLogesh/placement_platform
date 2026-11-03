@@ -270,7 +270,10 @@ export class PlacementDriveRepository {
       return true;
     }
 
-    await prisma.placementDrive.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.driveRegistration.deleteMany({ where: { driveId: id } });
+      await tx.placementDrive.delete({ where: { id } });
+    });
     return true;
   }
 
