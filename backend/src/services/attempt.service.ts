@@ -45,8 +45,14 @@ export class AttemptService {
       }
       for (const [asmtId, asmt] of this.assessmentRepo.memStore.assessments.entries()) {
         if (asmt.status === 'PUBLISHED') {
+          if (asmt.isCompanyAssessment || asmt.companyId) {
+            continue; // Company assessments require explicit assignment
+          }
           const asgns = this.assessmentRepo.memStore.assignments.get(asmtId) || [];
-          if (asgns.length === 0 || asmt.departmentTargeting === 'ALL') {
+          const targetInfo = this.assessmentRepo.getAssessmentTargetInfo(asmtId);
+          if (targetInfo && targetInfo.departmentTargeting === 'SPECIFIC') {
+            // Specific department targeting checked in student tests
+          } else if (asgns.length === 0 || !targetInfo || targetInfo.departmentTargeting === 'ALL' || (asmt as any).departmentTargeting === 'ALL') {
             assignedAssessmentIds.add(asmtId);
           }
         }
@@ -73,9 +79,13 @@ export class AttemptService {
         assignedAssessmentIds.add(a.assessmentId);
       }
 
-      // 2. Published assessments open to ALL or targeted to student's department
+      // 2. Published assessments open to ALL or targeted to student's department (excluding restricted company assessments)
       const publishedAssessments = await prisma.assessment.findMany({
-        where: { status: 'PUBLISHED' },
+        where: {
+          status: 'PUBLISHED',
+          companyId: null,
+          isCompanyAssessment: false,
+        },
         include: {
           _count: { select: { papers: true, assignments: true } },
         },
@@ -90,8 +100,8 @@ export class AttemptService {
             assignedAssessmentIds.add(pa.id);
           }
         } else {
-          // Open to all: either 0 restrictive assignments or targeted to ALL
-          if (pa._count.assignments === 0 || !targetInfo || targetInfo.departmentTargeting === 'ALL') {
+          // Open to all: general assessments targeted to ALL or open by default
+          if (!targetInfo || targetInfo.departmentTargeting === 'ALL' || pa._count.assignments === 0) {
             assignedAssessmentIds.add(pa.id);
           }
         }
@@ -165,6 +175,44 @@ export class AttemptService {
     return items;
   }
 
+  async getStudentAttendanceStreak(studentId: string, timeZone: string): Promise<number> {
+    let dateFormatter: Intl.DateTimeFormat;
+    try {
+      dateFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+    } catch {
+      throw new AppError('Invalid time zone', 400);
+    }
+
+    const getDateKey = (date: Date): string => {
+      const parts = dateFormatter.formatToParts(date);
+      const year = parts.find((part) => part.type === 'year')?.value;
+      const month = parts.find((part) => part.type === 'month')?.value;
+      const day = parts.find((part) => part.type === 'day')?.value;
+      return `${year}-${month}-${day}`;
+    };
+
+    const now = new Date();
+    const attendedDates = new Set(
+      (await this.attemptRepo.getStudentAttemptStartTimes(studentId)).map(getDateKey)
+    );
+
+    let streak = 0;
+    const [year, month, date] = getDateKey(now).split('-').map(Number);
+    let day = Date.UTC(year, month - 1, date);
+    let dayKey = getDateKey(now);
+    while (attendedDates.has(dayKey)) {
+      streak += 1;
+      day -= 24 * 60 * 60 * 1000;
+      dayKey = new Date(day).toISOString().slice(0, 10);
+    }
+    return streak;
+  }
+
   // ===========================================================================
   // 2. START ASSESSMENT
   // ===========================================================================
@@ -192,35 +240,64 @@ export class AttemptService {
         throw new AppError('Assessment schedule has ended', 400);
       }
 
+      // Fetch student details if available
+      const student = process.env.NODE_ENV === 'test'
+        ? null
+        : await prisma.student.findUnique({
+            where: { id: studentId },
+            select: { id: true, departmentId: true, classId: true, sectionId: true },
+          });
+
       // Check student assignment
       const assignments = await this.assessmentRepo.getAssessmentAssignments(assessmentId);
       let studentAssignment = assignments.find((a) => a.studentId === studentId);
 
+      // Check department/class/section level assignment
+      if (!studentAssignment && student) {
+        studentAssignment = assignments.find(
+          (a) =>
+            (a.departmentId && a.departmentId === student.departmentId && !a.studentId) ||
+            (a.classId && a.classId === student.classId && !a.studentId) ||
+            (a.sectionId && a.sectionId === student.sectionId && !a.studentId)
+        );
+      }
+
       if (!studentAssignment) {
-        if (assignments.length > 0) {
+        const isCompanyAssessment = Boolean(assessment.companyId || (assessment as any).isCompanyAssessment);
+
+        // Company assessments strictly require explicit candidate assignment
+        if (isCompanyAssessment) {
+          throw new AppError('You are not assigned to this assessment', 403);
+        }
+
+        const targetInfo = this.assessmentRepo.getAssessmentTargetInfo(assessmentId);
+        const memTargeting = (assessment as any).departmentTargeting;
+
+        let isEligible = false;
+        if (targetInfo && targetInfo.departmentTargeting === 'SPECIFIC') {
+          if (student?.departmentId && targetInfo.departmentIds.includes(student.departmentId)) {
+            isEligible = true;
+          }
+        } else if (
+          (!targetInfo && !memTargeting) ||
+          targetInfo?.departmentTargeting === 'ALL' ||
+          memTargeting === 'ALL'
+        ) {
+          // Open to all students
+          isEligible = true;
+        }
+
+        if (!isEligible) {
           throw new AppError('You are not assigned to this assessment', 403);
         }
 
         // Auto-allocate student if the assessment is published and eligible
-        const student = process.env.NODE_ENV === 'test'
-          ? null
-          : await prisma.student.findUnique({
-              where: { id: studentId },
-              select: { id: true, departmentId: true, classId: true, sectionId: true },
-            });
-
-        const targetInfo = this.assessmentRepo.getAssessmentTargetInfo(assessmentId);
-        if (targetInfo && targetInfo.departmentTargeting === 'SPECIFIC') {
-          if (!student?.departmentId || !targetInfo.departmentIds.includes(student.departmentId)) {
-            throw new AppError('You are not assigned to this assessment', 403);
-          }
-        }
-
         const papers = await this.assessmentRepo.getAssessmentPapers(assessmentId);
         if (!papers || papers.length === 0) {
           throw new AppError('Cannot start assessment: No examination papers have been generated', 400);
         }
 
+        // Allocate paper round-robin based on total assignments count so papers are evenly distributed
         const paperIndex = assignments.length % papers.length;
         const assignedPaper = papers[paperIndex];
 

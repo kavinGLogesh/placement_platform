@@ -6,8 +6,11 @@ import {
   DriveEligibilitySummary,
   DriveRegistration,
   RegisterStudentsInput,
+  ShortlistCandidatesInput,
   UpdateRegistrationStageInput,
   DriveStatus,
+  DriveSelectionOverview,
+  MarkCandidateSelectionInput,
 } from '../types/placement-drive.types.js';
 
 interface ApiResponse<T> {
@@ -53,6 +56,16 @@ export const placementDriveService = {
     return res.data.data;
   },
 
+  async shortlistCandidates(
+    driveId: string,
+    data: ShortlistCandidatesInput
+  ): Promise<{ shortlistedCount: number; notifiedCount: number; registrations: DriveRegistration[] }> {
+    const res = await apiClient.post<
+      ApiResponse<{ shortlistedCount: number; notifiedCount: number; registrations: DriveRegistration[] }>
+    >(`/admin/placement-drives/${driveId}/shortlist`, data);
+    return res.data.data;
+  },
+
   async registerStudents(
     driveId: string,
     data: RegisterStudentsInput
@@ -85,6 +98,24 @@ export const placementDriveService = {
   async getStudentDriveHistory(studentId: string): Promise<DriveRegistration[]> {
     const res = await apiClient.get<ApiResponse<DriveRegistration[]>>(
       `/admin/placement-drives/students/${studentId}/history`
+    );
+    return res.data.data;
+  },
+
+  async getSelectionOverview(driveId: string): Promise<DriveSelectionOverview> {
+    const res = await apiClient.get<ApiResponse<DriveSelectionOverview>>(
+      `/admin/placement-drives/${driveId}/selection-overview`
+    );
+    return res.data.data;
+  },
+
+  async markCandidatesSelection(
+    driveId: string,
+    data: MarkCandidateSelectionInput
+  ): Promise<{ updatedCount: number; status: string }> {
+    const res = await apiClient.post<ApiResponse<{ updatedCount: number; status: string }>>(
+      `/admin/placement-drives/${driveId}/mark-selection`,
+      data
     );
     return res.data.data;
   },

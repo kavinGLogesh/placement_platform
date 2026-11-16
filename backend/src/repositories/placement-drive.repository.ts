@@ -7,12 +7,14 @@ import {
   DriveRegistrationDto,
   DriveStatus,
   SelectionStage,
+  CandidateAuditLogDto,
 } from '../types/placement-drive.types.js';
 
 export class PlacementDriveRepository {
   // In-memory storage for isolated tests / offline
   private memDrives: Map<string, PlacementDriveDto> = new Map();
   private memRegistrations: Map<string, DriveRegistrationDto> = new Map();
+  private memAuditLogs: Map<string, CandidateAuditLogDto> = new Map();
 
   async createDrive(dto: CreatePlacementDriveDto, createdById?: string): Promise<PlacementDriveDto> {
     const driveDate = new Date(dto.driveDate);
@@ -44,6 +46,8 @@ export class PlacementDriveRepository {
           'Technical Round',
           'HR Interview',
         ],
+        registrationLink: dto.registrationLink?.trim() || null,
+        instructions: dto.instructions?.trim() || null,
         createdById: createdById || null,
         _count: { registrations: 0 },
         createdAt: new Date(),
@@ -75,6 +79,8 @@ export class PlacementDriveRepository {
         selectionProcess: dto.selectionProcess
           ? (dto.selectionProcess as any)
           : ['Online Assessment', 'Technical Round', 'HR Interview'],
+        registrationLink: dto.registrationLink?.trim() || null,
+        instructions: dto.instructions?.trim() || null,
         createdById: createdById || null,
       },
       include: {
@@ -201,6 +207,14 @@ export class PlacementDriveRepository {
           dto.selectionProcess !== undefined
             ? dto.selectionProcess
             : existing.selectionProcess,
+        registrationLink:
+          dto.registrationLink !== undefined
+            ? dto.registrationLink?.trim() || null
+            : existing.registrationLink,
+        instructions:
+          dto.instructions !== undefined
+            ? dto.instructions?.trim() || null
+            : existing.instructions,
         updatedAt: new Date(),
       };
       this.memDrives.set(id, updated);
@@ -247,6 +261,12 @@ export class PlacementDriveRepository {
           : {}),
         ...(dto.selectionProcess !== undefined
           ? { selectionProcess: dto.selectionProcess as any }
+          : {}),
+        ...(dto.registrationLink !== undefined
+          ? { registrationLink: dto.registrationLink?.trim() || null }
+          : {}),
+        ...(dto.instructions !== undefined
+          ? { instructions: dto.instructions?.trim() || null }
           : {}),
       },
       include: {
@@ -296,8 +316,18 @@ export class PlacementDriveRepository {
             name: true,
             registerNumber: true,
             collegeEmail: true,
+            year: true,
             cgpa: true,
             department: { select: { id: true, code: true, name: true } },
+            academicRecord: {
+              select: {
+                tenthPercentage: true,
+                twelfthPercentage: true,
+                activeBacklogs: true,
+                historyOfBacklogs: true,
+                ugCgpa: true,
+              },
+            },
           },
         },
         drive: {
@@ -333,8 +363,18 @@ export class PlacementDriveRepository {
             name: true,
             registerNumber: true,
             collegeEmail: true,
+            year: true,
             cgpa: true,
             department: { select: { id: true, code: true, name: true } },
+            academicRecord: {
+              select: {
+                tenthPercentage: true,
+                twelfthPercentage: true,
+                activeBacklogs: true,
+                historyOfBacklogs: true,
+                ugCgpa: true,
+              },
+            },
           },
         },
       },
@@ -348,7 +388,8 @@ export class PlacementDriveRepository {
     studentId: string,
     registeredBy: string,
     remarks?: string,
-    studentInfo?: any
+    studentInfo?: any,
+    initialStage: SelectionStage = SelectionStage.REGISTERED
   ): Promise<DriveRegistrationDto> {
     if (process.env.NODE_ENV === 'test') {
       const existing = await this.findRegistration(driveId, studentId);
@@ -361,7 +402,7 @@ export class PlacementDriveRepository {
         driveId,
         studentId,
         registeredBy,
-        currentStage: SelectionStage.REGISTERED,
+        currentStage: initialStage,
         stageRemarks: remarks || null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -392,7 +433,7 @@ export class PlacementDriveRepository {
         driveId,
         studentId,
         registeredBy,
-        currentStage: SelectionStage.REGISTERED,
+        currentStage: initialStage,
         stageRemarks: remarks || null,
       },
       include: {
@@ -402,8 +443,77 @@ export class PlacementDriveRepository {
             name: true,
             registerNumber: true,
             collegeEmail: true,
+            year: true,
             cgpa: true,
             department: { select: { id: true, code: true, name: true } },
+            academicRecord: {
+              select: {
+                tenthPercentage: true,
+                twelfthPercentage: true,
+                activeBacklogs: true,
+                historyOfBacklogs: true,
+                ugCgpa: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return reg as unknown as DriveRegistrationDto;
+  }
+
+  async upsertRegistration(
+    driveId: string,
+    studentId: string,
+    registeredBy: string,
+    stage: SelectionStage,
+    remarks?: string,
+    studentInfo?: any
+  ): Promise<DriveRegistrationDto> {
+    if (process.env.NODE_ENV === 'test') {
+      const existing = await this.findRegistration(driveId, studentId);
+      if (existing) {
+        existing.currentStage = stage;
+        existing.stageRemarks = remarks || existing.stageRemarks;
+        existing.updatedAt = new Date();
+        return existing;
+      }
+      return this.createRegistration(driveId, studentId, registeredBy, remarks, studentInfo, stage);
+    }
+
+    const reg = await prisma.driveRegistration.upsert({
+      where: { driveId_studentId: { driveId, studentId } },
+      create: {
+        driveId,
+        studentId,
+        registeredBy,
+        currentStage: stage,
+        stageRemarks: remarks || null,
+      },
+      update: {
+        currentStage: stage,
+        stageRemarks: remarks || null,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            registerNumber: true,
+            collegeEmail: true,
+            year: true,
+            cgpa: true,
+            department: { select: { id: true, code: true, name: true } },
+            academicRecord: {
+              select: {
+                tenthPercentage: true,
+                twelfthPercentage: true,
+                activeBacklogs: true,
+                historyOfBacklogs: true,
+                ugCgpa: true,
+              },
+            },
           },
         },
       },
@@ -444,8 +554,18 @@ export class PlacementDriveRepository {
             name: true,
             registerNumber: true,
             collegeEmail: true,
+            year: true,
             cgpa: true,
             department: { select: { id: true, code: true, name: true } },
+            academicRecord: {
+              select: {
+                tenthPercentage: true,
+                twelfthPercentage: true,
+                activeBacklogs: true,
+                historyOfBacklogs: true,
+                ugCgpa: true,
+              },
+            },
           },
         },
       },
@@ -483,6 +603,158 @@ export class PlacementDriveRepository {
     });
 
     return list as unknown as DriveRegistrationDto[];
+  }
+
+  async findRegistrationByDriveAndStudent(
+    driveId: string,
+    studentId: string
+  ): Promise<DriveRegistrationDto | null> {
+    if (process.env.NODE_ENV === 'test') {
+      const found = Array.from(this.memRegistrations.values()).find(
+        (r) => r.driveId === driveId && r.studentId === studentId
+      );
+      return found || null;
+    }
+
+    const reg = await prisma.driveRegistration.findUnique({
+      where: { driveId_studentId: { driveId, studentId } },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            registerNumber: true,
+            collegeEmail: true,
+            year: true,
+            cgpa: true,
+            department: { select: { id: true, code: true, name: true } },
+            academicRecord: {
+              select: {
+                tenthPercentage: true,
+                twelfthPercentage: true,
+                activeBacklogs: true,
+                historyOfBacklogs: true,
+                ugCgpa: true,
+              },
+            },
+          },
+        },
+        drive: {
+          select: {
+            id: true,
+            companyName: true,
+            jobRole: true,
+          },
+        },
+      },
+    });
+
+    return reg as unknown as DriveRegistrationDto | null;
+  }
+
+  async recordCandidateAuditLog(data: {
+    driveId: string;
+    studentId: string;
+    previousStage: SelectionStage | null;
+    newStage: SelectionStage;
+    changedBy: string;
+    remarks?: string | null;
+  }): Promise<CandidateAuditLogDto> {
+    if (process.env.NODE_ENV === 'test') {
+      const id = `audit-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+      const log: CandidateAuditLogDto = {
+        id,
+        driveId: data.driveId,
+        studentId: data.studentId,
+        previousStage: data.previousStage,
+        newStage: data.newStage,
+        changedBy: data.changedBy,
+        remarks: data.remarks || null,
+        createdAt: new Date(),
+      };
+      this.memAuditLogs.set(id, log);
+      return log;
+    }
+
+    const created = await prisma.driveCandidateAuditLog.create({
+      data: {
+        driveId: data.driveId,
+        studentId: data.studentId,
+        previousStage: data.previousStage,
+        newStage: data.newStage,
+        changedBy: data.changedBy,
+        remarks: data.remarks || null,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            registerNumber: true,
+            collegeEmail: true,
+          },
+        },
+      },
+    });
+
+    return created as unknown as CandidateAuditLogDto;
+  }
+
+  async getDriveAuditLogs(driveId: string): Promise<CandidateAuditLogDto[]> {
+    if (process.env.NODE_ENV === 'test') {
+      return Array.from(this.memAuditLogs.values())
+        .filter((l) => l.driveId === driveId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    const logs = await prisma.driveCandidateAuditLog.findMany({
+      where: { driveId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            registerNumber: true,
+            collegeEmail: true,
+          },
+        },
+      },
+    });
+
+    return logs as unknown as CandidateAuditLogDto[];
+  }
+
+  async bulkUpdateRegistrationStage(
+    registrationIds: string[],
+    stage: SelectionStage,
+    remarks?: string
+  ): Promise<number> {
+    if (registrationIds.length === 0) return 0;
+
+    if (process.env.NODE_ENV === 'test') {
+      let count = 0;
+      for (const id of registrationIds) {
+        const reg = this.memRegistrations.get(id);
+        if (reg) {
+          reg.currentStage = stage;
+          if (remarks !== undefined) reg.stageRemarks = remarks;
+          reg.updatedAt = new Date();
+          count++;
+        }
+      }
+      return count;
+    }
+
+    const res = await prisma.driveRegistration.updateMany({
+      where: { id: { in: registrationIds } },
+      data: {
+        currentStage: stage,
+        ...(remarks !== undefined ? { stageRemarks: remarks } : {}),
+      },
+    });
+
+    return res.count;
   }
 }
 

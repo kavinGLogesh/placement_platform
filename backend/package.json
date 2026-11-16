@@ -37,6 +37,7 @@
     "test:academic": "tsx --test --import ./tests/setup.ts tests/student_academic_records.test.ts",
     "test:direct-academic": "tsx --test --import ./tests/setup.ts tests/direct_academic_entry.test.ts",
     "test:placement-drive": "tsx --test --import ./tests/setup.ts tests/placement_drive.test.ts",
+    "test:tracking": "tsx --test --import ./tests/setup.ts tests/candidate_selection_tracking.test.ts",
     "test:all": "tsx --test --import ./tests/setup.ts tests/auth.test.ts tests/management.test.ts tests/question.test.ts tests/assessment.test.ts tests/attempt.test.ts tests/coding.test.ts tests/analytics.test.ts tests/report.test.ts tests/role_separation.test.ts tests/student_account_flow.test.ts tests/critical_audit_gaps.test.ts tests/advanced_anti_cheating.test.ts tests/structured_evaluation.test.ts tests/company_assessment.test.ts tests/company_intelligence.test.ts tests/assessment_attendance.test.ts tests/student_academic_records.test.ts tests/direct_academic_entry.test.ts tests/placement_drive.test.ts"
   },
   "keywords": [

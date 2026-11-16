@@ -1482,7 +1482,7 @@ export const AdminGdPage: React.FC = () => {
               </Alert>
             )}
 
-            <TableContainer component={Paper} variant="outlined">
+            <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <Table size="small">
                 <TableHead sx={{ bgcolor: '#EDF2FF' }}>
                   <TableRow>
@@ -1946,7 +1946,7 @@ export const AdminGdPage: React.FC = () => {
                 </Stack>
               </Box>
 
-              <TableContainer component={Paper} variant="outlined">
+              <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 <Table size="small">
                   <TableHead sx={{ backgroundColor: '#EDF2FF' }}>
                     <TableRow>

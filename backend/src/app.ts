@@ -1,6 +1,7 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import { env } from './config/env.config.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -11,7 +12,11 @@ export const createApp = (): Express => {
   const app = express();
 
   // Security headers
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    })
+  );
 
   // Cross-Origin Resource Sharing
   const configuredOrigins =
@@ -70,6 +75,9 @@ export const createApp = (): Express => {
 
   // HTTP Request Logger
   app.use(requestLogger);
+
+  // Static Uploads Storage
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
   // Mount REST API routes
   app.use('/api', apiRouter);

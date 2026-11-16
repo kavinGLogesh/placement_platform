@@ -5,6 +5,7 @@ import { env } from '../../config/env.config.js';
 import { Role } from '../../types/auth.types.js';
 import { hashPassword } from '../../utils/password.util.js';
 import { AppError } from '../../middleware/errorHandler.js';
+import { getAcademicStructure } from '../../utils/academic-structure.util.js';
 import {
   StudentImportRecordStatus,
   ColumnMappingResult,
@@ -183,6 +184,12 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000);
 
+export function parseNumeric(val: unknown): number | undefined {
+  if (val === undefined || val === null || val === '') return undefined;
+  const num = Number(val);
+  return isNaN(num) ? undefined : num;
+}
+
 export class AiStudentImportService {
   /**
    * Deterministic semantic heuristic mapping fallback
@@ -207,7 +214,7 @@ export class AiStudentImportService {
       return null;
     };
 
-    const department = findMatch(['dept', 'department', 'departmentname', 'branch', 'stream', 'deptcode']);
+    const department = findMatch(['dept', 'department', 'departmentname', 'deptcode']);
     const course = findMatch(['course', 'programme', 'program', 'degree', 'coursecode', 'major']);
     const className = findMatch(['class', 'batch', 'batchyear', 'classname', 'yearofstudy']);
     const section = findMatch(['section', 'sec', 'division', 'div', 'sectionname']);
@@ -217,14 +224,69 @@ export class AiStudentImportService {
     const dateOfBirth = findMatch(['dateofbirth', 'dob', 'birthdate', 'd_o_b', 'birth_date']);
     const collegeEmail = findMatch(['collegeemail', 'email', 'mail', 'emailid', 'studentemail', 'officialemail', 'emailaddress']);
     const year = findMatch(['year', 'currentyear', 'academicyear', 'studyyear']);
-    const cgpa = findMatch(['cgpa', 'gpa', 'score', 'percentage', 'mark']);
+    const cgpa = findMatch(['cgpa', 'overallcgpa', 'gpa']);
+
+    // 10th Standard Academic Marks
+    const tenthBoard = findMatch(['10thboard', 'tenthboard', 'sslcboard', 'matricboard', 'secondaryboard', '10board']);
+    const tenthPassingYear = findMatch(['10thpassingyear', '10thyear', 'tenthyear', 'tenthpassingyear', 'sslcyear', '10thpassyear', 'yearofpassing10th']);
+    const tenthMarksObtained = findMatch(['10thmarksobtained', '10thobtainedmarks', 'tenthmarksobtained', 'tenthabtainedmarks', 'tenthmarks', '10thmarks', '10thmark', 'sslcmarks', '10thscore', '10thscored']);
+    const tenthTotalMarks = findMatch(['10thtotalmarks', 'tenthtotalmarks', '10thmaxmarks', '10thtotal', 'tenthtotal', 'sslctotal', '10thmaximummarks']);
+    const tenthPercentage = findMatch(['10thpercentage', 'tenthpercentage', '10thpercent', '10thpct', 'sslcpercentage', '10percentage', '10th%']);
+
+    // 12th Standard / Diploma Academic Marks
+    const twelfthBoard = findMatch(['12thboard', 'twelfthboard', 'hscboard', 'plus2board', 'interboard', 'highersecondaryboard', '12board', 'diplomaboard']);
+    const twelfthPassingYear = findMatch(['12thpassingyear', '12thyear', 'twelfthyear', 'twelfthpassingyear', 'hscyear', '12thpassyear', 'yearofpassing12th']);
+    const twelfthMarksObtained = findMatch(['12thmarksobtained', '12thobtainedmarks', 'twelfthmarksobtained', 'twelfthobtainedmarks', '12thmarks', 'twelfthmarks', '12thmark', 'hscmarks', '12thscore', '12thscored', 'diplomamarks']);
+    const twelfthTotalMarks = findMatch(['12thtotalmarks', 'twelfthtotalmarks', '12thmaxmarks', '12thtotal', 'twelfthtotal', 'hsctotal', '12thmaximummarks', 'diplomatotal']);
+    const twelfthPercentage = findMatch(['12thpercentage', 'twelfthpercentage', '12thpercent', '12thpct', 'hscpercentage', '12percentage', '12th%', 'diplomapercentage']);
+
+    // Academic Structure & Level
+    const degreeLevel = findMatch(['degreelevel', 'level', 'ugpg', 'programlevel', 'studylevel']);
+    const currentSemester = findMatch(['currentsemester', 'semester', 'sem', 'currentsem', 'presentsemester']);
+
+    // Undergraduate (UG) Credentials
+    const ugDegree = findMatch(['ugdegree', 'undergraduatedegree', 'degreeprogram', 'ugcourse', 'undergraduatecourse']);
+    const ugBranch = findMatch(['ugbranch', 'branch', 'specialization', 'ugspecialization', 'stream']);
+    const ugStatus = findMatch(['ugstatus', 'undergraduatestatus', 'educationstatus', 'ugstudy', 'studystatus']);
+    const ugCgpa = findMatch(['ugcgpa', 'undergraduatecgpa', 'currentcgpa', 'finalcgpa', 'cgpa']);
+    const ugPercentage = findMatch(['ugpercentage', 'undergraduatepercentage', 'currentpercentage', 'finalpercentage', 'percentage', 'overallpercentage']);
+    const activeBacklogs = findMatch(['activebacklogs', 'backlogs', 'currentbacklogs', 'standingarrears', 'arrears', 'standingbacklogs', 'currentarrears']);
+    const historyOfBacklogs = findMatch(['historyofbacklogs', 'totalbacklogs', 'backloghistory', 'historyofarrears', 'arrearhistory', 'pastbacklogs']);
+
+    // Postgraduate (PG) Credentials
+    const pgDegree = findMatch(['pgdegree', 'postgraduatedegree', 'pgcourse', 'masterdegree']);
+    const pgStatus = findMatch(['pgstatus', 'postgraduatestatus']);
+    const pgCgpa = findMatch(['pgcgpa', 'postgraduatecgpa']);
+    const pgPercentage = findMatch(['pgpercentage', 'postgraduatepercentage']);
+
+    // Extended 30 Mandatory + 2 Optional Fields
+    const rollNo = findMatch(['rollno', 'rollnumber', 'roll_no', 'studentrollno']);
+    const gender = findMatch(['gender', 'sex']);
+    const whatsappNumber = findMatch(['whatsappnumber', 'whatsappno', 'wanumber', 'wano', 'whatsapp']);
+    const personalEmail = findMatch(['personalemail', 'personalmail', 'alternateemail', 'altemail', 'emailid', 'personalemailid']);
+    const schoolName = findMatch(['schoolname', '10thschool', '12thschool', 'school']);
+    const ugCollegeName = findMatch(['ugcollegename', 'collegename', 'ugcollege', 'college']);
+    const nativePlace = findMatch(['nativeplace', 'native', 'hometown', 'placeofbirth', 'place']);
+    const languagesKnown = findMatch(['languagesknown', 'languages', 'languages_known', 'mothertongue']);
+    const correspondenceAddress = findMatch(['correspondenceaddress', 'currentaddress', 'presentaddress', 'temporaryaddress', 'commaddress', 'addressforcommunication']);
+    const permanentAddress = findMatch(['permanentaddress', 'nativeaddress', 'homeaddress']);
+    const graduationYear = findMatch(['graduationyear', 'gradyear', 'yearofpassing', 'batchyear', 'passingyear']);
+    const arrearStatus = findMatch(['arrearstatus', 'standingarrears', 'arrears', 'currentarrears']);
+    const studentStatus = findMatch(['studentstatus', 'studystatus', 'admissionstatus']);
+    const placementWillingness = findMatch(['placementwillingness', 'willingness', 'interestedinplacement', 'placementready']);
+    const specialization = findMatch(['specialization', 'stream', 'ugspecialization', 'submajor']);
+    const skills = findMatch(['skills', 'technicalskills', 'skillset', 'skillsoptional']);
+    const internshipExperience = findMatch(['internshipexperience', 'internship', 'internships', 'workexperience', 'experience', 'internshipexperienceoptional']);
 
     let score = 0;
     if (department) score++;
-    if (course) score++;
+    if (course || ugDegree) score++;
     if (studentName) score++;
     if (registerNumber) score++;
     if (collegeEmail) score++;
+    if (tenthMarksObtained || tenthPercentage) score++;
+    if (twelfthMarksObtained || twelfthPercentage) score++;
+    if (ugCgpa || ugPercentage) score++;
 
     return {
       department,
@@ -238,9 +300,49 @@ export class AiStudentImportService {
       collegeEmail,
       year,
       cgpa,
+      tenthBoard,
+      tenthPassingYear,
+      tenthMarksObtained,
+      tenthTotalMarks,
+      tenthPercentage,
+      twelfthBoard,
+      twelfthPassingYear,
+      twelfthMarksObtained,
+      twelfthTotalMarks,
+      twelfthPercentage,
+      degreeLevel,
+      currentSemester,
+      ugDegree,
+      ugBranch,
+      ugStatus,
+      ugCgpa,
+      ugPercentage,
+      activeBacklogs,
+      historyOfBacklogs,
+      pgDegree,
+      pgStatus,
+      pgCgpa,
+      pgPercentage,
+      rollNo,
+      gender,
+      whatsappNumber,
+      personalEmail,
+      schoolName,
+      ugCollegeName,
+      nativePlace,
+      languagesKnown,
+      correspondenceAddress,
+      permanentAddress,
+      graduationYear,
+      arrearStatus,
+      studentStatus,
+      placementWillingness,
+      specialization,
+      skills,
+      internshipExperience,
       rawHeaders: headers,
       aiAssisted: false,
-      confidence: Math.round((score / 5) * 100),
+      confidence: Math.min(100, Math.round((score / 5) * 100)),
     };
   }
 
@@ -274,6 +376,29 @@ Map each column header to one of the canonical schema fields:
 - CollegeEmail: Student college email login address (e.g. student@college.edu.in)
 - Year: Current study year (e.g. 1, 2, 3, 4)
 - CGPA: Grade point average (e.g. 8.45)
+- TenthBoard: 10th school board (e.g. CBSE, State Board, ICSE)
+- TenthPassingYear: 10th passing year (e.g. 2020)
+- TenthMarksObtained: 10th obtained marks (e.g. 465)
+- TenthTotalMarks: 10th total/max marks (e.g. 500)
+- TenthPercentage: 10th percentage (e.g. 93.0)
+- TwelfthBoard: 12th/Diploma board (e.g. CBSE, State Board)
+- TwelfthPassingYear: 12th passing year (e.g. 2022)
+- TwelfthMarksObtained: 12th obtained marks (e.g. 558)
+- TwelfthTotalMarks: 12th total/max marks (e.g. 600)
+- TwelfthPercentage: 12th percentage (e.g. 93.0)
+- DegreeLevel: Degree level UG or PG
+- CurrentSemester: Current semester number (e.g. 1, 2, 3, 4, 5, 6)
+- UgDegree: UG degree program (e.g. B.Sc IT, B.E CSE, B.Com, BCA)
+- UgBranch: UG branch/specialization (e.g. Computer Science, Information Technology)
+- UgStatus: UG education status (STUDYING or COMPLETED)
+- UgCgpa: UG CGPA (e.g. 8.45)
+- UgPercentage: UG percentage (e.g. 80.27)
+- ActiveBacklogs: Current standing backlogs/arrears count
+- HistoryOfBacklogs: Total history of backlogs/arrears count
+- PgDegree: PG degree program if applicable (e.g. M.Sc, MCA, MBA)
+- PgStatus: PG education status (STUDYING or COMPLETED)
+- PgCgpa: PG CGPA (e.g. 8.5)
+- PgPercentage: PG percentage (e.g. 80.75)
 
 Uploaded Column Headers:
 ${JSON.stringify(headers, null, 2)}
@@ -294,6 +419,29 @@ Return ONLY valid JSON matching this exact structure:
   "CollegeEmail": string or null,
   "Year": string or null,
   "CGPA": string or null,
+  "TenthBoard": string or null,
+  "TenthPassingYear": string or null,
+  "TenthMarksObtained": string or null,
+  "TenthTotalMarks": string or null,
+  "TenthPercentage": string or null,
+  "TwelfthBoard": string or null,
+  "TwelfthPassingYear": string or null,
+  "TwelfthMarksObtained": string or null,
+  "TwelfthTotalMarks": string or null,
+  "TwelfthPercentage": string or null,
+  "DegreeLevel": string or null,
+  "CurrentSemester": string or null,
+  "UgDegree": string or null,
+  "UgBranch": string or null,
+  "UgStatus": string or null,
+  "UgCgpa": string or null,
+  "UgPercentage": string or null,
+  "ActiveBacklogs": string or null,
+  "HistoryOfBacklogs": string or null,
+  "PgDegree": string or null,
+  "PgStatus": string or null,
+  "PgCgpa": string or null,
+  "PgPercentage": string or null,
   "reasoning": string
 }`;
 
@@ -311,7 +459,7 @@ Return ONLY valid JSON matching this exact structure:
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 600,
+            maxOutputTokens: 900,
             responseMimeType: 'application/json',
           },
         }),
@@ -344,6 +492,29 @@ Return ONLY valid JSON matching this exact structure:
         collegeEmail: headers.includes(parsedAi.CollegeEmail) ? parsedAi.CollegeEmail : heuristic.collegeEmail,
         year: headers.includes(parsedAi.Year) ? parsedAi.Year : heuristic.year,
         cgpa: headers.includes(parsedAi.CGPA) ? parsedAi.CGPA : heuristic.cgpa,
+        tenthBoard: headers.includes(parsedAi.TenthBoard) ? parsedAi.TenthBoard : heuristic.tenthBoard,
+        tenthPassingYear: headers.includes(parsedAi.TenthPassingYear) ? parsedAi.TenthPassingYear : heuristic.tenthPassingYear,
+        tenthMarksObtained: headers.includes(parsedAi.TenthMarksObtained) ? parsedAi.TenthMarksObtained : heuristic.tenthMarksObtained,
+        tenthTotalMarks: headers.includes(parsedAi.TenthTotalMarks) ? parsedAi.TenthTotalMarks : heuristic.tenthTotalMarks,
+        tenthPercentage: headers.includes(parsedAi.TenthPercentage) ? parsedAi.TenthPercentage : heuristic.tenthPercentage,
+        twelfthBoard: headers.includes(parsedAi.TwelfthBoard) ? parsedAi.TwelfthBoard : heuristic.twelfthBoard,
+        twelfthPassingYear: headers.includes(parsedAi.TwelfthPassingYear) ? parsedAi.TwelfthPassingYear : heuristic.twelfthPassingYear,
+        twelfthMarksObtained: headers.includes(parsedAi.TwelfthMarksObtained) ? parsedAi.TwelfthMarksObtained : heuristic.twelfthMarksObtained,
+        twelfthTotalMarks: headers.includes(parsedAi.TwelfthTotalMarks) ? parsedAi.TwelfthTotalMarks : heuristic.twelfthTotalMarks,
+        twelfthPercentage: headers.includes(parsedAi.TwelfthPercentage) ? parsedAi.TwelfthPercentage : heuristic.twelfthPercentage,
+        degreeLevel: headers.includes(parsedAi.DegreeLevel) ? parsedAi.DegreeLevel : heuristic.degreeLevel,
+        currentSemester: headers.includes(parsedAi.CurrentSemester) ? parsedAi.CurrentSemester : heuristic.currentSemester,
+        ugDegree: headers.includes(parsedAi.UgDegree) ? parsedAi.UgDegree : heuristic.ugDegree,
+        ugBranch: headers.includes(parsedAi.UgBranch) ? parsedAi.UgBranch : heuristic.ugBranch,
+        ugStatus: headers.includes(parsedAi.UgStatus) ? parsedAi.UgStatus : heuristic.ugStatus,
+        ugCgpa: headers.includes(parsedAi.UgCgpa) ? parsedAi.UgCgpa : heuristic.ugCgpa,
+        ugPercentage: headers.includes(parsedAi.UgPercentage) ? parsedAi.UgPercentage : heuristic.ugPercentage,
+        activeBacklogs: headers.includes(parsedAi.ActiveBacklogs) ? parsedAi.ActiveBacklogs : heuristic.activeBacklogs,
+        historyOfBacklogs: headers.includes(parsedAi.HistoryOfBacklogs) ? parsedAi.HistoryOfBacklogs : heuristic.historyOfBacklogs,
+        pgDegree: headers.includes(parsedAi.PgDegree) ? parsedAi.PgDegree : heuristic.pgDegree,
+        pgStatus: headers.includes(parsedAi.PgStatus) ? parsedAi.PgStatus : heuristic.pgStatus,
+        pgCgpa: headers.includes(parsedAi.PgCgpa) ? parsedAi.PgCgpa : heuristic.pgCgpa,
+        pgPercentage: headers.includes(parsedAi.PgPercentage) ? parsedAi.PgPercentage : heuristic.pgPercentage,
         rawHeaders: headers,
         aiAssisted: true,
         confidence: 96,
@@ -555,6 +726,68 @@ Return ONLY valid JSON matching this exact structure:
         statusReasons.push(`DOB "${String(rawDob)}" could not be parsed to standard format`);
       }
 
+      // 10th Standard Academic Marks
+      const tenthBoard = mapping.tenthBoard && row[mapping.tenthBoard] ? String(row[mapping.tenthBoard]).trim() : undefined;
+      const tenthPassingYear = mapping.tenthPassingYear ? parseNumeric(row[mapping.tenthPassingYear]) : undefined;
+      const tenthTotalMarks = mapping.tenthTotalMarks ? parseNumeric(row[mapping.tenthTotalMarks]) : undefined;
+      const tenthMarksObtained = mapping.tenthMarksObtained ? parseNumeric(row[mapping.tenthMarksObtained]) : undefined;
+      let tenthPercentage = mapping.tenthPercentage ? parseNumeric(row[mapping.tenthPercentage]) : undefined;
+      if (tenthPercentage === undefined && tenthTotalMarks && tenthTotalMarks > 0 && tenthMarksObtained !== undefined && tenthMarksObtained >= 0) {
+        tenthPercentage = parseFloat(((tenthMarksObtained / tenthTotalMarks) * 100).toFixed(2));
+      }
+
+      // 12th Standard Academic Marks
+      const twelfthBoard = mapping.twelfthBoard && row[mapping.twelfthBoard] ? String(row[mapping.twelfthBoard]).trim() : undefined;
+      const twelfthPassingYear = mapping.twelfthPassingYear ? parseNumeric(row[mapping.twelfthPassingYear]) : undefined;
+      const twelfthTotalMarks = mapping.twelfthTotalMarks ? parseNumeric(row[mapping.twelfthTotalMarks]) : undefined;
+      const twelfthObtainedMarks = mapping.twelfthMarksObtained ? parseNumeric(row[mapping.twelfthMarksObtained]) : undefined;
+      let twelfthPercentage = mapping.twelfthPercentage ? parseNumeric(row[mapping.twelfthPercentage]) : undefined;
+      if (twelfthPercentage === undefined && twelfthTotalMarks && twelfthTotalMarks > 0 && twelfthObtainedMarks !== undefined && twelfthObtainedMarks >= 0) {
+        twelfthPercentage = parseFloat(((twelfthObtainedMarks / twelfthTotalMarks) * 100).toFixed(2));
+      }
+
+      // UG Credentials
+      const ugDegree = mapping.ugDegree && row[mapping.ugDegree] ? String(row[mapping.ugDegree]).trim() : rawCourse || undefined;
+      const ugBranch = mapping.ugBranch && row[mapping.ugBranch] ? String(row[mapping.ugBranch]).trim() : rawDept || undefined;
+      const ugStatus = mapping.ugStatus && row[mapping.ugStatus] ? String(row[mapping.ugStatus]).trim().toUpperCase() : 'STUDYING';
+      let ugCgpa = mapping.ugCgpa ? parseNumeric(row[mapping.ugCgpa]) : undefined;
+      let ugPercentage = mapping.ugPercentage ? parseNumeric(row[mapping.ugPercentage]) : undefined;
+      if (ugCgpa === undefined && parsedCgpa !== undefined) {
+        ugCgpa = parsedCgpa;
+      }
+      if (parsedCgpa === undefined && ugCgpa !== undefined) {
+        parsedCgpa = ugCgpa;
+      }
+      if (ugPercentage === undefined && ugCgpa !== undefined && ugCgpa >= 0 && ugCgpa <= 10) {
+        ugPercentage = parseFloat((ugCgpa * 9.5).toFixed(2));
+      }
+
+      const activeBacklogs = mapping.activeBacklogs ? (parseNumeric(row[mapping.activeBacklogs]) ?? 0) : 0;
+      const historyOfBacklogs = mapping.historyOfBacklogs ? (parseNumeric(row[mapping.historyOfBacklogs]) ?? 0) : 0;
+
+      // PG Credentials
+      const pgDegree = mapping.pgDegree && row[mapping.pgDegree] ? String(row[mapping.pgDegree]).trim() : undefined;
+      const pgStatus = mapping.pgStatus && row[mapping.pgStatus] ? String(row[mapping.pgStatus]).trim().toUpperCase() : undefined;
+      const pgCgpa = mapping.pgCgpa ? parseNumeric(row[mapping.pgCgpa]) : undefined;
+      let pgPercentage = mapping.pgPercentage ? parseNumeric(row[mapping.pgPercentage]) : undefined;
+      if (pgPercentage === undefined && pgCgpa !== undefined && pgCgpa >= 0 && pgCgpa <= 10) {
+        pgPercentage = parseFloat((pgCgpa * 9.5).toFixed(2));
+      }
+
+      // Academic Structure & Level
+      const rawDegreeLevel = mapping.degreeLevel && row[mapping.degreeLevel] ? String(row[mapping.degreeLevel]).trim().toUpperCase() : undefined;
+      const academicStructure = getAcademicStructure({
+        degreeLevel: rawDegreeLevel,
+        degreeName: ugDegree || pgDegree || rawCourse,
+        courseName: rawCourse,
+        departmentName: rawDept,
+      });
+      const degreeLevel = rawDegreeLevel || academicStructure.degreeLevel;
+      let currentSemester = mapping.currentSemester ? parseNumeric(row[mapping.currentSemester]) : undefined;
+      if (!currentSemester && parsedYear > 0) {
+        currentSemester = Math.min(parsedYear * 2 - 1, academicStructure.totalSemesters);
+      }
+
       // Determine final status
       let status: StudentImportRecordStatus = 'VALID';
       if (isDuplicate) {
@@ -586,6 +819,29 @@ Return ONLY valid JSON matching this exact structure:
         collegeEmail: rawEmail,
         year: parsedYear,
         cgpa: parsedCgpa,
+        tenthBoard,
+        tenthPassingYear,
+        tenthMarksObtained,
+        tenthTotalMarks,
+        tenthPercentage,
+        twelfthBoard,
+        twelfthPassingYear,
+        twelfthObtainedMarks,
+        twelfthTotalMarks,
+        twelfthPercentage,
+        degreeLevel,
+        currentSemester,
+        ugDegree,
+        ugBranch,
+        ugStatus,
+        ugCgpa,
+        ugPercentage,
+        activeBacklogs,
+        historyOfBacklogs,
+        pgDegree,
+        pgStatus,
+        pgCgpa,
+        pgPercentage,
         status,
         statusReasons,
         isDuplicate,
@@ -778,12 +1034,13 @@ Return ONLY valid JSON matching this exact structure:
         courseMap.get(`${departmentId}:${nameClean.toLowerCase()}`);
       if (existing) return existing;
 
+      const struct = getAcademicStructure({ courseName: nameClean, courseCode: codeClean });
       const created = await prisma.course.create({
         data: {
           departmentId,
           code: codeClean,
           name: nameClean,
-          durationYears: 4,
+          durationYears: struct.durationYears,
         },
       });
       courseMap.set(`${departmentId}:${created.code.toUpperCase()}`, created);
@@ -841,37 +1098,170 @@ Return ONLY valid JSON matching this exact structure:
         const cls = await resolveClass(dept.id, crs.id, item.year || 1);
         const sec = await resolveSection(cls.id, item.section || 'A');
 
-        // Execute safe per-student creation
+        const structure = getAcademicStructure({
+          degreeLevel: item.degreeLevel,
+          degreeName: item.ugDegree || item.pgDegree || crs.name,
+          courseName: crs.name,
+          courseCode: crs.code,
+          departmentName: dept.name,
+          departmentCode: dept.code,
+        });
+
+        const cgpaValue = (item.ugCgpa ?? item.cgpa) ?? null;
+        const pctValue = item.ugPercentage ?? (cgpaValue !== null ? parseFloat((cgpaValue * 9.5).toFixed(2)) : null);
+        const currentSemesterVal = item.currentSemester || Math.min((item.year || 1) * 2 - 1, structure.totalSemesters);
+
+        // Execute safe per-student creation or synchronization
         await prisma.$transaction(async (tx) => {
-          // 1. Create User account with role STUDENT, common temporary password, and mustChangePassword=true
-          const user = await tx.user.create({
-            data: {
-              email: item.collegeEmail.toLowerCase().trim(),
-              passwordHash: commonPasswordHash,
-              role: Role.STUDENT,
-              isActive: true,
-              mustChangePassword: true,
+          let studentId: string;
+
+          // Check if student already exists by registerNumber or collegeEmail
+          const existing = await tx.student.findFirst({
+            where: {
+              OR: [
+                { registerNumber: item.registerNumber.toUpperCase().trim() },
+                { collegeEmail: item.collegeEmail.toLowerCase().trim() },
+              ],
             },
           });
 
-          // 2. Create Student profile (DOB stored as student metadata, not password)
-          await tx.student.create({
-            data: {
-              userId: user.id,
-              registerNumber: item.registerNumber.toUpperCase().trim(),
-              name: item.studentName.trim(),
-              collegeEmail: item.collegeEmail.toLowerCase().trim(),
-              phone: item.mobileNumber?.trim() || null,
-              dob: item.dateOfBirth?.trim() || null,
-              departmentId: dept.id,
-              courseId: crs.id,
-              classId: cls.id,
-              sectionId: sec.id,
-              year: item.year || 1,
-              cgpa: item.cgpa !== undefined ? item.cgpa : null,
-              status: 'ACTIVE',
+          if (existing) {
+            // Update existing student profile
+            const updated = await tx.student.update({
+              where: { id: existing.id },
+              data: {
+                name: item.studentName.trim(),
+                phone: item.mobileNumber?.trim() || existing.phone,
+                dob: item.dateOfBirth?.trim() || existing.dob,
+                departmentId: dept.id,
+                courseId: crs.id,
+                classId: cls.id,
+                sectionId: sec.id,
+                year: item.year || existing.year,
+                cgpa: cgpaValue ?? existing.cgpa,
+              },
+            });
+            studentId = updated.id;
+          } else {
+            // 1. Create User account with role STUDENT if not exists
+            let user = await tx.user.findUnique({
+              where: { email: item.collegeEmail.toLowerCase().trim() },
+            });
+            if (!user) {
+              user = await tx.user.create({
+                data: {
+                  email: item.collegeEmail.toLowerCase().trim(),
+                  passwordHash: commonPasswordHash,
+                  role: Role.STUDENT,
+                  isActive: true,
+                  mustChangePassword: true,
+                },
+              });
+            }
+
+            // 2. Create Student profile
+            const created = await tx.student.create({
+              data: {
+                userId: user.id,
+                registerNumber: item.registerNumber.toUpperCase().trim(),
+                name: item.studentName.trim(),
+                collegeEmail: item.collegeEmail.toLowerCase().trim(),
+                phone: item.mobileNumber?.trim() || null,
+                dob: item.dateOfBirth?.trim() || null,
+                departmentId: dept.id,
+                courseId: crs.id,
+                classId: cls.id,
+                sectionId: sec.id,
+                year: item.year || 1,
+                cgpa: cgpaValue,
+                status: 'ACTIVE',
+              },
+            });
+            studentId = created.id;
+          }
+
+          // 3. Upsert StudentAcademicRecord
+          const academicRecord = await tx.studentAcademicRecord.upsert({
+            where: { studentId },
+            create: {
+              studentId,
+              tenthBoard: item.tenthBoard || null,
+              tenthPassingYear: item.tenthPassingYear || null,
+              tenthObtainedMarks: item.tenthMarksObtained || null,
+              tenthTotalMarks: item.tenthTotalMarks || null,
+              tenthPercentage: item.tenthPercentage || null,
+              twelfthBoard: item.twelfthBoard || null,
+              twelfthPassingYear: item.twelfthPassingYear || null,
+              twelfthObtainedMarks: item.twelfthObtainedMarks || null,
+              twelfthTotalMarks: item.twelfthTotalMarks || null,
+              twelfthPercentage: item.twelfthPercentage || null,
+              degreeLevel: item.degreeLevel || structure.degreeLevel,
+              studyStatus: item.ugStatus || 'STUDYING',
+              currentSemester: currentSemesterVal,
+              ugDegree: item.ugDegree || crs.name || null,
+              ugBranch: item.ugBranch || dept.name || null,
+              ugStatus: item.ugStatus || 'STUDYING',
+              ugCgpa: item.ugCgpa ?? cgpaValue,
+              ugPercentage: item.ugPercentage ?? pctValue,
+              currentCgpa: cgpaValue,
+              overallPercentage: pctValue,
+              activeBacklogs: item.activeBacklogs || 0,
+              historyOfBacklogs: item.historyOfBacklogs || 0,
+              pgDegree: item.pgDegree || null,
+              pgStatus: item.pgStatus || null,
+              pgCgpa: item.pgCgpa || null,
+              pgPercentage: item.pgPercentage || null,
+            },
+            update: {
+              ...(item.tenthBoard ? { tenthBoard: item.tenthBoard } : {}),
+              ...(item.tenthPassingYear ? { tenthPassingYear: item.tenthPassingYear } : {}),
+              ...(item.tenthMarksObtained !== undefined ? { tenthObtainedMarks: item.tenthMarksObtained } : {}),
+              ...(item.tenthTotalMarks !== undefined ? { tenthTotalMarks: item.tenthTotalMarks } : {}),
+              ...(item.tenthPercentage !== undefined ? { tenthPercentage: item.tenthPercentage } : {}),
+              ...(item.twelfthBoard ? { twelfthBoard: item.twelfthBoard } : {}),
+              ...(item.twelfthPassingYear ? { twelfthPassingYear: item.twelfthPassingYear } : {}),
+              ...(item.twelfthObtainedMarks !== undefined ? { twelfthObtainedMarks: item.twelfthObtainedMarks } : {}),
+              ...(item.twelfthTotalMarks !== undefined ? { twelfthTotalMarks: item.twelfthTotalMarks } : {}),
+              ...(item.twelfthPercentage !== undefined ? { twelfthPercentage: item.twelfthPercentage } : {}),
+              degreeLevel: item.degreeLevel || structure.degreeLevel,
+              currentSemester: currentSemesterVal,
+              ...(item.ugDegree ? { ugDegree: item.ugDegree } : {}),
+              ...(item.ugBranch ? { ugBranch: item.ugBranch } : {}),
+              ...(item.ugStatus ? { ugStatus: item.ugStatus, studyStatus: item.ugStatus } : {}),
+              ...(item.ugCgpa !== undefined ? { ugCgpa: item.ugCgpa } : (cgpaValue !== null ? { ugCgpa: cgpaValue } : {})),
+              ...(item.ugPercentage !== undefined ? { ugPercentage: item.ugPercentage } : (pctValue !== null ? { ugPercentage: pctValue } : {})),
+              ...(cgpaValue !== null ? { currentCgpa: cgpaValue } : {}),
+              ...(pctValue !== null ? { overallPercentage: pctValue } : {}),
+              activeBacklogs: item.activeBacklogs ?? 0,
+              historyOfBacklogs: item.historyOfBacklogs ?? 0,
+              ...(item.pgDegree ? { pgDegree: item.pgDegree } : {}),
+              ...(item.pgStatus ? { pgStatus: item.pgStatus } : {}),
+              ...(item.pgCgpa !== undefined ? { pgCgpa: item.pgCgpa } : {}),
+              ...(item.pgPercentage !== undefined ? { pgPercentage: item.pgPercentage } : {}),
             },
           });
+
+          // 4. Initialize / Ensure semester records strictly up to structure.totalSemesters (Arts & Science = 6, PG = 4, Engineering = 8)
+          for (let sem = 1; sem <= structure.totalSemesters; sem++) {
+            await tx.studentSemesterRecord.upsert({
+              where: {
+                academicRecordId_semesterNumber: {
+                  academicRecordId: academicRecord.id,
+                  semesterNumber: sem,
+                },
+              },
+              create: {
+                academicRecordId: academicRecord.id,
+                semesterNumber: sem,
+                sgpa: null,
+                cgpa: null,
+                totalCredits: 24,
+                creditsEarned: 24,
+                backlogsCount: 0,
+              },
+              update: {}, // preserve existing semester entries
+            });
+          }
         });
 
         createdCredentials.push({

@@ -12,6 +12,7 @@ export interface TokenPayload {
 
 export interface StudentProfileDto {
   id: string;
+  name: string;
   registerNumber: string;
   department: string;
   batchYear: number;

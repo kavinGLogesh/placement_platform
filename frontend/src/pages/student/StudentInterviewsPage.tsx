@@ -346,7 +346,7 @@ export const StudentInterviewsPage: React.FC = () => {
                         Criterion-wise Marks (Human Evaluated)
                       </Typography>
 
-                      <TableContainer component={Paper} variant="outlined">
+                      <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                         <Table size="small">
                           <TableHead sx={{ backgroundColor: '#EDF2FF' }}>
                             <TableRow>

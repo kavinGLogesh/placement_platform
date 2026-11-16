@@ -42,6 +42,8 @@ import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import PeopleIcon from '@mui/icons-material/People';
 import PersonOffIcon from '@mui/icons-material/PersonOff';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
+import VideocamIcon from '@mui/icons-material/Videocam';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { attemptService } from '../../services/attempt.service.js';
 import { QuestionContentRenderer } from '../../components/common/QuestionContentRenderer.js';
@@ -68,6 +70,7 @@ export const StudentAttemptPage: React.FC = () => {
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number | null>(null);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,8 +91,46 @@ export const StudentAttemptPage: React.FC = () => {
   const lastViolationTimeRef = useRef<{ type: AttemptViolationType; time: number } | null>(null);
   const mountTimeRef = useRef(Date.now());
 
+  // Real Camera Proctoring Gate
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraRetryKey, setCameraRetryKey] = useState(0);
+
+  const handleCameraReady = useCallback((ready: boolean, errorMsg?: string | null) => {
+    setCameraReady(ready);
+    setCameraError(errorMsg || null);
+  }, []);
+
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAutoSubmittingRef = useRef(false);
+
+  // Complete webcam hardware & media track release to guarantee camera & light turn off immediately
+  const stopAllMediaTracks = useCallback(() => {
+    try {
+      const videos = document.querySelectorAll('video');
+      videos.forEach((video) => {
+        try {
+          video.pause();
+          const stream = video.srcObject as MediaStream | null;
+          if (stream && typeof stream.getTracks === 'function') {
+            stream.getTracks().forEach((track) => {
+              try {
+                track.enabled = false;
+                track.stop();
+              } catch {
+                // track stop safety
+              }
+            });
+          }
+          video.srcObject = null;
+        } catch {
+          // video cleanup safety
+        }
+      });
+    } catch {
+      // query safety
+    }
+  }, []);
 
   // Assessment-Only Fullscreen Handlers
   const exitFullscreen = useCallback(async () => {
@@ -144,6 +185,7 @@ export const StudentAttemptPage: React.FC = () => {
   // Auto-redirect to student dashboard when terminated
   useEffect(() => {
     if (!isTerminated) return;
+    stopAllMediaTracks();
     setRedirectCountdown(8);
     const interval = setInterval(() => {
       setRedirectCountdown((prev) => {
@@ -157,11 +199,20 @@ export const StudentAttemptPage: React.FC = () => {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [isTerminated, exitFullscreen, navigate]);
+  }, [isTerminated, exitFullscreen, navigate, stopAllMediaTracks]);
 
-  // Cleanup: Guarantee fullscreen is always exited if component unmounts (student leaves test page)
+  // Cleanup: Guarantee fullscreen is always exited and webcam streams released if component unmounts
   useEffect(() => {
+    const handlePageExit = () => {
+      stopAllMediaTracks();
+    };
+    window.addEventListener('beforeunload', handlePageExit);
+    window.addEventListener('pagehide', handlePageExit);
+
     return () => {
+      stopAllMediaTracks();
+      window.removeEventListener('beforeunload', handlePageExit);
+      window.removeEventListener('pagehide', handlePageExit);
       hasEnteredFullscreenRef.current = false;
       const inFs = Boolean(
         document.fullscreenElement ||
@@ -181,7 +232,7 @@ export const StudentAttemptPage: React.FC = () => {
         }
       }
     };
-  }, []);
+  }, [stopAllMediaTracks]);
 
   // 1. Load Attempt
   useEffect(() => {
@@ -200,6 +251,9 @@ export const StudentAttemptPage: React.FC = () => {
           setViolationCount(data.violationCount);
           if (data.violationCount >= 3) {
             setIsTerminated(true);
+            setIsSubmitting(true);
+            setIsSubmitted(true);
+            stopAllMediaTracks();
             isAutoSubmittingRef.current = true;
           }
         }
@@ -217,6 +271,7 @@ export const StudentAttemptPage: React.FC = () => {
 
         // If already submitted/expired or disqualified, exit fullscreen and redirect to dashboard
         if (data.status !== 'IN_PROGRESS' || (typeof data.violationCount === 'number' && data.violationCount >= 3)) {
+          stopAllMediaTracks();
           await exitFullscreen();
           navigate('/student/dashboard');
           return;
@@ -283,6 +338,9 @@ export const StudentAttemptPage: React.FC = () => {
   const handleTimeExpired = useCallback(async () => {
     if (isAutoSubmittingRef.current || !attemptId) return;
     isAutoSubmittingRef.current = true;
+    setIsSubmitting(true);
+    setIsSubmitted(true);
+    stopAllMediaTracks();
     setSyncStatus('SYNCING');
     try {
       const res = await attemptService.submitAttempt(attemptId);
@@ -292,7 +350,7 @@ export const StudentAttemptPage: React.FC = () => {
       await exitFullscreen();
       navigate('/student/results');
     }
-  }, [attemptId, navigate, exitFullscreen]);
+  }, [attemptId, navigate, exitFullscreen, stopAllMediaTracks]);
 
   // 2. Authoritative Timer Countdown & Auto-Submit
   useEffect(() => {
@@ -386,6 +444,9 @@ export const StudentAttemptPage: React.FC = () => {
       if (shouldAutoTerminate) {
         isAutoSubmittingRef.current = true;
         setIsTerminated(true);
+        setIsSubmitting(true);
+        setIsSubmitted(true);
+        stopAllMediaTracks();
         setViolationWarningOpen(false);
         exitFullscreen().catch(() => {});
 
@@ -431,6 +492,9 @@ export const StudentAttemptPage: React.FC = () => {
           setViolationCount(res.violationCount);
           if (res.isTerminated || (res.violationCount >= maxAllowed && terminationAction !== 'WARN_ONLY')) {
             setIsTerminated(true);
+            setIsSubmitting(true);
+            setIsSubmitted(true);
+            stopAllMediaTracks();
             setViolationWarningOpen(false);
             exitFullscreen().catch(() => {});
           }
@@ -439,7 +503,7 @@ export const StudentAttemptPage: React.FC = () => {
         console.warn('Failed to record violation on server:', err);
       }
     },
-    [attemptId, violationCount, isTerminated, exitFullscreen, attempt?.assessment]
+    [attemptId, violationCount, isTerminated, exitFullscreen, attempt?.assessment, stopAllMediaTracks]
   );
 
   // 3d. Fullscreen Change Listener
@@ -816,6 +880,8 @@ export const StudentAttemptPage: React.FC = () => {
   const handleConfirmSubmit = async () => {
     if (!attemptId) return;
     setIsSubmitting(true);
+    setIsSubmitted(true);
+    stopAllMediaTracks();
     try {
       const result = await attemptService.submitAttempt(attemptId);
       await exitFullscreen();
@@ -827,6 +893,7 @@ export const StudentAttemptPage: React.FC = () => {
           : 'Failed to submit test';
       setError(msg || 'Failed to submit test');
       setIsSubmitting(false);
+      setIsSubmitted(false);
       setSubmitDialogOpen(false);
     }
   };
@@ -2024,15 +2091,136 @@ export const StudentAttemptPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Real-Time Camera Proctoring Monitor (Zero Footage Stored) */}
-      <CameraProctorMonitor
-        onViolation={triggerViolation}
-        violationCount={violationCount}
-        maxViolations={(attempt?.assessment as any)?.maxViolations || 3}
-        enableMobileDetection={(attempt?.assessment as any)?.enableMobileDetection !== false}
-        isActive={!isTerminated}
-        isWarningModalOpen={violationWarningOpen}
-      />
+      {/* Real Camera Proctoring Gate: Lock assessment interaction until real physical webcam is confirmed active */}
+      {!isTerminated &&
+        !isSubmitting &&
+        !isSubmitted &&
+        attempt?.status === 'IN_PROGRESS' &&
+        (attempt?.assessment as any)?.enableMobileDetection !== false &&
+        !cameraReady && (
+          <Dialog
+            open={true}
+            disableEscapeKeyDown
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{
+              sx: {
+                borderRadius: 3,
+                p: { xs: 2.5, sm: 3.5 },
+                textAlign: 'center',
+                border: cameraError ? '2px solid #EF4444' : '2px solid #0284C7',
+                boxShadow: cameraError
+                  ? '0 25px 50px -12px rgba(239, 68, 68, 0.25)'
+                  : '0 25px 50px -12px rgba(2, 132, 199, 0.25)',
+                bgcolor: '#FFFFFF',
+              },
+            }}
+          >
+            <DialogTitle sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, p: 0, mb: 1.5 }}>
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: '50%',
+                  bgcolor: cameraError ? '#FEF2F2' : '#F0F9FF',
+                  border: `2px solid ${cameraError ? '#F87171' : '#38BDF8'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <VideocamIcon sx={{ fontSize: 36, color: cameraError ? '#DC2626' : '#0284C7' }} />
+              </Box>
+              <Typography variant="h5" fontWeight={800} color="#0F172A">
+                Physical Webcam Verification Required
+              </Typography>
+            </DialogTitle>
+            <DialogContent sx={{ p: 0 }}>
+              <Typography variant="body2" color="#475569" sx={{ mb: 2.5, lineHeight: 1.6 }}>
+                This assessment is monitored by real-time AI camera proctoring. Examination questions and answer options remain locked until your physical camera feed is active and streaming live.
+              </Typography>
+
+              {cameraError && (
+                <Alert
+                  severity={cameraError.includes('HTTPS') ? 'warning' : 'error'}
+                  sx={{ mb: 2.5, textAlign: 'left', borderRadius: 2 }}
+                >
+                  {cameraError}
+                </Alert>
+              )}
+
+              {cameraError?.includes('HTTPS') ? (
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  onClick={() => {
+                    window.location.href = window.location.href.replace('http:', 'https:');
+                  }}
+                  sx={{
+                    py: 1.5,
+                    fontWeight: 800,
+                    textTransform: 'none',
+                    borderRadius: 2,
+                    bgcolor: '#0284C7',
+                    '&:hover': { bgcolor: '#0369A1' },
+                  }}
+                >
+                  Switch to HTTPS (Secure Mode)
+                </Button>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 1.5 }}>
+                  {!cameraError && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                      <CircularProgress size={36} sx={{ color: '#0284C7' }} />
+                      <Typography variant="body2" color="#0F172A" fontWeight={700}>
+                        Requesting physical webcam access...
+                      </Typography>
+                      <Typography variant="caption" color="#64748B">
+                        Please click "Allow" in your browser prompt. Auto-timeout in 15 seconds.
+                      </Typography>
+                    </Box>
+                  )}
+                  <Button
+                    variant="contained"
+                    size="large"
+                    color={cameraError ? 'error' : 'primary'}
+                    startIcon={<RefreshIcon />}
+                    onClick={() => {
+                      setCameraError(null);
+                      setCameraRetryKey((prev) => prev + 1);
+                    }}
+                    sx={{
+                      minWidth: 220,
+                      py: 1.25,
+                      textTransform: 'none',
+                      fontWeight: 800,
+                      borderRadius: 2,
+                      bgcolor: cameraError ? '#DC2626' : '#0284c7',
+                      '&:hover': { bgcolor: cameraError ? '#B91C1C' : '#0369a1' },
+                    }}
+                  >
+                    Retry Camera Access
+                  </Button>
+                </Box>
+              )}
+            </DialogContent>
+          </Dialog>
+        )}
+
+      {/* Real-Time Camera Proctoring Monitor (Zero Footage Stored) - strictly powered off immediately when completed or submitted */}
+      {!isTerminated && !isSubmitting && !isSubmitted && attempt?.status === 'IN_PROGRESS' && (
+        <CameraProctorMonitor
+          key={cameraRetryKey}
+          onViolation={triggerViolation}
+          violationCount={violationCount}
+          maxViolations={(attempt?.assessment as any)?.maxViolations || 3}
+          enableMobileDetection={(attempt?.assessment as any)?.enableMobileDetection !== false}
+          isActive={!isTerminated && !isSubmitting && !isSubmitted && attempt?.status === 'IN_PROGRESS'}
+          isWarningModalOpen={violationWarningOpen}
+          onCameraReady={handleCameraReady}
+        />
+      )}
     </Box>
     </>
   );

@@ -29,6 +29,7 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { StudentAcademicRecord } from '../../types/academic.types.js';
 import { academicService } from '../../services/academic.service.js';
+import { getAcademicStructure } from '../../utils/academic-structure.util.js';
 
 interface Props {
   studentRegisterNumber: string;
@@ -39,6 +40,14 @@ export const StudentAcademicRecordsView: React.FC<Props> = ({ studentRegisterNum
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloadingDoc, setDownloadingDoc] = useState<string | null>(null);
+
+  const structure = React.useMemo(() => {
+    return getAcademicStructure({
+      degreeLevel: record?.degreeLevel,
+      degreeName: record?.ugDegree || record?.pgDegree,
+      courseName: record?.ugBranch,
+    });
+  }, [record?.degreeLevel, record?.ugDegree, record?.pgDegree, record?.ugBranch]);
 
   useEffect(() => {
     const fetchRecord = async () => {
@@ -384,10 +393,19 @@ export const StudentAcademicRecordsView: React.FC<Props> = ({ studentRegisterNum
           </Grid>
         </Box>
 
-        {/* Semester-Wise Records */}
-        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#1E293B' }}>
-          Semester-Wise Progression & Verified Marksheets
-        </Typography>
+        {/* Dynamic Semester-Wise Records */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#1E293B' }}>
+            {structure.streamLabel} Progression (Semesters 1 to {structure.totalSemesters})
+          </Typography>
+          <Chip
+            label={`${structure.totalSemesters} Semesters Total`}
+            size="small"
+            color="primary"
+            variant="outlined"
+            sx={{ fontWeight: 700 }}
+          />
+        </Box>
 
         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
           <Table size="small">
@@ -403,8 +421,7 @@ export const StudentAcademicRecordsView: React.FC<Props> = ({ studentRegisterNum
               </TableRow>
             </TableHead>
             <TableBody>
-              {Array.from({ length: 8 }, (_, i) => {
-                const semNo = i + 1;
+              {structure.semesterNumbers.map((semNo) => {
                 const sem = record?.semesters?.find((s) => s.semesterNumber === semNo);
                 return (
                   <TableRow key={semNo} hover>

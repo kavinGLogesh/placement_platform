@@ -14,6 +14,7 @@ export interface UserRecord {
   student?: {
     id: string;
     userId: string;
+    name: string;
     registerNumber: string;
     department: string;
     batchYear: number;
@@ -79,6 +80,7 @@ class InMemoryUserStore {
       student: {
         id: 'stu-001',
         userId: 'usr-student-001',
+        name: 'Logeshwaran',
         registerNumber: '2026CS101',
         department: 'Computer Science & Engineering',
         batchYear: 2026,
@@ -99,6 +101,7 @@ class InMemoryUserStore {
       student: {
         id: 'stu-002',
         userId: 'usr-student-002',
+        name: 'Priya Sharma',
         registerNumber: '2026CS102',
         department: 'Computer Science & Engineering',
         batchYear: 2026,
@@ -390,6 +393,7 @@ export class UserRepository {
       student: user.student
         ? {
             id: user.student.id,
+            name: user.student.name,
             registerNumber: user.student.registerNumber,
             department: user.student.department,
             batchYear: user.student.batchYear,

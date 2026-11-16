@@ -18,6 +18,9 @@ import {
   LinearProgress,
   Tooltip,
   IconButton,
+  Divider,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -32,6 +35,7 @@ import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -43,9 +47,12 @@ import {
 } from 'recharts';
 import { analyticsService } from '../services/analytics.service.js';
 import { evaluationService } from '../services/evaluation.service.js';
+import { placementStudentService } from '../services/placement-student.service.js';
 
 export const StudentDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Primary student dashboard metrics (assigned, completed, available, scores)
   const {
@@ -82,10 +89,22 @@ export const StudentDashboardPage: React.FC = () => {
     staleTime: 30000,
   });
 
+  // Placement drives query
+  const {
+    data: studentDrives = [],
+    isLoading: isDrivesLoading,
+    refetch: refetchDrives,
+  } = useQuery({
+    queryKey: ['student-placement-drives'],
+    queryFn: () => placementStudentService.getStudentDrives(),
+    staleTime: 30000,
+  });
+
   const handleRefreshAll = () => {
     refetchDashboard();
     refetchPerformance();
     refetchHumanEval();
+    refetchDrives();
   };
 
   const summary = dashboardData?.summary || {
@@ -510,6 +529,165 @@ export const StudentDashboardPage: React.FC = () => {
           </Grid>
         </Grid>
       )}
+
+      {/* Campus Placement Drives Quick Section */}
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3.5,
+          p: 2.75,
+          bgcolor: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+        }}
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+            <Box
+              sx={{
+                width: 38,
+                height: 38,
+                borderRadius: '10px',
+                bgcolor: '#0f766e',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <BusinessCenterIcon sx={{ fontSize: 22 }} />
+            </Box>
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="subtitle1" fontWeight={800} sx={{ color: '#0F172A', lineHeight: 1.2 }}>
+                  Campus Placement Drives
+                </Typography>
+                {studentDrives.filter((d) => d.isEligible && !d.isApplied).length > 0 && (
+                  <Chip
+                    size="small"
+                    label={`${studentDrives.filter((d) => d.isEligible && !d.isApplied).length} Eligible to Apply`}
+                    sx={{ bgcolor: '#ecfdf5', color: '#059669', fontWeight: 700, fontSize: '0.72rem', height: 22 }}
+                  />
+                )}
+              </Box>
+              <Typography variant="caption" sx={{ color: '#64748B' }}>
+                Explore active campus recruitments, verify eligibility criteria, and track your application progress.
+              </Typography>
+            </Box>
+          </Box>
+          <Button
+            size="small"
+            endIcon={<ArrowForwardIcon sx={{ fontSize: 14 }} />}
+            onClick={() => navigate('/student/drives')}
+            sx={{
+              color: '#0f766e',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+            }}
+          >
+            View All Drives ({studentDrives.length})
+          </Button>
+        </Box>
+
+        {isDrivesLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+            <CircularProgress size={24} sx={{ color: '#0f766e' }} />
+          </Box>
+        ) : studentDrives.length === 0 ? (
+          <Box sx={{ p: 3, bgcolor: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1', textAlign: 'center' }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
+              No campus placement drives currently scheduled. New company drives will appear here once announced.
+            </Typography>
+          </Box>
+        ) : (
+          <Grid container spacing={2}>
+            {studentDrives.slice(0, 3).map((item) => {
+              const { drive, isEligible, isApplied, currentStage } = item;
+              return (
+                <Grid item xs={12} md={4} key={drive.id}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      bgcolor: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '12px',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+                      '&:hover': {
+                        borderColor: '#0f766e',
+                        boxShadow: '0 4px 12px rgba(15, 118, 110, 0.08)',
+                      },
+                    }}
+                  >
+                    <Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#0F172A' }}>
+                          {drive.companyName}
+                        </Typography>
+                        {isApplied ? (
+                          <Chip
+                            size="small"
+                            label={currentStage?.replace(/_/g, ' ') || 'APPLIED'}
+                            sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, bgcolor: '#ede9fe', color: '#7c3aed' }}
+                          />
+                        ) : isEligible ? (
+                          <Chip
+                            size="small"
+                            label="ELIGIBLE"
+                            sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, bgcolor: '#ecfdf5', color: '#059669' }}
+                          />
+                        ) : (
+                          <Chip
+                            size="small"
+                            label="NOT ELIGIBLE"
+                            sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#fee2e2', color: '#dc2626' }}
+                          />
+                        )}
+                      </Box>
+                      <Typography variant="caption" sx={{ color: '#0f766e', fontWeight: 700, display: 'block' }}>
+                        {drive.jobRole}
+                      </Typography>
+                      {drive.packageDetails && (
+                        <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.25 }}>
+                          CTC: {drive.packageDetails}
+                        </Typography>
+                      )}
+                      <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mt: 0.5 }}>
+                        Drive Date: {new Date(drive.driveDate).toLocaleDateString()}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+                      <Button
+                        size="small"
+                        variant={isApplied ? 'outlined' : isEligible ? 'contained' : 'text'}
+                        onClick={() => navigate('/student/drives')}
+                        sx={{
+                          fontSize: '0.75rem',
+                          textTransform: 'none',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          ...(isEligible && !isApplied
+                            ? { bgcolor: '#0f766e', '&:hover': { bgcolor: '#115e59' }, color: '#ffffff' }
+                            : {}),
+                        }}
+                      >
+                        {isApplied ? 'Track Application' : isEligible ? 'Apply in Portal' : 'View Requirements'}
+                      </Button>
+                    </Box>
+                  </Box>
+                </Grid>
+              );
+            })}
+          </Grid>
+        )}
+      </Card>
 
       {/* Two-Column Chart Section */}
       <Grid container spacing={2.5} sx={{ mb: 3.5 }}>
@@ -956,7 +1134,75 @@ export const StudentDashboardPage: React.FC = () => {
             </Box>
 
             {dashboardData?.recentResults && dashboardData.recentResults.length > 0 ? (
-              <TableContainer>
+              isMobile ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {dashboardData.recentResults.slice(0, 5).map((r) => (
+                    <Card
+                      key={r.id}
+                      variant="outlined"
+                      sx={{
+                        p: 1.75,
+                        borderRadius: 2,
+                        borderColor: '#E2E8F0',
+                        bgcolor: '#FFFFFF',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0F172A', fontSize: '0.85rem', flex: 1, pr: 1 }}>
+                          {r.assessmentTitle}
+                        </Typography>
+                        <Chip
+                          icon={r.isPassed ? <CheckCircleOutlineIcon sx={{ '&&': { fontSize: 13 } }} /> : <CancelOutlinedIcon sx={{ '&&': { fontSize: 13 } }} />}
+                          label={r.isPassed ? 'PASS' : 'FAIL'}
+                          size="small"
+                          sx={{
+                            fontWeight: 700,
+                            fontSize: '0.68rem',
+                            borderRadius: '4px',
+                            bgcolor: r.isPassed ? '#ECFDF5' : '#FEF2F2',
+                            color: r.isPassed ? '#059669' : '#DC2626',
+                            border: '1px solid',
+                            borderColor: r.isPassed ? '#A7F3D0' : '#FECACA',
+                          }}
+                        />
+                      </Box>
+
+                      <Divider sx={{ my: 0.75, borderColor: '#F1F5F9' }} />
+
+                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, my: 1 }}>
+                        <Box>
+                          <Typography variant="caption" sx={{ color: '#64748B', fontSize: '0.65rem', fontWeight: 600, display: 'block' }}>
+                            SCORE
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F172A', fontSize: '0.82rem' }}>
+                            {r.percentage}% ({r.obtainedMarks}/{r.totalMarks})
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" sx={{ color: '#64748B', fontSize: '0.65rem', fontWeight: 600, display: 'block' }}>
+                            ACCURACY
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155', fontSize: '0.82rem' }}>
+                            {r.accuracy}%
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        fullWidth
+                        onClick={() => navigate('/student/reports')}
+                        sx={{ fontWeight: 600, fontSize: '0.74rem', color: '#2563EB', textTransform: 'none', borderRadius: 1.5, py: 0.5, mt: 0.5 }}
+                      >
+                        View Scorecard
+                      </Button>
+                    </Card>
+                  ))}
+                </Box>
+              ) : (
+              <TableContainer sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 <Table size="small">
                   <TableHead sx={{ bgcolor: '#F8FAFC' }}>
                     <TableRow>
@@ -1015,6 +1261,7 @@ export const StudentDashboardPage: React.FC = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+              )
             ) : (
               <Box sx={{ p: 4, textAlign: 'center', bgcolor: '#F8FAFC', borderRadius: '10px', border: '1px dashed #CBD5E1' }}>
                 <AssignmentOutlinedIcon sx={{ fontSize: 36, color: '#94A3B8', mb: 1 }} />

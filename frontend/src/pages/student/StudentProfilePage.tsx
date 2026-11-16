@@ -377,7 +377,7 @@ export const StudentProfilePage: React.FC = () => {
                 sx={{ fontWeight: 700, fontSize: '0.75rem', height: 24 }}
               />
               <Chip
-                label="Candidate / Student"
+                label="Student"
                 size="small"
                 sx={{ bgcolor: '#eff6ff', color: '#267D86', border: '1px solid #bfdbfe', fontWeight: 600, height: 24 }}
               />

@@ -11,6 +11,7 @@ import {
   getResumeMetaFilePath,
 } from '../utils/resume.util.js';
 import { aiStudentImportService } from '../services/ai/ai-student-import.service.js';
+import { Role } from '../types/auth.types.js';
 
 export class ManagementController {
   constructor(private readonly service: ManagementService = managementService) {}
@@ -508,6 +509,13 @@ export class ManagementController {
 
   addStudentSkill = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const userRole = (req as any).user?.role;
+      if (userRole === Role.SUPER_ADMIN || userRole === Role.PLACEMENT_ADMIN) {
+        throw new AppError(
+          'Candidate skills and competency matrix are self-managed by students through their Student Portal. Administrators have read-only access.',
+          403
+        );
+      }
       const id = String(req.params.id);
       const skill = await this.service.addStudentSkill(id, req.body);
       sendSuccess(res, 'Student skill added successfully', skill, 201);
@@ -518,6 +526,13 @@ export class ManagementController {
 
   updateStudentSkill = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const userRole = (req as any).user?.role;
+      if (userRole === Role.SUPER_ADMIN || userRole === Role.PLACEMENT_ADMIN) {
+        throw new AppError(
+          'Candidate skills and competency matrix are self-managed by students through their Student Portal. Administrators have read-only access.',
+          403
+        );
+      }
       const id = String(req.params.id);
       const skillId = String(req.params.skillId);
       const skill = await this.service.updateStudentSkill(id, skillId, req.body);
@@ -529,6 +544,13 @@ export class ManagementController {
 
   deleteStudentSkill = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const userRole = (req as any).user?.role;
+      if (userRole === Role.SUPER_ADMIN || userRole === Role.PLACEMENT_ADMIN) {
+        throw new AppError(
+          'Candidate skills and competency matrix are self-managed by students through their Student Portal. Administrators have read-only access.',
+          403
+        );
+      }
       const id = String(req.params.id);
       const skillId = String(req.params.skillId);
       await this.service.removeStudentSkill(id, skillId);

@@ -1177,7 +1177,7 @@ export const AdminResultsPage: React.FC = () => {
             </Box>
           ) : resultsData && resultsData.items.length > 0 ? (
             <Card sx={{ bgcolor: CARD_BG, border: `1px solid ${BORDER_COLOR}`, borderRadius: '8px' }}>
-              <TableContainer component={Paper} sx={{ bgcolor: 'transparent', boxShadow: 'none' }}>
+              <TableContainer component={Paper} sx={{ bgcolor: 'transparent', boxShadow: 'none', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 <Table size="small">
                   <TableHead sx={{ bgcolor: '#F8FAFC' }}>
                     <TableRow>
@@ -1445,7 +1445,7 @@ export const AdminResultsPage: React.FC = () => {
                 Click any department row to automatically filter the entire dashboard by that department.
               </Typography>
             </Box>
-            <TableContainer>
+            <TableContainer sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <Table size="small">
                 <TableHead sx={{ bgcolor: '#F8FAFC' }}>
                   <TableRow>
@@ -1674,7 +1674,7 @@ export const AdminResultsPage: React.FC = () => {
                 Curriculum Topic Competency Master Table
               </Typography>
             </Box>
-            <TableContainer>
+            <TableContainer sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <Table size="small">
                 <TableHead sx={{ bgcolor: '#F8FAFC' }}>
                   <TableRow>
@@ -1851,7 +1851,7 @@ export const AdminResultsPage: React.FC = () => {
                     Student Score Records for {assessmentSummary.assessmentName}
                   </Typography>
                 </Box>
-                <TableContainer>
+                <TableContainer sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                   <Table size="small">
                     <TableHead sx={{ bgcolor: '#F8FAFC' }}>
                       <TableRow>
@@ -2237,7 +2237,7 @@ export const AdminResultsPage: React.FC = () => {
             <Typography variant="subtitle2" fontWeight={700} color={BRAND_MIDNIGHT} gutterBottom>
               Assessment History
             </Typography>
-            <TableContainer component={Paper} elevation={0} sx={{ border: `1px solid ${BORDER_COLOR}`, mb: 3 }}>
+            <TableContainer component={Paper} elevation={0} sx={{ border: `1px solid ${BORDER_COLOR}`, mb: 3, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <Table size="small">
                 <TableHead sx={{ bgcolor: '#F8FAFC' }}>
                   <TableRow>

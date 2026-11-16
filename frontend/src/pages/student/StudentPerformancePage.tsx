@@ -599,7 +599,7 @@ export const StudentPerformancePage: React.FC = () => {
           <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
             Topic Mastery & Strengths Matrix
           </Typography>
-          <TableContainer component={Paper} sx={{ bgcolor: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+          <TableContainer component={Paper} sx={{ bgcolor: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <Table size="small">
               <TableHead sx={{ bgcolor: 'rgba(255, 255, 255, 0.04)' }}>
                 <TableRow>
@@ -827,7 +827,7 @@ export const StudentPerformancePage: React.FC = () => {
         </Typography>
 
         {assessmentHistory.length > 0 ? (
-          <TableContainer component={Paper} sx={{ bgcolor: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+          <TableContainer component={Paper} sx={{ bgcolor: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <Table size="small">
               <TableHead sx={{ bgcolor: 'rgba(255, 255, 255, 0.04)' }}>
                 <TableRow>

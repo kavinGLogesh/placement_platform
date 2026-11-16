@@ -58,6 +58,7 @@ import { StudentAcademicRecordsSection } from '../../components/admin/StudentAca
 import { StudentPersonalEmailManager } from '../../components/admin/StudentPersonalEmailManager.js';
 import { AcademicBulkImportDialog } from '../../components/admin/AcademicBulkImportDialog.js';
 import { StudentSkillsCard } from '../../components/student/StudentSkillsCard.js';
+import { getAcademicStructure } from '../../utils/academic-structure.util.js';
 
 export const StudentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -126,6 +127,19 @@ export const StudentDetailPage: React.FC = () => {
     queryFn: () => analyticsService.getStudentDrilldown(id || ''),
     enabled: Boolean(id),
   });
+
+  // Dynamic Academic Structure based on program/stream
+  const academicStructure = React.useMemo(() => {
+    return getAcademicStructure({
+      degreeLevel: student?.academicRecord?.degreeLevel || ((student?.course as any)?.durationYears === 2 ? 'PG' : 'UG'),
+      degreeName: student?.academicRecord?.ugDegree || student?.academicRecord?.pgDegree || student?.course?.name,
+      courseName: student?.course?.name,
+      courseCode: student?.course?.code,
+      departmentName: student?.department?.name,
+      departmentCode: student?.department?.code,
+      durationYears: (student?.course as any)?.durationYears,
+    });
+  }, [student]);
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -349,6 +363,7 @@ export const StudentDetailPage: React.FC = () => {
               onChange={(_e, newTab) => setActiveTab(newTab)}
               variant="scrollable"
               scrollButtons="auto"
+              allowScrollButtonsMobile
               sx={{
                 px: 2,
                 borderBottom: '1px solid #e2e8f0',
@@ -945,8 +960,8 @@ export const StudentDetailPage: React.FC = () => {
                 />
               </Box>
 
-              {/* Student Skills & Competencies */}
-              <StudentSkillsCard studentId={student.id} readOnly={false} />
+              {/* Student Skills & Competencies (Admin Read-Only) */}
+              <StudentSkillsCard studentId={student.id} readOnly={true} />
             </Box>
           )}
 
@@ -980,21 +995,34 @@ export const StudentDetailPage: React.FC = () => {
                 </Typography>
               </Alert>
 
-              {/* Semesters 1 to 8 Table */}
+              {/* Dynamic Program Semesters Table */}
               <Card elevation={0} sx={{ border: '1px solid #DCE6F5', borderRadius: 2 }}>
                 <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" fontWeight={700}>
-                      Semesters 1 to 8 Results
-                    </Typography>
-                    <Chip
-                      label={`Current: Semester ${student.academicRecord?.currentSemester || 1}`}
-                      color="primary"
-                      sx={{ fontWeight: 700 }}
-                    />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                    <div>
+                      <Typography variant="h6" fontWeight={700}>
+                        {academicStructure.streamLabel} - Semesters 1 to {academicStructure.totalSemesters} Results
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Showing strictly the {academicStructure.totalSemesters} semesters configured for this academic stream.
+                      </Typography>
+                    </div>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Chip
+                        label={`Current: Semester ${student.academicRecord?.currentSemester || 1}`}
+                        color="primary"
+                        sx={{ fontWeight: 700 }}
+                      />
+                      <Chip
+                        label={`${academicStructure.totalSemesters} Semesters Total`}
+                        color="default"
+                        variant="outlined"
+                        sx={{ fontWeight: 600 }}
+                      />
+                    </Box>
                   </Box>
 
-                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                     <Table size="small">
                       <TableHead sx={{ bgcolor: '#F8FAFC' }}>
                         <TableRow>
@@ -1008,8 +1036,7 @@ export const StudentDetailPage: React.FC = () => {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {Array.from({ length: 8 }, (_, i) => {
-                          const semNum = i + 1;
+                        {academicStructure.semesterNumbers.map((semNum) => {
                           const sem = student.academicRecord?.semesters?.find(
                             (s: any) => s.semesterNumber === semNum
                           );
@@ -1206,7 +1233,7 @@ export const StudentDetailPage: React.FC = () => {
                       Clean Proctoring Record: Zero malpractice or security warnings recorded for this candidate.
                     </Alert>
                   ) : (
-                    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                       <Table size="small">
                         <TableHead sx={{ bgcolor: '#F8FAFC' }}>
                           <TableRow>

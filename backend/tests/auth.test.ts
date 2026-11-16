@@ -69,6 +69,21 @@ describe('Phase 2 — Authentication API (/api/auth)', () => {
     superAdminRefreshToken = body.data.refreshToken;
   });
 
+  it('returns the linked student name with student authentication data', async () => {
+    const res = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'student@placement.edu',
+        password: 'Student@123',
+      }),
+    });
+
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.data.user.student.name, 'Logeshwaran');
+  });
+
   it('2. Invalid password returns HTTP 401', async () => {
     const res = await fetch(`${baseUrl}/auth/login`, {
       method: 'POST',

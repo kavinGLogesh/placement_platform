@@ -40,6 +40,12 @@ export class AttemptService {
     return res.data.data;
   }
 
+  async getStudentAttendanceStreak(): Promise<number> {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const res = await apiClient.get('/student/streak', { params: { timeZone } });
+    return res.data.data.streak;
+  }
+
   /**
    * Start or resume an assessment attempt server-side
    */

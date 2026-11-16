@@ -707,7 +707,7 @@ export const AdminInterviewsPage: React.FC = () => {
                   </Button>
                 </Box>
               ) : (
-                <TableContainer>
+                <TableContainer sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                   <Table size="small">
                     <TableHead sx={{ backgroundColor: '#EDF2FF' }}>
                       <TableRow>
@@ -904,7 +904,7 @@ export const AdminInterviewsPage: React.FC = () => {
                 </Stack>
               </Box>
 
-              <TableContainer component={Paper} variant="outlined">
+              <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 <Table size="small">
                   <TableHead sx={{ backgroundColor: '#EDF2FF' }}>
                     <TableRow>
@@ -1090,7 +1090,7 @@ export const AdminInterviewsPage: React.FC = () => {
                 Criterion Evaluation Marks (Source of Truth Backend Calculation)
               </Typography>
 
-              <TableContainer component={Paper} variant="outlined">
+              <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 <Table size="small">
                   <TableHead sx={{ backgroundColor: '#E7EEFA' }}>
                     <TableRow>

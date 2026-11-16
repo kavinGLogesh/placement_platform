@@ -158,12 +158,26 @@ export interface StudentDto {
   id: string;
   userId?: string | null;
   registerNumber: string;
+  rollNo?: string | null;
   name: string;
+  gender?: string | null;
   collegeEmail: string;
   personalEmail?: string | null;
   isPersonalEmailVerified?: boolean;
   phone?: string | null;
+  whatsappNumber?: string | null;
   dob?: string | null;
+  schoolName?: string | null;
+  ugCollegeName?: string | null;
+  nativePlace?: string | null;
+  languagesKnown?: string | null;
+  correspondenceAddress?: string | null;
+  permanentAddress?: string | null;
+  graduationYear?: number | null;
+  arrearStatus?: string | null;
+  placementWillingness?: string | null;
+  specialization?: string | null;
+  internshipExperience?: string | null;
   departmentId: string;
   courseId: string | null;
   classId: string | null;
@@ -207,11 +221,26 @@ export interface UpdateStudentSkillDto {
 export interface CreateStudentDto {
   userId?: string | null;
   registerNumber: string;
+  rollNo?: string | null;
   name: string;
+  gender?: string | null;
   collegeEmail: string;
   personalEmail?: string;
   phone?: string;
+  whatsappNumber?: string | null;
   dob?: string;
+  schoolName?: string | null;
+  ugCollegeName?: string | null;
+  nativePlace?: string | null;
+  languagesKnown?: string | null;
+  correspondenceAddress?: string | null;
+  permanentAddress?: string | null;
+  graduationYear?: number | null;
+  arrearStatus?: string | null;
+  placementWillingness?: string | null;
+  specialization?: string | null;
+  internshipExperience?: string | null;
+  skillsList?: string[] | null;
   password?: string;
   departmentId: string;
   courseId?: string | null;
@@ -222,20 +251,31 @@ export interface CreateStudentDto {
   status?: StudentStatus;
 
   // 10th Standard Academic Credentials
+  tenthBoard?: string | null;
+  tenthPassingYear?: number | null;
   tenthObtainedMarks?: number | null;
   tenthTotalMarks?: number | null;
   tenthPercentage?: number | null;
 
   // 12th Standard Academic Credentials
+  twelfthBoard?: string | null;
+  twelfthPassingYear?: number | null;
   twelfthObtainedMarks?: number | null;
   twelfthTotalMarks?: number | null;
   twelfthPercentage?: number | null;
 
+  // Academic Structure & Level
+  degreeLevel?: string | null;
+  currentSemester?: number | null;
+
   // Undergraduate (UG) Credentials
   ugDegree?: string | null;
+  ugBranch?: string | null;
   ugStatus?: 'STUDYING' | 'COMPLETED' | string | null;
   ugCgpa?: number | null;
   ugPercentage?: number | null;
+  activeBacklogs?: number | null;
+  historyOfBacklogs?: number | null;
 
   // Postgraduate (PG) Credentials (Optional)
   pgDegree?: string | null;
@@ -254,7 +294,21 @@ export interface UpdateStudentDto {
   personalEmail?: string | null;
   isPersonalEmailVerified?: boolean;
   phone?: string;
+  whatsappNumber?: string | null;
   dob?: string;
+  rollNo?: string | null;
+  gender?: string | null;
+  schoolName?: string | null;
+  ugCollegeName?: string | null;
+  nativePlace?: string | null;
+  languagesKnown?: string | null;
+  correspondenceAddress?: string | null;
+  permanentAddress?: string | null;
+  graduationYear?: number | null;
+  arrearStatus?: string | null;
+  placementWillingness?: string | null;
+  specialization?: string | null;
+  internshipExperience?: string | null;
   password?: string;
   departmentId?: string;
   courseId?: string | null;
@@ -363,6 +417,54 @@ export interface ColumnMappingResult {
   collegeEmail: string | null;
   year: string | null;
   cgpa: string | null;
+
+  // Academic Credentials Mapping
+  tenthBoard?: string | null;
+  tenthPassingYear?: string | null;
+  tenthMarksObtained?: string | null;
+  tenthTotalMarks?: string | null;
+  tenthPercentage?: string | null;
+
+  twelfthBoard?: string | null;
+  twelfthPassingYear?: string | null;
+  twelfthMarksObtained?: string | null;
+  twelfthTotalMarks?: string | null;
+  twelfthPercentage?: string | null;
+
+  degreeLevel?: string | null;
+  currentSemester?: string | null;
+  ugDegree?: string | null;
+  ugBranch?: string | null;
+  ugStatus?: string | null;
+  ugCgpa?: string | null;
+  ugPercentage?: string | null;
+  activeBacklogs?: string | null;
+  historyOfBacklogs?: string | null;
+
+  pgDegree?: string | null;
+  pgStatus?: string | null;
+  pgCgpa?: string | null;
+  pgPercentage?: string | null;
+
+  // Comprehensive 30+2 Fields Mapping
+  rollNo?: string | null;
+  gender?: string | null;
+  whatsappNumber?: string | null;
+  personalEmail?: string | null;
+  schoolName?: string | null;
+  ugCollegeName?: string | null;
+  nativePlace?: string | null;
+  languagesKnown?: string | null;
+  correspondenceAddress?: string | null;
+  permanentAddress?: string | null;
+  graduationYear?: string | null;
+  arrearStatus?: string | null;
+  studentStatus?: string | null;
+  placementWillingness?: string | null;
+  specialization?: string | null;
+  skills?: string | null;
+  internshipExperience?: string | null;
+
   rawHeaders: string[];
   aiAssisted: boolean;
   confidence: number;
@@ -382,6 +484,40 @@ export interface StudentImportItem {
   collegeEmail: string;
   year?: number;
   cgpa?: number;
+
+  // 10th Standard Academic Marks
+  tenthBoard?: string;
+  tenthPassingYear?: number;
+  tenthMarksObtained?: number;
+  tenthTotalMarks?: number;
+  tenthPercentage?: number;
+
+  // 12th Standard Academic Marks
+  twelfthBoard?: string;
+  twelfthPassingYear?: number;
+  twelfthObtainedMarks?: number;
+  twelfthTotalMarks?: number;
+  twelfthPercentage?: number;
+
+  // Academic Structure & Level
+  degreeLevel?: string;
+  currentSemester?: number;
+
+  // Undergraduate (UG) Credentials
+  ugDegree?: string;
+  ugBranch?: string;
+  ugStatus?: string;
+  ugCgpa?: number;
+  ugPercentage?: number;
+  activeBacklogs?: number;
+  historyOfBacklogs?: number;
+
+  // Postgraduate (PG) Credentials
+  pgDegree?: string;
+  pgStatus?: string;
+  pgCgpa?: number;
+  pgPercentage?: number;
+
   status: StudentImportRecordStatus;
   statusReasons: string[];
   isDuplicate: boolean;

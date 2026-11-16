@@ -98,6 +98,24 @@ export class PlacementDriveController {
     }
   };
 
+  shortlistCandidates = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const adminUser = (req as any).user;
+      if (!adminUser) throw new AppError('Unauthorized admin request', 401);
+
+      const result = await this.service.shortlistCandidates(id, req.body, adminUser);
+      sendSuccess(
+        res,
+        `Successfully shortlisted ${result.shortlistedCount} candidates and published registration to Student Portals`,
+        result,
+        201
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getRegistrations = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id);
@@ -121,8 +139,117 @@ export class PlacementDriveController {
         throw new AppError(`Invalid selection stage: ${stage}`, 400);
       }
 
-      const updated = await this.service.updateRegistrationStage(id, registrationId, stage, remarks);
+      const adminUser = (req as any).user;
+      const updated = await this.service.updateRegistrationStage(
+        id,
+        registrationId,
+        stage,
+        adminUser?.email || 'admin@placement.edu',
+        remarks
+      );
       sendSuccess(res, 'Recruitment stage updated successfully', updated);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkUpdateStage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const adminUser = (req as any).user;
+      const { registrationIds, stage, remarks } = req.body;
+
+      if (!registrationIds || !Array.isArray(registrationIds) || registrationIds.length === 0) {
+        throw new AppError('registrationIds array is required', 400);
+      }
+      if (!stage || !Object.values(SelectionStage).includes(stage)) {
+        throw new AppError(`Invalid selection stage: ${stage}`, 400);
+      }
+
+      const result = await this.service.bulkUpdateStage(
+        id,
+        registrationIds,
+        stage,
+        adminUser?.email || 'admin@placement.edu',
+        remarks
+      );
+      sendSuccess(res, `Updated ${result.updatedCount} candidates to stage ${stage}`, result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  finalizeDriveSelections = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const adminUser = (req as any).user;
+
+      const result = await this.service.finalizeDriveSelections(
+        id,
+        adminUser?.email || 'admin@placement.edu'
+      );
+      sendSuccess(
+        res,
+        `Drive selections finalized. ${result.selectedCount} selected, ${result.rejectedCount} unselected candidates marked as Rejected.`,
+        result
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  notifyEligibleStudents = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const result = await this.service.notifyEligibleStudents(id);
+      sendSuccess(res, `Dispatched notifications to ${result.notifiedCount} eligible candidates`, result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getDriveStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const stats = await this.service.getDriveCandidateStats(id);
+      sendSuccess(res, 'Drive candidate statistics retrieved successfully', stats);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getDriveAuditLogs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const logs = await this.service.getDriveAuditLogs(id);
+      sendSuccess(res, 'Drive candidate audit logs retrieved successfully', logs);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getSelectionOverview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const overview = await this.service.getDriveSelectionOverview(id);
+      sendSuccess(res, 'Drive selection overview retrieved successfully', overview);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  markCandidatesSelection = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const adminUser = (req as any).user;
+      const { registrationIds, status, remarks, notifyStudents } = req.body;
+
+      const result = await this.service.markCandidatesSelection(
+        id,
+        { registrationIds, status, remarks, notifyStudents },
+        adminUser || { id: 'admin', email: 'admin@placement.edu' }
+      );
+      sendSuccess(res, `Successfully marked ${result.updatedCount} candidate(s) as ${result.status}`, result);
     } catch (error) {
       next(error);
     }

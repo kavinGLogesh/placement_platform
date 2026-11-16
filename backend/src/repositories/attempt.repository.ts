@@ -147,6 +147,20 @@ export class AttemptRepository {
     }));
   }
 
+  async getStudentAttemptStartTimes(studentId: string): Promise<Date[]> {
+    if (process.env.NODE_ENV === 'test') {
+      return Array.from(this.memStore.attempts.values())
+        .filter((attempt) => attempt.studentId === studentId)
+        .map((attempt) => new Date(attempt.startTime));
+    }
+
+    const attempts = await prisma.assessmentAttempt.findMany({
+      where: { studentId },
+      select: { startTime: true },
+    });
+    return attempts.map((attempt) => attempt.startTime);
+  }
+
   async getAttemptById(attemptId: string): Promise<AssessmentAttemptDto | null> {
     if (process.env.NODE_ENV === 'test') {
       const att = this.memStore.attempts.get(attemptId);
@@ -688,4 +702,3 @@ export class AttemptRepository {
 }
 
 export const attemptRepository = new AttemptRepository();
-

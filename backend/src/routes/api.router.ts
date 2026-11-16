@@ -27,6 +27,8 @@ import {
 import { companyRouter } from './company.router.js';
 import { attendanceRouter } from './attendance.router.js';
 import { placementDriveRouter } from './placement-drive.router.js';
+import { studentPlacementRouter } from './student-drive.router.js';
+import { chatRouter } from './chat.router.js';
 
 export const apiRouter = Router();
 
@@ -41,6 +43,7 @@ apiRouter.use('/auth', authRouter);
 apiRouter.use('/admin', adminRouter);
 apiRouter.use('/student', studentRouter);
 apiRouter.use('/student', studentAssessmentRouter);
+apiRouter.use('/student', studentPlacementRouter);
 
 // Phase 3 Institutional Hierarchy & Student Management routes
 apiRouter.use('/colleges', collegeRouter);
@@ -81,5 +84,8 @@ apiRouter.use('/attendance', attendanceRouter);
 
 // Phase 12 Placement Drives Management Module (Admin Exclusively)
 apiRouter.use('/admin/placement-drives', placementDriveRouter);
+
+// Phase 13 WhatsApp-style College Communication & Group Chat Module
+apiRouter.use('/chat', chatRouter);
 
 

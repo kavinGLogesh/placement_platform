@@ -14,6 +14,10 @@ import {
   TablePagination,
   Skeleton,
   TableSortLabel,
+  Card,
+  Divider,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
@@ -64,7 +68,15 @@ export function DataTable<T extends { id: string | number }>({
   actions,
   emptyMessage = 'No records found in this view',
 }: DataTableProps<T>): React.ReactElement {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const safeData = Array.isArray(data) ? data : [];
+
+  const primaryCol = columns[0];
+  const actionCol = columns.find(
+    (c) => c.id.toLowerCase() === 'actions' || c.label.toLowerCase() === 'actions'
+  );
+  const bodyColumns = columns.filter((c) => c !== primaryCol && c !== actionCol);
 
   return (
     <Paper
@@ -127,8 +139,106 @@ export function DataTable<T extends { id: string | number }>({
         </Box>
       )}
 
-      {/* Table Container */}
-      <TableContainer sx={{ maxHeight: 680, overflowX: 'auto' }}>
+      {/* Mobile Card View */}
+      {isMobile ? (
+        <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5, bgcolor: '#F8FAFC' }}>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, rIdx) => (
+              <Card key={`mob-sk-${rIdx}`} variant="outlined" sx={{ p: 2, borderRadius: 2, borderColor: '#E2E8F0', bgcolor: '#FFFFFF' }}>
+                <Skeleton variant="text" width="60%" height={24} sx={{ mb: 1 }} />
+                <Skeleton variant="text" width="40%" height={18} sx={{ mb: 1.5 }} />
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
+                  <Skeleton variant="rectangular" height={32} sx={{ borderRadius: 1 }} />
+                  <Skeleton variant="rectangular" height={32} sx={{ borderRadius: 1 }} />
+                </Box>
+              </Card>
+            ))
+          ) : safeData.length === 0 ? (
+            <Card variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2, borderColor: '#E2E8F0', bgcolor: '#FFFFFF' }}>
+              <InboxOutlinedIcon sx={{ fontSize: 36, color: '#8293B0', mb: 1, opacity: 0.7 }} />
+              <Typography variant="body2" color="text.primary" fontWeight={600} sx={{ mb: 0.5 }}>
+                {emptyMessage}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                No records match the current filter criteria.
+              </Typography>
+            </Card>
+          ) : (
+            safeData.map((row) => (
+              <Card
+                key={String(row.id)}
+                variant="outlined"
+                sx={{
+                  borderRadius: 2,
+                  borderColor: '#E2E8F0',
+                  bgcolor: '#FFFFFF',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+                  p: 1.75,
+                }}
+              >
+                {/* Card Header: Primary Column & Action Column */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 1.25 }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    {primaryCol && (
+                      <>
+                        <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600, fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          {primaryCol.label}
+                        </Typography>
+                        <Box sx={{ fontWeight: 700, color: '#0F172A', fontSize: '0.92rem', mt: 0.2 }}>
+                          {primaryCol.render
+                            ? primaryCol.render(row)
+                            : ((row as Record<string, unknown>)[primaryCol.id] as React.ReactNode) ?? '—'}
+                        </Box>
+                      </>
+                    )}
+                  </Box>
+
+                  {actionCol && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                      {actionCol.render
+                        ? actionCol.render(row)
+                        : ((row as Record<string, unknown>)[actionCol.id] as React.ReactNode) ?? null}
+                    </Box>
+                  )}
+                </Box>
+
+                {bodyColumns.length > 0 && <Divider sx={{ my: 1, borderColor: '#F1F5F9' }} />}
+
+                {/* Body Details Grid */}
+                {bodyColumns.length > 0 && (
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1.25 }}>
+                    {bodyColumns.map((col) => (
+                      <Box key={col.id} sx={{ minWidth: 0 }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: '#64748B',
+                            fontSize: '0.67rem',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.03em',
+                            display: 'block',
+                            mb: 0.2,
+                          }}
+                        >
+                          {col.label}
+                        </Typography>
+                        <Box sx={{ fontSize: '0.82rem', color: '#1E293B', fontWeight: 500 }}>
+                          {col.render
+                            ? col.render(row)
+                            : ((row as Record<string, unknown>)[col.id] as React.ReactNode) ?? '—'}
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Card>
+            ))
+          )}
+        </Box>
+      ) : (
+        /* Desktop Table Container */
+        <TableContainer sx={{ maxHeight: 680, overflowX: 'auto' }}>
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
@@ -230,6 +340,7 @@ export function DataTable<T extends { id: string | number }>({
           </TableBody>
         </Table>
       </TableContainer>
+      )}
 
       {/* Pagination */}
       {totalCount !== undefined && onPageChange && onRowsPerPageChange && (
@@ -245,7 +356,12 @@ export function DataTable<T extends { id: string | number }>({
             borderTop: '1px solid #DCE6F5',
             color: '#7182A0',
             '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-              fontSize: '0.8rem',
+              fontSize: { xs: '0.72rem', sm: '0.8rem' },
+            },
+            '& .MuiTablePagination-toolbar': {
+              flexWrap: 'wrap',
+              px: { xs: 1, sm: 2 },
+              minHeight: 52,
             },
           }}
         />

@@ -36,6 +36,8 @@ import { AdminReportsPage } from '../pages/admin/AdminReportsPage.js';
 import { StudentReportsPage } from '../pages/student/StudentReportsPage.js';
 import { StudentProfilePage } from '../pages/student/StudentProfilePage.js';
 import { StudentChangePasswordPage } from '../pages/student/StudentChangePasswordPage.js';
+import { StudentDrivesPage } from '../pages/student/StudentDrivesPage.js';
+import { CollegeChatPage } from '../pages/chat/CollegeChatPage.js';
 import { ProtectedRoute } from './ProtectedRoute.js';
 import { useAuth } from '../hooks/useAuth.js';
 
@@ -108,6 +110,30 @@ export const AppRoutes: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
                 <PlacementDriveDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="chat"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN', 'STUDENT']}>
+                <CollegeChatPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/chat"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PLACEMENT_ADMIN']}>
+                <CollegeChatPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="student/chat"
+            element={
+              <ProtectedRoute allowedRoles={['STUDENT']}>
+                <CollegeChatPage />
               </ProtectedRoute>
             }
           />
@@ -334,6 +360,14 @@ export const AppRoutes: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={['STUDENT']}>
                 <StudentInterviewsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="student/drives"
+            element={
+              <ProtectedRoute allowedRoles={['STUDENT']}>
+                <StudentDrivesPage />
               </ProtectedRoute>
             }
           />

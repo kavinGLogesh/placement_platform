@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -23,20 +23,17 @@ import {
   TableHead,
   TableRow,
   Paper,
-  IconButton,
-  Tooltip,
+  InputAdornment,
 } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import EditIcon from '@mui/icons-material/Edit';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import DownloadIcon from '@mui/icons-material/Download';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import CalculateIcon from '@mui/icons-material/Calculate';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import { StudentAcademicRecord, UpsertAcademicRecordInput } from '../../types/academic.types.js';
 import { academicService } from '../../services/academic.service.js';
+import { getAcademicStructure } from '../../utils/academic-structure.util.js';
 
 interface Props {
   studentId: string;
@@ -56,36 +53,62 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [formValidationErrors, setFormValidationErrors] = useState<string[]>([]);
 
-  // Marksheet Upload Modal State
-  const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [uploadDocType, setUploadDocType] = useState<'tenth' | 'twelfth' | 'semester'>('tenth');
-  const [uploadSemesterNumber, setUploadSemesterNumber] = useState<number | undefined>(undefined);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
+  // Synchronize internal record state when initialRecord prop updates
+  React.useEffect(() => {
+    if (initialRecord) {
+      setRecord(initialRecord);
+    }
+  }, [initialRecord]);
 
-  // View / Download Loading State
-  const [downloadingDoc, setDownloadingDoc] = useState<string | null>(null);
+  // Fallback fetch: If initialRecord was missing or null on first load, fetch directly
+  React.useEffect(() => {
+    if (!initialRecord && studentId) {
+      let isMounted = true;
+      academicService
+        .getAdminAcademicRecord(studentId)
+        .then((rec) => {
+          if (isMounted && rec) {
+            setRecord(rec);
+          }
+        })
+        .catch(() => {
+          // handled gracefully
+        });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [initialRecord, studentId]);
 
-  // Edit Form State
+  // Active student academic structure (Arts & Science 6 sem, PG 4 sem, Engineering 8 sem)
+  const activeStructure = useMemo(() => {
+    return getAcademicStructure({
+      degreeLevel: record?.degreeLevel,
+      degreeName: record?.ugDegree || record?.pgDegree,
+    });
+  }, [record?.degreeLevel, record?.ugDegree, record?.pgDegree]);
+
+  // Direct Academic Entry Form State
   const [editForm, setEditForm] = useState<UpsertAcademicRecordInput>({
     tenthBoard: initialRecord?.tenthBoard || '',
-    tenthPassingYear: initialRecord?.tenthPassingYear || 2020,
+    tenthPassingYear: initialRecord?.tenthPassingYear || new Date().getFullYear() - 4,
     tenthTotalMarks: initialRecord?.tenthTotalMarks ?? 500,
     tenthObtainedMarks: initialRecord?.tenthObtainedMarks ?? 450,
     tenthPercentage: initialRecord?.tenthPercentage ?? 90.0,
 
     twelfthBoard: initialRecord?.twelfthBoard || '',
-    twelfthPassingYear: initialRecord?.twelfthPassingYear || 2022,
+    twelfthPassingYear: initialRecord?.twelfthPassingYear || new Date().getFullYear() - 2,
     twelfthTotalMarks: initialRecord?.twelfthTotalMarks ?? 600,
     twelfthObtainedMarks: initialRecord?.twelfthObtainedMarks ?? 540,
     twelfthPercentage: initialRecord?.twelfthPercentage ?? 90.0,
 
-    ugDegree: initialRecord?.ugDegree || 'B.Tech',
-    ugBranch: initialRecord?.ugBranch || 'Computer Science & Engineering',
+    ugDegree: initialRecord?.ugDegree || 'B.Sc IT',
+    ugBranch: initialRecord?.ugBranch || 'Information Technology',
     ugStatus: initialRecord?.ugStatus || initialRecord?.studyStatus || 'STUDYING',
     ugCgpa: initialRecord?.ugCgpa ?? initialRecord?.currentCgpa ?? 8.5,
-    ugPercentage: initialRecord?.ugPercentage ?? initialRecord?.overallPercentage ?? null,
+    ugPercentage: initialRecord?.ugPercentage ?? initialRecord?.overallPercentage ?? 80.75,
 
     pgDegree: initialRecord?.pgDegree || '',
     pgStatus: initialRecord?.pgStatus || '',
@@ -96,15 +119,23 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
     studyStatus: initialRecord?.studyStatus || initialRecord?.ugStatus || 'STUDYING',
     currentSemester: initialRecord?.currentSemester || 1,
     currentCgpa: initialRecord?.currentCgpa ?? initialRecord?.ugCgpa ?? 8.5,
+    overallPercentage: initialRecord?.overallPercentage ?? initialRecord?.ugPercentage ?? 80.75,
     activeBacklogs: initialRecord?.activeBacklogs || 0,
     historyOfBacklogs: initialRecord?.historyOfBacklogs || 0,
 
-    semesters: Array.from({ length: 8 }, (_, i) => {
+    semesters: Array.from(
+      {
+        length: getAcademicStructure({
+          degreeLevel: initialRecord?.degreeLevel,
+          degreeName: initialRecord?.ugDegree || initialRecord?.pgDegree,
+        }).totalSemesters,
+      },
+      (_, i) => {
       const existing = initialRecord?.semesters?.find((s) => s.semesterNumber === i + 1);
       return {
         semesterNumber: i + 1,
-        sgpa: existing?.sgpa ?? (i < 4 ? 8.5 : null),
-        cgpa: existing?.cgpa ?? (i < 4 ? 8.5 : null),
+        sgpa: existing?.sgpa ?? null,
+        cgpa: existing?.cgpa ?? null,
         totalCredits: existing?.totalCredits ?? 24,
         creditsEarned: existing?.creditsEarned ?? 24,
         backlogsCount: existing?.backlogsCount ?? 0,
@@ -112,22 +143,36 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
     }),
   });
 
+  // Dynamic Structure in Edit Modal based on user selection
+  const formStructure = useMemo(() => {
+    return getAcademicStructure({
+      degreeLevel: editForm.degreeLevel,
+      degreeName: editForm.degreeLevel === 'PG' ? editForm.pgDegree : editForm.ugDegree,
+    });
+  }, [editForm.degreeLevel, editForm.ugDegree, editForm.pgDegree]);
+
   const openEditDialog = () => {
+    setFormValidationErrors([]);
+    const currStructure = getAcademicStructure({
+      degreeLevel: record?.degreeLevel,
+      degreeName: record?.ugDegree || record?.pgDegree,
+    });
+
     setEditForm({
       tenthBoard: record?.tenthBoard || '',
-      tenthPassingYear: record?.tenthPassingYear || 2020,
+      tenthPassingYear: record?.tenthPassingYear || new Date().getFullYear() - 4,
       tenthTotalMarks: record?.tenthTotalMarks ?? null,
       tenthObtainedMarks: record?.tenthObtainedMarks ?? null,
       tenthPercentage: record?.tenthPercentage ?? null,
 
       twelfthBoard: record?.twelfthBoard || '',
-      twelfthPassingYear: record?.twelfthPassingYear || 2022,
+      twelfthPassingYear: record?.twelfthPassingYear || new Date().getFullYear() - 2,
       twelfthTotalMarks: record?.twelfthTotalMarks ?? null,
       twelfthObtainedMarks: record?.twelfthObtainedMarks ?? null,
       twelfthPercentage: record?.twelfthPercentage ?? null,
 
-      ugDegree: record?.ugDegree || 'B.Tech',
-      ugBranch: record?.ugBranch || 'Computer Science & Engineering',
+      ugDegree: record?.ugDegree || 'B.Sc IT',
+      ugBranch: record?.ugBranch || 'Information Technology',
       ugStatus: record?.ugStatus || record?.studyStatus || 'STUDYING',
       ugCgpa: record?.ugCgpa ?? record?.currentCgpa ?? null,
       ugPercentage: record?.ugPercentage ?? record?.overallPercentage ?? null,
@@ -141,43 +186,215 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
       studyStatus: record?.studyStatus || record?.ugStatus || 'STUDYING',
       currentSemester: record?.currentSemester || 1,
       currentCgpa: record?.currentCgpa ?? record?.ugCgpa ?? null,
+      overallPercentage: record?.overallPercentage ?? record?.ugPercentage ?? null,
       activeBacklogs: record?.activeBacklogs || 0,
       historyOfBacklogs: record?.historyOfBacklogs || 0,
 
-      semesters: Array.from({ length: 8 }, (_, i) => {
-        const existing = record?.semesters?.find((s) => s.semesterNumber === i + 1);
-        return {
-          semesterNumber: i + 1,
-          sgpa: existing?.sgpa ?? null,
-          cgpa: existing?.cgpa ?? null,
-          totalCredits: existing?.totalCredits ?? 24,
-          creditsEarned: existing?.creditsEarned ?? 24,
-          backlogsCount: existing?.backlogsCount ?? 0,
-        };
-      }),
+      semesters: Array.from(
+        { length: currStructure.totalSemesters },
+        (_, i) => {
+          const existing = record?.semesters?.find((s) => s.semesterNumber === i + 1);
+          return {
+            semesterNumber: i + 1,
+            sgpa: existing?.sgpa ?? null,
+            cgpa: existing?.cgpa ?? null,
+            totalCredits: existing?.totalCredits ?? 24,
+            creditsEarned: existing?.creditsEarned ?? 24,
+            backlogsCount: existing?.backlogsCount ?? 0,
+          };
+        }
+      ),
     });
     setEditOpen(true);
   };
 
+  // 10th Marks auto-calculation
+  const handleTenthMarksChange = (total: number | null, obtained: number | null) => {
+    let calculatedPct = editForm.tenthPercentage;
+    if (total !== null && total > 0 && obtained !== null && obtained >= 0) {
+      calculatedPct = parseFloat(((obtained / total) * 100).toFixed(2));
+    }
+    setEditForm((prev) => ({
+      ...prev,
+      tenthTotalMarks: total,
+      tenthObtainedMarks: obtained,
+      tenthPercentage: calculatedPct,
+    }));
+  };
+
+  // 12th Marks auto-calculation
+  const handleTwelfthMarksChange = (total: number | null, obtained: number | null) => {
+    let calculatedPct = editForm.twelfthPercentage;
+    if (total !== null && total > 0 && obtained !== null && obtained >= 0) {
+      calculatedPct = parseFloat(((obtained / total) * 100).toFixed(2));
+    }
+    setEditForm((prev) => ({
+      ...prev,
+      twelfthTotalMarks: total,
+      twelfthObtainedMarks: obtained,
+      twelfthPercentage: calculatedPct,
+    }));
+  };
+
+  // UG CGPA & Percentage handling
+  const handleUgCgpaChange = (cgpa: number | null) => {
+    let calculatedPct = editForm.ugPercentage;
+    if (cgpa !== null && cgpa >= 0 && cgpa <= 10 && (!editForm.ugPercentage || editForm.ugPercentage === 0)) {
+      calculatedPct = parseFloat((cgpa * 9.5).toFixed(2));
+    }
+    setEditForm((prev) => ({
+      ...prev,
+      ugCgpa: cgpa,
+      currentCgpa: cgpa,
+      ugPercentage: calculatedPct,
+      overallPercentage: calculatedPct,
+    }));
+  };
+
+  // PG CGPA & Percentage handling
+  const handlePgCgpaChange = (cgpa: number | null) => {
+    let calculatedPct = editForm.pgPercentage;
+    if (cgpa !== null && cgpa >= 0 && cgpa <= 10 && (!editForm.pgPercentage || editForm.pgPercentage === 0)) {
+      calculatedPct = parseFloat((cgpa * 9.5).toFixed(2));
+    }
+    setEditForm((prev) => ({
+      ...prev,
+      pgCgpa: cgpa,
+      pgPercentage: calculatedPct,
+    }));
+  };
+
+  // Calculate Cumulative CGPA strictly within the program's semesters
+  const calculateProgramCgpa = (semList: any[]) => {
+    const relevantSemesters = semList.filter(
+      (s) => s.semesterNumber <= formStructure.totalSemesters && s.sgpa !== null && s.sgpa !== undefined && s.sgpa > 0
+    );
+    if (relevantSemesters.length === 0) return null;
+    let totalQualityPoints = 0;
+    let totalCredits = 0;
+    for (const sem of relevantSemesters) {
+      const credits = sem.totalCredits || 24;
+      totalQualityPoints += Number(sem.sgpa) * credits;
+      totalCredits += credits;
+    }
+    return totalCredits > 0 ? parseFloat((totalQualityPoints / totalCredits).toFixed(2)) : null;
+  };
+
+  // Validate form prior to save
+  const validateForm = (): boolean => {
+    const errors: string[] = [];
+
+    // 10th Validation
+    if (editForm.tenthTotalMarks !== null && editForm.tenthTotalMarks !== undefined) {
+      if (editForm.tenthTotalMarks <= 0) {
+        errors.push('10th Total Marks must be greater than 0.');
+      }
+      if (
+        editForm.tenthObtainedMarks !== null &&
+        editForm.tenthObtainedMarks !== undefined &&
+        editForm.tenthObtainedMarks > editForm.tenthTotalMarks
+      ) {
+        errors.push('10th Obtained Marks cannot exceed Total Marks.');
+      }
+    }
+    if (editForm.tenthPercentage !== null && editForm.tenthPercentage !== undefined) {
+      if (editForm.tenthPercentage < 0 || editForm.tenthPercentage > 100) {
+        errors.push('10th Percentage must be between 0 and 100%.');
+      }
+    }
+
+    // 12th Validation
+    if (editForm.twelfthTotalMarks !== null && editForm.twelfthTotalMarks !== undefined) {
+      if (editForm.twelfthTotalMarks <= 0) {
+        errors.push('12th Total Marks must be greater than 0.');
+      }
+      if (
+        editForm.twelfthObtainedMarks !== null &&
+        editForm.twelfthObtainedMarks !== undefined &&
+        editForm.twelfthObtainedMarks > editForm.twelfthTotalMarks
+      ) {
+        errors.push('12th Obtained Marks cannot exceed Total Marks.');
+      }
+    }
+    if (editForm.twelfthPercentage !== null && editForm.twelfthPercentage !== undefined) {
+      if (editForm.twelfthPercentage < 0 || editForm.twelfthPercentage > 100) {
+        errors.push('12th Percentage must be between 0 and 100%.');
+      }
+    }
+
+    // UG Validation
+    if (editForm.ugCgpa !== null && editForm.ugCgpa !== undefined) {
+      if (editForm.ugCgpa < 0 || editForm.ugCgpa > 10) {
+        errors.push('UG CGPA must be between 0.00 and 10.00.');
+      }
+    }
+    if (editForm.ugPercentage !== null && editForm.ugPercentage !== undefined) {
+      if (editForm.ugPercentage < 0 || editForm.ugPercentage > 100) {
+        errors.push('UG Percentage must be between 0 and 100%.');
+      }
+    }
+
+    // PG Validation
+    if (editForm.pgCgpa !== null && editForm.pgCgpa !== undefined) {
+      if (editForm.pgCgpa < 0 || editForm.pgCgpa > 10) {
+        errors.push('PG CGPA must be between 0.00 and 10.00.');
+      }
+    }
+    if (editForm.pgPercentage !== null && editForm.pgPercentage !== undefined) {
+      if (editForm.pgPercentage < 0 || editForm.pgPercentage > 100) {
+        errors.push('PG Percentage must be between 0 and 100%.');
+      }
+    }
+
+    setFormValidationErrors(errors);
+    return errors.length === 0;
+  };
+
   const handleSaveAcademicRecord = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) {
+      return;
+    }
+
     setSaving(true);
     setActionError(null);
     try {
+      // Filter semesters strictly up to the program's configured totalSemesters
+      const filteredSemesters = editForm.semesters
+        ?.filter((s) => s.semesterNumber <= formStructure.totalSemesters)
+        .map((s) => ({
+          ...s,
+          semesterNumber: s.semesterNumber,
+          sgpa: s.sgpa != null && !isNaN(Number(s.sgpa)) ? Number(s.sgpa) : null,
+          cgpa: s.cgpa != null && !isNaN(Number(s.cgpa)) ? Number(s.cgpa) : null,
+          totalCredits: s.totalCredits ? Number(s.totalCredits) : 24,
+          creditsEarned: s.creditsEarned ? Number(s.creditsEarned) : 24,
+          backlogsCount: s.backlogsCount ? Number(s.backlogsCount) : 0,
+        }));
+
       const payload: UpsertAcademicRecordInput = {
         ...editForm,
+        degreeLevel: editForm.degreeLevel || formStructure.degreeLevel,
         studyStatus: editForm.ugStatus || editForm.studyStatus,
         currentCgpa: editForm.ugCgpa ?? editForm.currentCgpa,
         overallPercentage: editForm.ugPercentage ?? editForm.overallPercentage,
         pgDegree: editForm.pgDegree?.trim() || null,
         pgStatus: editForm.pgStatus?.trim() || null,
-        pgCgpa: editForm.pgCgpa !== undefined && editForm.pgCgpa !== null && !isNaN(Number(editForm.pgCgpa)) ? Number(editForm.pgCgpa) : null,
-        pgPercentage: editForm.pgPercentage !== undefined && editForm.pgPercentage !== null && !isNaN(Number(editForm.pgPercentage)) ? Number(editForm.pgPercentage) : null,
+        pgCgpa:
+          editForm.pgCgpa !== undefined && editForm.pgCgpa !== null && !isNaN(Number(editForm.pgCgpa))
+            ? Number(editForm.pgCgpa)
+            : null,
+        pgPercentage:
+          editForm.pgPercentage !== undefined && editForm.pgPercentage !== null && !isNaN(Number(editForm.pgPercentage))
+            ? Number(editForm.pgPercentage)
+            : null,
+        semesters: filteredSemesters,
       };
+
       const updated = await academicService.updateAdminAcademicRecord(studentId, payload);
       setRecord(updated);
       setEditOpen(false);
-      setActionSuccess('Academic records saved and synchronized successfully.');
+      setActionSuccess('Student academic records saved and synchronized successfully.');
       onRecordUpdated();
       setTimeout(() => setActionSuccess(null), 5000);
     } catch (err: any) {
@@ -188,82 +405,8 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
     }
   };
 
-  const handleOpenUploadModal = (docType: 'tenth' | 'twelfth' | 'semester', semNo?: number) => {
-    setUploadDocType(docType);
-    setUploadSemesterNumber(semNo);
-    setSelectedFile(null);
-    setUploadModalOpen(true);
-  };
-
-  const handleUploadSubmit = async () => {
-    if (!selectedFile) return;
-    setUploading(true);
-    setActionError(null);
-    try {
-      const updated = await academicService.uploadMarksheet(
-        studentId,
-        uploadDocType,
-        selectedFile,
-        uploadSemesterNumber
-      );
-      setRecord(updated);
-      setUploadModalOpen(false);
-      setActionSuccess(
-        `Marksheet for ${
-          uploadDocType === 'tenth'
-            ? '10th Standard'
-            : uploadDocType === 'twelfth'
-            ? '12th Standard'
-            : `Semester ${uploadSemesterNumber}`
-        } uploaded securely.`
-      );
-      onRecordUpdated();
-      setTimeout(() => setActionSuccess(null), 5000);
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to upload marksheet file';
-      setActionError(msg);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleViewOrDownloadDoc = async (
-    docType: 'tenth' | 'twelfth' | 'semester',
-    semesterNumber?: number,
-    isInline: boolean = false
-  ) => {
-    const key = `${docType}_${semesterNumber || ''}_${isInline ? 'view' : 'dl'}`;
-    setDownloadingDoc(key);
-    setActionError(null);
-    try {
-      const { blob, filename } = await academicService.downloadMarksheetBlob(
-        studentId,
-        docType,
-        semesterNumber
-      );
-      const fileUrl = window.URL.createObjectURL(blob);
-      if (isInline) {
-        window.open(fileUrl, '_blank');
-      } else {
-        const link = document.createElement('a');
-        link.href = fileUrl;
-        link.download = filename || `${studentRegisterNumber}_${docType}_Marksheet.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-      setTimeout(() => window.URL.revokeObjectURL(fileUrl), 10000);
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message || err?.message || 'Unable to retrieve marksheet document';
-      setActionError(msg);
-    } finally {
-      setDownloadingDoc(null);
-    }
-  };
-
   return (
-    <Card sx={{ border: '1px solid #DCE6F5', borderRadius: '8px', bgcolor: '#ffffff' }}>
+    <Card sx={{ border: '1px solid #DCE6F5', borderRadius: '10px', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
       <CardContent sx={{ p: 3.5 }}>
         {/* Section Header */}
         <Box
@@ -277,13 +420,13 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <SchoolIcon sx={{ color: '#1765B5', fontSize: 28 }} />
+            <SchoolIcon sx={{ color: '#0284c7', fontSize: 28 }} />
             <div>
-              <Typography variant="h6" fontWeight={700} sx={{ color: '#14264B' }}>
-                Student Academic Records & Marksheets
+              <Typography variant="h6" fontWeight={700} sx={{ color: '#0f172a' }}>
+                Student Academic Records ({studentRegisterNumber})
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                10th, 12th, Undergraduate (UG), and Postgraduate (PG) academic credentials with optional marksheets.
+                {activeStructure.streamLabel} &bull; {activeStructure.totalSemesters} Semesters Curriculum
               </Typography>
             </div>
           </Box>
@@ -294,16 +437,16 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
             startIcon={<EditIcon fontSize="small" />}
             onClick={openEditDialog}
             sx={{
-              bgcolor: '#1765B5',
+              bgcolor: '#0284c7',
               color: '#ffffff',
               borderRadius: '6px',
               textTransform: 'none',
               fontWeight: 600,
               fontSize: '0.8125rem',
-              '&:hover': { bgcolor: '#104B91' },
+              '&:hover': { bgcolor: '#0369a1' },
             }}
           >
-            Manage Academic Records
+            Direct Academic Entry / Edit
           </Button>
         </Box>
 
@@ -319,16 +462,21 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
           </Alert>
         )}
 
-        <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
-          <Typography variant="body2" fontWeight={600}>
-            Academic Records & Grading Policy
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Marks, CGPA, and percentages are recorded directly as official academic standing. Marksheet document uploads are strictly optional and are not mandatory for student registration, profile completion, or placement eligibility.
+        {/* Informational Guidance Banner */}
+        <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, bgcolor: '#f0f9ff', borderColor: '#bae6fd' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AssignmentTurnedInIcon sx={{ color: '#0284c7', fontSize: 20 }} />
+            <Typography variant="body2" fontWeight={700} color="#0369a1">
+              Dynamic Stream Structure & Real-Time Eligibility Engine
+            </Typography>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {activeStructure.streamLabel}: Configured for {activeStructure.durationYears} years ({activeStructure.totalSemesters} semesters).
+            Academic marks, percentages, and CGPA synchronize dynamically with Placement Drive eligibility criteria without requiring document uploads.
           </Typography>
         </Alert>
 
-        {/* 4 Academic Sections: 10th Standard, 12th Standard, Undergraduate (UG), Postgraduate (PG) */}
+        {/* 4 Academic Metric Cards: 10th, 12th, UG, PG */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
           {/* 1. 10th Standard Card */}
           <Grid item xs={12} md={6}>
@@ -350,28 +498,29 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     Secondary (10th Standard)
                   </Typography>
                   <Chip
-                    label={record?.hasTenthMarksheet ? 'Marksheet Verified' : 'Optional (No Marksheet)'}
+                    label="Direct Academic Entry"
                     size="small"
-                    color={record?.hasTenthMarksheet ? 'success' : 'default'}
-                    icon={record?.hasTenthMarksheet ? <CheckCircleIcon /> : <WarningAmberIcon />}
-                    sx={{ fontWeight: 600 }}
+                    color="primary"
+                    variant="outlined"
+                    icon={<CheckCircleOutlineIcon />}
+                    sx={{ fontWeight: 600, fontSize: '0.72rem' }}
                   />
                 </Box>
 
-                <Grid container spacing={1.5}>
+                <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
                       Board / Council
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {record?.tenthBoard || 'Not Provided'}
+                    <Typography variant="body2" fontWeight={600} color="#0f172a">
+                      {record?.tenthBoard || 'State Board'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
                       Passing Year
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" fontWeight={600} color="#0f172a">
                       {record?.tenthPassingYear || 'Not Provided'}
                     </Typography>
                   </Grid>
@@ -379,7 +528,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     <Typography variant="caption" color="text.secondary">
                       Marks (Obtained / Total)
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" fontWeight={700} color="#1e293b">
                       {record?.tenthObtainedMarks != null && record?.tenthTotalMarks != null
                         ? `${record.tenthObtainedMarks} / ${record.tenthTotalMarks}`
                         : 'Not Provided'}
@@ -389,61 +538,18 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     <Typography variant="caption" color="text.secondary">
                       Percentage
                     </Typography>
-                    <Typography variant="h6" fontWeight={800} color="#0284C7">
+                    <Typography variant="h6" fontWeight={800} color="#0284c7">
                       {record?.tenthPercentage != null ? `${Number(record.tenthPercentage).toFixed(2)}%` : 'Not Provided'}
                     </Typography>
                   </Grid>
                 </Grid>
               </Box>
 
-              <Box sx={{ mt: 2.5, pt: 2, borderTop: '1px solid #E2E8F0', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<CloudUploadIcon fontSize="small" />}
-                  onClick={() => handleOpenUploadModal('tenth')}
-                  sx={{ textTransform: 'none', fontWeight: 600 }}
-                >
-                  {record?.hasTenthMarksheet ? 'Replace Marksheet' : 'Upload Marksheet (Optional)'}
-                </Button>
-                {record?.hasTenthMarksheet && (
-                  <>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      startIcon={
-                        downloadingDoc === 'tenth__view' ? (
-                          <CircularProgress size={14} />
-                        ) : (
-                          <VisibilityIcon fontSize="small" />
-                        )
-                      }
-                      onClick={() => handleViewOrDownloadDoc('tenth', undefined, true)}
-                      disabled={Boolean(downloadingDoc)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      View
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      startIcon={
-                        downloadingDoc === 'tenth__dl' ? (
-                          <CircularProgress size={14} />
-                        ) : (
-                          <DownloadIcon fontSize="small" />
-                        )
-                      }
-                      onClick={() => handleViewOrDownloadDoc('tenth', undefined, false)}
-                      disabled={Boolean(downloadingDoc)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Download
-                    </Button>
-                  </>
-                )}
+              <Box sx={{ mt: 2.5, pt: 1.5, borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CalculateIcon sx={{ fontSize: 16, color: '#64748b' }} />
+                <Typography variant="caption" color="text.secondary">
+                  Percentage automatically verified for placement drive eligibility.
+                </Typography>
               </Box>
             </Box>
           </Grid>
@@ -465,31 +571,32 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="subtitle1" fontWeight={700} color="#1E293B">
-                    Higher Secondary / 12th Standard / Diploma
+                    Higher Secondary / 12th Standard
                   </Typography>
                   <Chip
-                    label={record?.hasTwelfthMarksheet ? 'Marksheet Verified' : 'Optional (No Marksheet)'}
+                    label="Direct Academic Entry"
                     size="small"
-                    color={record?.hasTwelfthMarksheet ? 'success' : 'default'}
-                    icon={record?.hasTwelfthMarksheet ? <CheckCircleIcon /> : <WarningAmberIcon />}
-                    sx={{ fontWeight: 600 }}
+                    color="primary"
+                    variant="outlined"
+                    icon={<CheckCircleOutlineIcon />}
+                    sx={{ fontWeight: 600, fontSize: '0.72rem' }}
                   />
                 </Box>
 
-                <Grid container spacing={1.5}>
+                <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
                       Board / Institution
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {record?.twelfthBoard || 'Not Provided'}
+                    <Typography variant="body2" fontWeight={600} color="#0f172a">
+                      {record?.twelfthBoard || 'State Board'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
                       Passing Year
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" fontWeight={600} color="#0f172a">
                       {record?.twelfthPassingYear || 'Not Provided'}
                     </Typography>
                   </Grid>
@@ -497,7 +604,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     <Typography variant="caption" color="text.secondary">
                       Marks (Obtained / Total)
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" fontWeight={700} color="#1e293b">
                       {record?.twelfthObtainedMarks != null && record?.twelfthTotalMarks != null
                         ? `${record.twelfthObtainedMarks} / ${record.twelfthTotalMarks}`
                         : 'Not Provided'}
@@ -507,61 +614,18 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     <Typography variant="caption" color="text.secondary">
                       Percentage
                     </Typography>
-                    <Typography variant="h6" fontWeight={800} color="#0284C7">
+                    <Typography variant="h6" fontWeight={800} color="#0284c7">
                       {record?.twelfthPercentage != null ? `${Number(record.twelfthPercentage).toFixed(2)}%` : 'Not Provided'}
                     </Typography>
                   </Grid>
                 </Grid>
               </Box>
 
-              <Box sx={{ mt: 2.5, pt: 2, borderTop: '1px solid #E2E8F0', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<CloudUploadIcon fontSize="small" />}
-                  onClick={() => handleOpenUploadModal('twelfth')}
-                  sx={{ textTransform: 'none', fontWeight: 600 }}
-                >
-                  {record?.hasTwelfthMarksheet ? 'Replace Marksheet' : 'Upload Marksheet (Optional)'}
-                </Button>
-                {record?.hasTwelfthMarksheet && (
-                  <>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      startIcon={
-                        downloadingDoc === 'twelfth__view' ? (
-                          <CircularProgress size={14} />
-                        ) : (
-                          <VisibilityIcon fontSize="small" />
-                        )
-                      }
-                      onClick={() => handleViewOrDownloadDoc('twelfth', undefined, true)}
-                      disabled={Boolean(downloadingDoc)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      View
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      startIcon={
-                        downloadingDoc === 'twelfth__dl' ? (
-                          <CircularProgress size={14} />
-                        ) : (
-                          <DownloadIcon fontSize="small" />
-                        )
-                      }
-                      onClick={() => handleViewOrDownloadDoc('twelfth', undefined, false)}
-                      disabled={Boolean(downloadingDoc)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Download
-                    </Button>
-                  </>
-                )}
+              <Box sx={{ mt: 2.5, pt: 1.5, borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CalculateIcon sx={{ fontSize: 16, color: '#64748b' }} />
+                <Typography variant="caption" color="text.secondary">
+                  Percentage automatically verified for placement drive eligibility.
+                </Typography>
               </Box>
             </Box>
           </Grid>
@@ -593,9 +657,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                       label={
                         (record?.ugStatus || record?.studyStatus) === 'COMPLETED'
                           ? 'Completed'
-                          : (record?.ugStatus || record?.studyStatus) === 'STUDYING'
-                          ? 'Studying'
-                          : record?.ugStatus || record?.studyStatus || 'Not Provided'
+                          : 'Studying'
                       }
                       size="small"
                       color={(record?.ugStatus || record?.studyStatus) === 'COMPLETED' ? 'success' : 'info'}
@@ -603,7 +665,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     />
                     {record?.currentSemester && (
                       <Chip
-                        label={`Sem ${record.currentSemester}`}
+                        label={`Sem ${record.currentSemester} of ${activeStructure.totalSemesters}`}
                         size="small"
                         variant="outlined"
                         sx={{ fontWeight: 600 }}
@@ -612,30 +674,26 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                   </Box>
                 </Box>
 
-                <Grid container spacing={1.5}>
+                <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
-                      Degree
+                      Degree & Program
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {record?.ugDegree || 'Not Provided'}
+                    <Typography variant="body2" fontWeight={700} color="#0f172a">
+                      {record?.ugDegree || 'B.Sc IT'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
-                      Education Status
+                      Branch / Specialization
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {(record?.ugStatus || record?.studyStatus) === 'COMPLETED'
-                        ? 'Completed'
-                        : (record?.ugStatus || record?.studyStatus) === 'STUDYING'
-                        ? 'Studying'
-                        : 'Not Provided'}
+                    <Typography variant="body2" fontWeight={600} color="#0f172a">
+                      {record?.ugBranch || 'Information Technology'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
-                      {(record?.ugStatus || record?.studyStatus) === 'COMPLETED' ? 'Final CGPA' : 'Current CGPA'}
+                      Cumulative CGPA (0-10)
                     </Typography>
                     <Typography variant="h6" fontWeight={800} color="#0D9488">
                       {record?.ugCgpa != null
@@ -647,7 +705,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
-                      {(record?.ugStatus || record?.studyStatus) === 'COMPLETED' ? 'Final Percentage' : 'Current Percentage'}
+                      Overall Percentage
                     </Typography>
                     <Typography variant="h6" fontWeight={800} color="#0284C7">
                       {record?.ugPercentage != null
@@ -657,16 +715,6 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                         : 'Not Provided'}
                     </Typography>
                   </Grid>
-                  {record?.ugBranch && (
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary">
-                        Branch / Specialization
-                      </Typography>
-                      <Typography variant="body2" fontWeight={600}>
-                        {record.ugBranch}
-                      </Typography>
-                    </Grid>
-                  )}
                 </Grid>
               </Box>
 
@@ -722,7 +770,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                         ? 'Studying'
                         : record?.pgDegree
                         ? 'Enrolled'
-                        : 'Optional / Not Enrolled'
+                        : 'Not Enrolled'
                     }
                     size="small"
                     color={
@@ -737,49 +785,49 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                   />
                 </Box>
 
-                <Grid container spacing={1.5}>
+                <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
                       Degree
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {record?.pgDegree || 'Not Provided'}
+                    <Typography variant="body2" fontWeight={600} color="#0f172a">
+                      {record?.pgDegree || 'None / Not Enrolled'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
                       Education Status
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" fontWeight={600} color="#0f172a">
                       {record?.pgStatus === 'COMPLETED'
                         ? 'Completed'
                         : record?.pgStatus === 'STUDYING'
                         ? 'Studying'
-                        : 'Not Provided'}
+                        : 'Not Enrolled'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
-                      {record?.pgStatus === 'COMPLETED' ? 'Final CGPA' : 'Current CGPA'}
+                      PG CGPA (0-10)
                     </Typography>
                     <Typography
                       variant="h6"
                       fontWeight={800}
                       color={record?.pgCgpa != null ? '#7E22CE' : 'text.secondary'}
                     >
-                      {record?.pgCgpa != null ? Number(record.pgCgpa).toFixed(2) : 'Not Provided'}
+                      {record?.pgCgpa != null ? Number(record.pgCgpa).toFixed(2) : '—'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">
-                      {record?.pgStatus === 'COMPLETED' ? 'Final Percentage' : 'Current Percentage'}
+                      PG Percentage
                     </Typography>
                     <Typography
                       variant="h6"
                       fontWeight={800}
                       color={record?.pgPercentage != null ? '#7E22CE' : 'text.secondary'}
                     >
-                      {record?.pgPercentage != null ? `${Number(record.pgPercentage).toFixed(2)}%` : 'Not Provided'}
+                      {record?.pgPercentage != null ? `${Number(record.pgPercentage).toFixed(2)}%` : '—'}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -788,36 +836,52 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
               <Box sx={{ mt: 2.5, pt: 1.5, borderTop: '1px solid #E2E8F0' }}>
                 <Typography variant="caption" color="text.secondary">
                   {record?.pgDegree || record?.pgCgpa != null || record?.pgPercentage != null
-                    ? 'Official postgraduate academic record recorded directly.'
-                    : 'Postgraduate fields are optional for students who have not started PG.'}
+                    ? 'Postgraduate credentials recorded and managed directly (2 Years, 4 Semesters).'
+                    : 'Optional for students who have not enrolled in a PG program.'}
                 </Typography>
               </Box>
             </Box>
           </Grid>
         </Grid>
 
-        {/* Semester-Wise Records Table */}
-        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#1E293B' }}>
-          Semester-Wise Progression (Semesters 1 to 8)
-        </Typography>
+        {/* Dynamic Semester-Wise Records Table */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+          <div>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#1E293B' }}>
+              {activeStructure.streamLabel} Progression (Semesters 1 to {activeStructure.totalSemesters})
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Showing only the {activeStructure.totalSemesters} semesters configured for this academic stream.
+            </Typography>
+          </div>
+          <Chip
+            label={`${activeStructure.totalSemesters} Semesters Total`}
+            size="small"
+            color="primary"
+            variant="outlined"
+            sx={{ fontWeight: 700 }}
+          />
+        </Box>
 
         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
           <Table size="small">
             <TableHead sx={{ bgcolor: '#F8FAFC' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>Semester</TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="center">SGPA</TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="center">CGPA</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="center">SGPA (0-10)</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="center">CGPA (0-10)</TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="center">Credits (Earned / Total)</TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="center">Arrears / Backlogs</TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="center">Marksheet Document</TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="right">Actions</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="center">Academic Standing</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {Array.from({ length: 8 }, (_, i) => {
+              {Array.from({ length: activeStructure.totalSemesters }, (_, i) => {
                 const semNo = i + 1;
                 const sem = record?.semesters?.find((s) => s.semesterNumber === semNo);
+                const hasArrears = sem?.backlogsCount && sem.backlogsCount > 0;
+                const isCompleted = sem?.sgpa != null && sem?.cgpa != null;
+
                 return (
                   <TableRow key={semNo} hover>
                     <TableCell sx={{ fontWeight: 700, color: '#1E293B' }}>
@@ -836,70 +900,26 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     </TableCell>
                     <TableCell align="center">
                       <Chip
-                        label={sem?.backlogsCount ? `${sem.backlogsCount} Backlogs` : '0 Backlogs'}
+                        label={hasArrears ? `${sem?.backlogsCount} Backlog(s)` : '0 Backlogs'}
                         size="small"
-                        color={sem?.backlogsCount && sem.backlogsCount > 0 ? 'error' : 'default'}
-                        variant={sem?.backlogsCount ? 'filled' : 'outlined'}
+                        color={hasArrears ? 'error' : 'default'}
+                        variant={hasArrears ? 'filled' : 'outlined'}
                         sx={{ fontWeight: 600, fontSize: '0.72rem' }}
                       />
                     </TableCell>
                     <TableCell align="center">
-                      {sem?.hasMarksheet ? (
+                      {isCompleted ? (
                         <Chip
-                          icon={<PictureAsPdfIcon fontSize="small" />}
-                          label="Verified File"
+                          label={hasArrears ? 'Arrears Pending' : 'Clear / Passed'}
                           size="small"
-                          color="success"
+                          color={hasArrears ? 'warning' : 'success'}
                           sx={{ fontWeight: 600, fontSize: '0.72rem' }}
                         />
                       ) : (
                         <Typography variant="caption" color="text.secondary">
-                          Not uploaded
+                          Upcoming / Inactive
                         </Typography>
                       )}
-                    </TableCell>
-                    <TableCell align="right">
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                        <Tooltip title={sem?.hasMarksheet ? 'Replace Marksheet' : 'Upload Marksheet'}>
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleOpenUploadModal('semester', semNo)}
-                          >
-                            <CloudUploadIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        {sem?.hasMarksheet && (
-                          <>
-                            <Tooltip title="View Marksheet">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleViewOrDownloadDoc('semester', semNo, true)}
-                                disabled={Boolean(downloadingDoc)}
-                              >
-                                {downloadingDoc === `semester_${semNo}_view` ? (
-                                  <CircularProgress size={16} />
-                                ) : (
-                                  <VisibilityIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Download Marksheet">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleViewOrDownloadDoc('semester', semNo, false)}
-                                disabled={Boolean(downloadingDoc)}
-                              >
-                                {downloadingDoc === `semester_${semNo}_dl` ? (
-                                  <CircularProgress size={16} />
-                                ) : (
-                                  <DownloadIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </Tooltip>
-                          </>
-                        )}
-                      </Box>
                     </TableCell>
                   </TableRow>
                 );
@@ -918,14 +938,74 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
         PaperProps={{ sx: { borderRadius: 2.5 } }}
       >
         <form onSubmit={handleSaveAcademicRecord}>
-          <DialogTitle sx={{ fontWeight: 700, color: '#14264B', borderBottom: '1px solid #E2E8F0' }}>
-            Edit Student Academic Credentials
+          <DialogTitle sx={{ fontWeight: 700, color: '#14264B', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Direct Academic Entry & Management</span>
+            <Chip
+              label={formStructure.streamLabel}
+              size="small"
+              color="primary"
+              sx={{ fontWeight: 700 }}
+            />
           </DialogTitle>
           <DialogContent sx={{ pt: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {formValidationErrors.length > 0 && (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Please resolve the following input issues:
+                </Typography>
+                <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                  {formValidationErrors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+              </Alert>
+            )}
+
+            {/* Program Stream Selector */}
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#f0f9ff', border: '1px solid #bae6fd' }}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: '#0369a1' }}>
+                Academic Program Stream Configuration
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    select
+                    label="Degree Level"
+                    fullWidth
+                    size="small"
+                    value={editForm.degreeLevel || 'UG'}
+                    onChange={(e) => {
+                      const newLevel = e.target.value as 'UG' | 'PG';
+                      setEditForm((prev) => ({
+                        ...prev,
+                        degreeLevel: newLevel,
+                        studyStatus: newLevel === 'PG' ? 'COMPLETED' : prev.studyStatus,
+                      }));
+                    }}
+                  >
+                    <MenuItem value="UG">Undergraduate (UG)</MenuItem>
+                    <MenuItem value="PG">Postgraduate (PG)</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', gap: 1 }}>
+                    <Chip
+                      label={formStructure.streamLabel}
+                      color="info"
+                      sx={{ fontWeight: 700 }}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      Active: {formStructure.totalSemesters} Semesters only
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+
             {/* 10th Standard Inputs */}
             <Box>
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#1E293B' }}>
-                10th Standard Details
+                1. 10th Standard (Secondary) Records
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
@@ -933,6 +1013,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     label="Board / Council"
                     fullWidth
                     size="small"
+                    placeholder="e.g. CBSE, ICSE, State Board"
                     value={editForm.tenthBoard || ''}
                     onChange={(e) => setEditForm({ ...editForm, tenthBoard: e.target.value })}
                   />
@@ -955,12 +1036,11 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     type="number"
                     fullWidth
                     size="small"
-                    value={editForm.tenthTotalMarks || ''}
+                    placeholder="500"
+                    value={editForm.tenthTotalMarks ?? ''}
                     onChange={(e) => {
-                      const total = Number(e.target.value) || null;
-                      const obt = editForm.tenthObtainedMarks || 0;
-                      const pct = total && total > 0 ? Number(((obt / total) * 100).toFixed(2)) : null;
-                      setEditForm({ ...editForm, tenthTotalMarks: total, tenthPercentage: pct });
+                      const total = e.target.value !== '' ? Number(e.target.value) : null;
+                      handleTenthMarksChange(total, editForm.tenthObtainedMarks ?? null);
                     }}
                   />
                 </Grid>
@@ -970,26 +1050,32 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     type="number"
                     fullWidth
                     size="small"
-                    value={editForm.tenthObtainedMarks || ''}
+                    placeholder="450"
+                    value={editForm.tenthObtainedMarks ?? ''}
                     onChange={(e) => {
-                      const obt = Number(e.target.value) || null;
-                      const total = editForm.tenthTotalMarks || 0;
-                      const pct = total && total > 0 && obt ? Number(((obt / total) * 100).toFixed(2)) : null;
-                      setEditForm({ ...editForm, tenthObtainedMarks: obt, tenthPercentage: pct });
+                      const obtained = e.target.value !== '' ? Number(e.target.value) : null;
+                      handleTenthMarksChange(editForm.tenthTotalMarks ?? null, obtained);
                     }}
                   />
                 </Grid>
                 <Grid item xs={6} sm={2}>
                   <TextField
-                    label="Percentage (%)"
+                    label="Percentage"
                     type="number"
                     fullWidth
                     size="small"
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    }}
                     inputProps={{ step: 0.01, min: 0, max: 100 }}
-                    value={editForm.tenthPercentage || ''}
+                    value={editForm.tenthPercentage ?? ''}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, tenthPercentage: Number(e.target.value) || null })
+                      setEditForm({
+                        ...editForm,
+                        tenthPercentage: e.target.value !== '' ? Number(e.target.value) : null,
+                      })
                     }
+                    helperText="Auto-calculated from marks"
                   />
                 </Grid>
               </Grid>
@@ -1000,7 +1086,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
             {/* 12th Standard Inputs */}
             <Box>
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#1E293B' }}>
-                12th Standard / Diploma Details
+                2. 12th Standard / Higher Secondary Records
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
@@ -1008,6 +1094,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     label="Board / Institution"
                     fullWidth
                     size="small"
+                    placeholder="e.g. CBSE, State Board, Diploma"
                     value={editForm.twelfthBoard || ''}
                     onChange={(e) => setEditForm({ ...editForm, twelfthBoard: e.target.value })}
                   />
@@ -1030,12 +1117,11 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     type="number"
                     fullWidth
                     size="small"
-                    value={editForm.twelfthTotalMarks || ''}
+                    placeholder="600"
+                    value={editForm.twelfthTotalMarks ?? ''}
                     onChange={(e) => {
-                      const total = Number(e.target.value) || null;
-                      const obt = editForm.twelfthObtainedMarks || 0;
-                      const pct = total && total > 0 ? Number(((obt / total) * 100).toFixed(2)) : null;
-                      setEditForm({ ...editForm, twelfthTotalMarks: total, twelfthPercentage: pct });
+                      const total = e.target.value !== '' ? Number(e.target.value) : null;
+                      handleTwelfthMarksChange(total, editForm.twelfthObtainedMarks ?? null);
                     }}
                   />
                 </Grid>
@@ -1045,26 +1131,32 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     type="number"
                     fullWidth
                     size="small"
-                    value={editForm.twelfthObtainedMarks || ''}
+                    placeholder="540"
+                    value={editForm.twelfthObtainedMarks ?? ''}
                     onChange={(e) => {
-                      const obt = Number(e.target.value) || null;
-                      const total = editForm.twelfthTotalMarks || 0;
-                      const pct = total && total > 0 && obt ? Number(((obt / total) * 100).toFixed(2)) : null;
-                      setEditForm({ ...editForm, twelfthObtainedMarks: obt, twelfthPercentage: pct });
+                      const obtained = e.target.value !== '' ? Number(e.target.value) : null;
+                      handleTwelfthMarksChange(editForm.twelfthTotalMarks ?? null, obtained);
                     }}
                   />
                 </Grid>
                 <Grid item xs={6} sm={2}>
                   <TextField
-                    label="Percentage (%)"
+                    label="Percentage"
                     type="number"
                     fullWidth
                     size="small"
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    }}
                     inputProps={{ step: 0.01, min: 0, max: 100 }}
-                    value={editForm.twelfthPercentage || ''}
+                    value={editForm.twelfthPercentage ?? ''}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, twelfthPercentage: Number(e.target.value) || null })
+                      setEditForm({
+                        ...editForm,
+                        twelfthPercentage: e.target.value !== '' ? Number(e.target.value) : null,
+                      })
                     }
+                    helperText="Auto-calculated from marks"
                   />
                 </Grid>
               </Grid>
@@ -1075,14 +1167,15 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
             {/* Undergraduate (UG) Details */}
             <Box>
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#1E293B' }}>
-                Undergraduate (UG) Details
+                3. Undergraduate (UG) Academic Credentials
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={3}>
                   <TextField
-                    label="UG Degree (e.g. B.Tech / B.E.)"
+                    label="UG Degree"
                     fullWidth
                     size="small"
+                    placeholder="e.g. B.Sc IT / B.Com / BCA"
                     value={editForm.ugDegree || ''}
                     onChange={(e) => setEditForm({ ...editForm, ugDegree: e.target.value })}
                   />
@@ -1092,6 +1185,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     label="Branch / Specialization"
                     fullWidth
                     size="small"
+                    placeholder="e.g. Information Technology"
                     value={editForm.ugBranch || ''}
                     onChange={(e) => setEditForm({ ...editForm, ugBranch: e.target.value })}
                   />
@@ -1118,17 +1212,18 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     type="number"
                     fullWidth
                     size="small"
-                    inputProps={{ min: 1, max: 12 }}
+                    inputProps={{ min: 1, max: formStructure.totalSemesters }}
                     value={editForm.currentSemester || 1}
                     onChange={(e) =>
                       setEditForm({ ...editForm, currentSemester: Number(e.target.value) || 1 })
                     }
+                    helperText={`1 to ${formStructure.totalSemesters}`}
                   />
                 </Grid>
 
                 <Grid item xs={12} sm={3}>
                   <TextField
-                    label={(editForm.ugStatus || editForm.studyStatus) === 'COMPLETED' ? 'Final CGPA (0-10)' : 'Current CGPA (0-10)'}
+                    label="UG CGPA (0.00 - 10.00)"
                     type="number"
                     fullWidth
                     size="small"
@@ -1136,16 +1231,19 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                     value={editForm.ugCgpa ?? editForm.currentCgpa ?? ''}
                     onChange={(e) => {
                       const val = e.target.value !== '' ? Number(e.target.value) : null;
-                      setEditForm({ ...editForm, ugCgpa: val, currentCgpa: val });
+                      handleUgCgpaChange(val);
                     }}
                   />
                 </Grid>
                 <Grid item xs={12} sm={3}>
                   <TextField
-                    label={(editForm.ugStatus || editForm.studyStatus) === 'COMPLETED' ? 'Final Percentage (%)' : 'Current Percentage (%)'}
+                    label="UG Percentage (%)"
                     type="number"
                     fullWidth
                     size="small"
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    }}
                     inputProps={{ step: 0.01, min: 0, max: 100 }}
                     value={editForm.ugPercentage ?? editForm.overallPercentage ?? ''}
                     onChange={(e) => {
@@ -1156,7 +1254,7 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                 </Grid>
                 <Grid item xs={6} sm={3}>
                   <TextField
-                    label="Active Backlogs / Arrears"
+                    label="Active Backlogs"
                     type="number"
                     fullWidth
                     size="small"
@@ -1189,19 +1287,17 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                 <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#1E293B' }}>
-                  Postgraduate (PG) Details (Optional)
+                  4. Postgraduate (PG) Credentials (Optional)
                 </Typography>
-                <Chip label="Optional" size="small" variant="outlined" />
+                <Chip label="2 Years, 4 Semesters" size="small" variant="outlined" />
               </Box>
-              <Alert severity="info" variant="outlined" sx={{ mb: 2, fontSize: '0.8125rem' }}>
-                Leave these fields empty if the student has not enrolled in a Postgraduate program.
-              </Alert>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={3}>
                   <TextField
-                    label="PG Degree (e.g. M.Tech / MBA)"
+                    label="PG Degree"
                     fullWidth
                     size="small"
+                    placeholder="e.g. M.Sc / MBA / M.Com"
                     value={editForm.pgDegree || ''}
                     onChange={(e) => setEditForm({ ...editForm, pgDegree: e.target.value })}
                   />
@@ -1222,26 +1318,27 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
                 </Grid>
                 <Grid item xs={12} sm={3}>
                   <TextField
-                    label={editForm.pgStatus === 'COMPLETED' ? 'Final CGPA (0-10)' : 'Current CGPA (0-10)'}
+                    label="PG CGPA (0.00 - 10.00)"
                     type="number"
                     fullWidth
                     size="small"
                     inputProps={{ step: 0.01, min: 0, max: 10 }}
                     value={editForm.pgCgpa ?? ''}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        pgCgpa: e.target.value !== '' ? Number(e.target.value) : null,
-                      })
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value !== '' ? Number(e.target.value) : null;
+                      handlePgCgpaChange(val);
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12} sm={3}>
                   <TextField
-                    label={editForm.pgStatus === 'COMPLETED' ? 'Final Percentage (%)' : 'Current Percentage (%)'}
+                    label="PG Percentage (%)"
                     type="number"
                     fullWidth
                     size="small"
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    }}
                     inputProps={{ step: 0.01, min: 0, max: 100 }}
                     value={editForm.pgPercentage ?? ''}
                     onChange={(e) =>
@@ -1257,137 +1354,158 @@ export const StudentAcademicRecordsSection: React.FC<Props> = ({
 
             <Divider />
 
-            {/* Semester-wise details */}
+            {/* Dynamic Semester-wise details for relevant stream */}
             <Box>
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#1E293B' }}>
-                Semester-Wise SGPA / CGPA / Backlogs (Semesters 1-8)
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+                <div>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#1E293B' }}>
+                    5. {formStructure.streamLabel} (Semesters 1 to {formStructure.totalSemesters})
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Displaying only the {formStructure.totalSemesters} semesters configured for this program.
+                  </Typography>
+                </div>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<CalculateIcon fontSize="small" />}
+                  onClick={() => {
+                    const autoCgpa = calculateProgramCgpa(editForm.semesters || []);
+                    if (autoCgpa !== null) {
+                      const autoPct = parseFloat((autoCgpa * 9.5).toFixed(2));
+                      setEditForm((prev) => ({
+                        ...prev,
+                        ugCgpa: autoCgpa,
+                        currentCgpa: autoCgpa,
+                        ugPercentage: autoPct,
+                        overallPercentage: autoPct,
+                      }));
+                      setActionSuccess(`Calculated Cumulative CGPA: ${autoCgpa} (${autoPct}%) from completed semesters.`);
+                      setTimeout(() => setActionSuccess(null), 4000);
+                    }
+                  }}
+                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                >
+                  Calculate Overall CGPA from Semesters
+                </Button>
+              </Box>
+
               <Grid container spacing={1.5}>
-                {editForm.semesters?.map((sem, idx) => (
-                  <Grid item xs={12} sm={6} md={3} key={sem.semesterNumber}>
-                    <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                      <Typography variant="caption" fontWeight={700} color="#1E293B" sx={{ display: 'block', mb: 1 }}>
-                        Semester {sem.semesterNumber}
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <TextField
-                          label="SGPA (0-10)"
-                          size="small"
-                          type="number"
-                          inputProps={{ step: 0.01, min: 0, max: 10 }}
-                          value={sem.sgpa ?? ''}
-                          onChange={(e) => {
-                            const newSems = [...(editForm.semesters || [])];
-                            newSems[idx].sgpa = e.target.value !== '' ? Number(e.target.value) : null;
-                            setEditForm({ ...editForm, semesters: newSems });
-                          }}
-                        />
-                        <TextField
-                          label="CGPA (0-10)"
-                          size="small"
-                          type="number"
-                          inputProps={{ step: 0.01, min: 0, max: 10 }}
-                          value={sem.cgpa ?? ''}
-                          onChange={(e) => {
-                            const newSems = [...(editForm.semesters || [])];
-                            newSems[idx].cgpa = e.target.value !== '' ? Number(e.target.value) : null;
-                            setEditForm({ ...editForm, semesters: newSems });
-                          }}
-                        />
-                        <TextField
-                          label="Backlogs"
-                          size="small"
-                          type="number"
-                          inputProps={{ min: 0 }}
-                          value={sem.backlogsCount ?? 0}
-                          onChange={(e) => {
-                            const newSems = [...(editForm.semesters || [])];
-                            newSems[idx].backlogsCount = Number(e.target.value) || 0;
-                            setEditForm({ ...editForm, semesters: newSems });
-                          }}
-                        />
+                {Array.from({ length: formStructure.totalSemesters }, (_, idx) => {
+                  const semNo = idx + 1;
+                  const sem = editForm.semesters?.find((s) => s.semesterNumber === semNo) || {
+                    semesterNumber: semNo,
+                    sgpa: null,
+                    cgpa: null,
+                    totalCredits: 24,
+                    creditsEarned: 24,
+                    backlogsCount: 0,
+                  };
+
+                  return (
+                    <Grid item xs={12} sm={6} md={3} key={semNo}>
+                      <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                        <Typography variant="caption" fontWeight={700} color="#1E293B" sx={{ display: 'block', mb: 1 }}>
+                          Semester {semNo}
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <TextField
+                            label="SGPA (0-10)"
+                            size="small"
+                            type="number"
+                            inputProps={{ step: 0.01, min: 0, max: 10 }}
+                            value={sem.sgpa ?? ''}
+                            onChange={(e) => {
+                              const newSems = [...(editForm.semesters || [])];
+                              const existingIdx = newSems.findIndex((s) => s.semesterNumber === semNo);
+                              const parsedVal = e.target.value !== '' ? Number(e.target.value) : null;
+                              if (existingIdx >= 0) {
+                                newSems[existingIdx].sgpa = parsedVal;
+                              } else {
+                                newSems.push({
+                                  semesterNumber: semNo,
+                                  sgpa: parsedVal,
+                                  cgpa: parsedVal,
+                                  totalCredits: 24,
+                                  creditsEarned: 24,
+                                  backlogsCount: 0,
+                                });
+                              }
+                              setEditForm({ ...editForm, semesters: newSems });
+                            }}
+                          />
+                          <TextField
+                            label="Cumulative CGPA"
+                            size="small"
+                            type="number"
+                            inputProps={{ step: 0.01, min: 0, max: 10 }}
+                            value={sem.cgpa ?? ''}
+                            onChange={(e) => {
+                              const newSems = [...(editForm.semesters || [])];
+                              const existingIdx = newSems.findIndex((s) => s.semesterNumber === semNo);
+                              const parsedVal = e.target.value !== '' ? Number(e.target.value) : null;
+                              if (existingIdx >= 0) {
+                                newSems[existingIdx].cgpa = parsedVal;
+                              } else {
+                                newSems.push({
+                                  semesterNumber: semNo,
+                                  sgpa: parsedVal,
+                                  cgpa: parsedVal,
+                                  totalCredits: 24,
+                                  creditsEarned: 24,
+                                  backlogsCount: 0,
+                                });
+                              }
+                              setEditForm({ ...editForm, semesters: newSems });
+                            }}
+                          />
+                          <TextField
+                            label="Backlogs"
+                            size="small"
+                            type="number"
+                            inputProps={{ min: 0 }}
+                            value={sem.backlogsCount ?? 0}
+                            onChange={(e) => {
+                              const newSems = [...(editForm.semesters || [])];
+                              const existingIdx = newSems.findIndex((s) => s.semesterNumber === semNo);
+                              const parsedVal = Number(e.target.value) || 0;
+                              if (existingIdx >= 0) {
+                                newSems[existingIdx].backlogsCount = parsedVal;
+                              } else {
+                                newSems.push({
+                                  semesterNumber: semNo,
+                                  sgpa: null,
+                                  cgpa: null,
+                                  totalCredits: 24,
+                                  creditsEarned: 24,
+                                  backlogsCount: parsedVal,
+                                });
+                              }
+                              setEditForm({ ...editForm, semesters: newSems });
+                            }}
+                          />
+                        </Box>
                       </Box>
-                    </Box>
-                  </Grid>
-                ))}
+                    </Grid>
+                  );
+                })}
               </Grid>
             </Box>
           </DialogContent>
           <DialogActions sx={{ p: 2.5, borderTop: '1px solid #E2E8F0' }}>
-            <Button onClick={() => setEditOpen(false)} color="inherit">
+            <Button onClick={() => setEditOpen(false)} color="inherit" sx={{ textTransform: 'none' }}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" disabled={saving} sx={{ bgcolor: '#1765B5' }}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={saving}
+              sx={{ bgcolor: '#0284c7', textTransform: 'none', fontWeight: 600, '&:hover': { bgcolor: '#0369a1' } }}
+            >
               {saving ? <CircularProgress size={20} color="inherit" /> : 'Save Academic Record'}
             </Button>
           </DialogActions>
         </form>
-      </Dialog>
-
-      {/* Upload Marksheet Modal */}
-      <Dialog
-        open={uploadModalOpen}
-        onClose={() => setUploadModalOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 2.5 } }}
-      >
-        <DialogTitle sx={{ fontWeight: 700, color: '#14264B', borderBottom: '1px solid #E2E8F0' }}>
-          Upload Marksheet Document
-        </DialogTitle>
-        <DialogContent sx={{ pt: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            Target Document:{' '}
-            <strong>
-              {uploadDocType === 'tenth'
-                ? '10th Standard Marksheet'
-                : uploadDocType === 'twelfth'
-                ? '12th Standard Marksheet'
-                : `Semester ${uploadSemesterNumber} Marksheet`}
-            </strong>
-          </Typography>
-
-          <Alert severity="info" variant="outlined" sx={{ fontSize: '0.8125rem' }}>
-            Supported formats: PDF documents (.pdf) or images (.png, .jpg, .jpeg). Maximum size: 10 MB.
-          </Alert>
-
-          <Button
-            variant="outlined"
-            component="label"
-            startIcon={<CloudUploadIcon />}
-            sx={{ py: 2, borderStyle: 'dashed' }}
-          >
-            {selectedFile ? selectedFile.name : 'Choose Marksheet File'}
-            <input
-              type="file"
-              hidden
-              accept=".pdf,image/png,image/jpeg,image/jpg"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) setSelectedFile(file);
-              }}
-            />
-          </Button>
-
-          {selectedFile && (
-            <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
-              Selected file: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2.5, borderTop: '1px solid #E2E8F0' }}>
-          <Button onClick={() => setUploadModalOpen(false)} color="inherit">
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            disabled={!selectedFile || uploading}
-            onClick={handleUploadSubmit}
-            sx={{ bgcolor: '#1765B5' }}
-          >
-            {uploading ? <CircularProgress size={20} color="inherit" /> : 'Upload Marksheet'}
-          </Button>
-        </DialogActions>
       </Dialog>
     </Card>
   );

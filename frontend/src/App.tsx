@@ -18,6 +18,15 @@ const queryClient = new QueryClient({
   },
 });
 
+// Automatic HTTPS redirection for LAN IP access so physical camera is enabled (requires Secure Context)
+if (
+  typeof window !== 'undefined' &&
+  window.location.protocol === 'http:' &&
+  !['localhost', '127.0.0.1'].includes(window.location.hostname)
+) {
+  window.location.href = window.location.href.replace('http:', 'https:');
+}
+
 export const App: React.FC = () => {
   return (
     <ErrorBoundary>

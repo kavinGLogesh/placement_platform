@@ -1,5 +1,6 @@
 import { prisma } from '../config/prisma.config.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { getAcademicStructure } from '../utils/academic-structure.util.js';
 import {
   CollegeDto,
   CreateCollegeDto,
@@ -1115,11 +1116,25 @@ export class ManagementRepository {
       data: {
         userId: record.userId,
         registerNumber: record.registerNumber,
+        rollNo: dto.rollNo?.trim() || null,
         name: record.name,
+        gender: dto.gender?.trim() || null,
         collegeEmail: record.collegeEmail,
         personalEmail: record.personalEmail,
         phone: record.phone,
+        whatsappNumber: dto.whatsappNumber?.trim() || dto.phone?.trim() || null,
         dob: record.dob,
+        schoolName: dto.schoolName?.trim() || null,
+        ugCollegeName: dto.ugCollegeName?.trim() || null,
+        nativePlace: dto.nativePlace?.trim() || null,
+        languagesKnown: dto.languagesKnown?.trim() || null,
+        correspondenceAddress: dto.correspondenceAddress?.trim() || null,
+        permanentAddress: dto.permanentAddress?.trim() || null,
+        graduationYear: dto.graduationYear || null,
+        arrearStatus: dto.arrearStatus?.trim() || null,
+        placementWillingness: dto.placementWillingness?.trim() || null,
+        specialization: dto.specialization?.trim() || dto.ugBranch?.trim() || null,
+        internshipExperience: dto.internshipExperience?.trim() || null,
         departmentId: record.departmentId,
         courseId: record.courseId,
         classId: record.classId,
@@ -1136,19 +1151,95 @@ export class ManagementRepository {
       },
     });
 
-    if (acadRecordData) {
-      const savedAcad = await prisma.studentAcademicRecord.upsert({
-        where: { studentId: created.id },
-        create: {
-          studentId: created.id,
-          ...acadRecordData,
-        },
-        update: {
-          ...acadRecordData,
-        },
-      });
-      (created as StudentDto).academicRecord = savedAcad;
+    if (dto.skillsList && dto.skillsList.length > 0) {
+      for (const skill of dto.skillsList) {
+        const clean = skill.trim();
+        if (!clean) continue;
+        await prisma.studentSkill.upsert({
+          where: { studentId_name: { studentId: created.id, name: clean } },
+          create: {
+            studentId: created.id,
+            name: clean,
+            category: 'TECHNICAL',
+            level: 'INTERMEDIATE',
+            verified: false,
+          },
+          update: {},
+        });
+      }
     }
+
+    const struct = getAcademicStructure({
+      degreeLevel: dto.degreeLevel,
+      degreeName: dto.ugDegree || dto.pgDegree || course?.name,
+      courseName: course?.name,
+      departmentName: dept?.name,
+    });
+    const currentSem = dto.currentSemester ?? Math.min((dto.year || 1) * 2 - 1, struct.totalSemesters);
+    const pctVal = dto.ugPercentage ?? (cgpaVal !== null ? parseFloat((cgpaVal * 9.5).toFixed(2)) : null);
+
+    const fullAcadData = {
+      tenthBoard: dto.tenthBoard ?? null,
+      tenthPassingYear: dto.tenthPassingYear ?? null,
+      tenthObtainedMarks: dto.tenthObtainedMarks ?? null,
+      tenthTotalMarks: dto.tenthTotalMarks ?? null,
+      tenthPercentage: dto.tenthPercentage ?? null,
+      twelfthBoard: dto.twelfthBoard ?? null,
+      twelfthPassingYear: dto.twelfthPassingYear ?? null,
+      twelfthObtainedMarks: dto.twelfthObtainedMarks ?? null,
+      twelfthTotalMarks: dto.twelfthTotalMarks ?? null,
+      twelfthPercentage: dto.twelfthPercentage ?? null,
+      degreeLevel: dto.degreeLevel || struct.degreeLevel,
+      ugDegree: dto.ugDegree || (course ? course.name : null),
+      ugBranch: dto.ugBranch || (dept ? dept.name : null),
+      ugStatus: dto.ugStatus || 'STUDYING',
+      studyStatus: dto.ugStatus || 'STUDYING',
+      ugCgpa: dto.ugCgpa ?? cgpaVal,
+      ugPercentage: dto.ugPercentage ?? pctVal,
+      currentSemester: currentSem,
+      activeBacklogs: dto.activeBacklogs ?? 0,
+      historyOfBacklogs: dto.historyOfBacklogs ?? 0,
+      pgDegree: dto.pgDegree ?? null,
+      pgStatus: dto.pgStatus ?? null,
+      pgCgpa: dto.pgCgpa ?? null,
+      pgPercentage: dto.pgPercentage ?? null,
+      currentCgpa: dto.ugCgpa ?? cgpaVal,
+      overallPercentage: dto.ugPercentage ?? pctVal,
+    };
+
+    const savedAcad = await prisma.studentAcademicRecord.upsert({
+      where: { studentId: created.id },
+      create: {
+        studentId: created.id,
+        ...fullAcadData,
+      },
+      update: {
+        ...fullAcadData,
+      },
+    });
+
+    for (let sem = 1; sem <= struct.totalSemesters; sem++) {
+      await prisma.studentSemesterRecord.upsert({
+        where: {
+          academicRecordId_semesterNumber: {
+            academicRecordId: savedAcad.id,
+            semesterNumber: sem,
+          },
+        },
+        create: {
+          academicRecordId: savedAcad.id,
+          semesterNumber: sem,
+          sgpa: null,
+          cgpa: null,
+          totalCredits: 24,
+          creditsEarned: 24,
+          backlogsCount: 0,
+        },
+        update: {},
+      });
+    }
+
+    (created as StudentDto).academicRecord = savedAcad;
 
     return created as StudentDto;
   }
@@ -1519,10 +1610,24 @@ export class ManagementRepository {
       where: { id },
       data: {
         ...(dto.name ? { name: dto.name.trim() } : {}),
+        ...(dto.rollNo !== undefined ? { rollNo: dto.rollNo?.trim() || null } : {}),
+        ...(dto.gender !== undefined ? { gender: dto.gender?.trim() || null } : {}),
         ...(dto.personalEmail !== undefined ? { personalEmail: dto.personalEmail?.trim() || null } : {}),
         ...(dto.isPersonalEmailVerified !== undefined ? { isPersonalEmailVerified: dto.isPersonalEmailVerified } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone?.trim() || null } : {}),
+        ...(dto.whatsappNumber !== undefined ? { whatsappNumber: dto.whatsappNumber?.trim() || null } : {}),
         ...(dto.dob !== undefined ? { dob: dto.dob?.trim() || null } : {}),
+        ...(dto.schoolName !== undefined ? { schoolName: dto.schoolName?.trim() || null } : {}),
+        ...(dto.ugCollegeName !== undefined ? { ugCollegeName: dto.ugCollegeName?.trim() || null } : {}),
+        ...(dto.nativePlace !== undefined ? { nativePlace: dto.nativePlace?.trim() || null } : {}),
+        ...(dto.languagesKnown !== undefined ? { languagesKnown: dto.languagesKnown?.trim() || null } : {}),
+        ...(dto.correspondenceAddress !== undefined ? { correspondenceAddress: dto.correspondenceAddress?.trim() || null } : {}),
+        ...(dto.permanentAddress !== undefined ? { permanentAddress: dto.permanentAddress?.trim() || null } : {}),
+        ...(dto.graduationYear !== undefined ? { graduationYear: dto.graduationYear || null } : {}),
+        ...(dto.arrearStatus !== undefined ? { arrearStatus: dto.arrearStatus?.trim() || null } : {}),
+        ...(dto.placementWillingness !== undefined ? { placementWillingness: dto.placementWillingness?.trim() || null } : {}),
+        ...(dto.specialization !== undefined ? { specialization: dto.specialization?.trim() || null } : {}),
+        ...(dto.internshipExperience !== undefined ? { internshipExperience: dto.internshipExperience?.trim() || null } : {}),
         ...(dto.departmentId ? { departmentId: dto.departmentId } : {}),
         ...(dto.courseId ? { courseId: dto.courseId } : {}),
         ...(dto.classId ? { classId: dto.classId } : {}),
@@ -1593,10 +1698,25 @@ export class ManagementRepository {
           data: {
             userId: s.userId || null,
             registerNumber: s.registerNumber.trim().toUpperCase(),
+            rollNo: s.rollNo?.trim() || null,
             name: s.name.trim(),
+            gender: s.gender?.trim() || null,
             collegeEmail: s.collegeEmail.trim().toLowerCase(),
+            personalEmail: s.personalEmail?.trim()?.toLowerCase() || null,
             phone: s.phone?.trim() || null,
+            whatsappNumber: s.whatsappNumber?.trim() || s.phone?.trim() || null,
             dob: s.dob?.trim() || null,
+            schoolName: s.schoolName?.trim() || null,
+            ugCollegeName: s.ugCollegeName?.trim() || null,
+            nativePlace: s.nativePlace?.trim() || null,
+            languagesKnown: s.languagesKnown?.trim() || null,
+            correspondenceAddress: s.correspondenceAddress?.trim() || null,
+            permanentAddress: s.permanentAddress?.trim() || null,
+            graduationYear: s.graduationYear || null,
+            arrearStatus: s.arrearStatus?.trim() || null,
+            placementWillingness: s.placementWillingness?.trim() || null,
+            specialization: s.specialization?.trim() || s.ugBranch?.trim() || null,
+            internshipExperience: s.internshipExperience?.trim() || null,
             departmentId: s.departmentId,
             courseId: s.courseId || null,
             classId: s.classId || null,
@@ -1609,49 +1729,76 @@ export class ManagementRepository {
       })
     );
 
-    // Upsert academic records for created students who have academic info
+    // Upsert academic records, skills & initialize semester records for all created students
     await Promise.all(
-      createdStudents.map((created, idx) => {
+      createdStudents.map(async (created, idx) => {
         const s = students[idx];
-        const hasAcademic =
-          s.tenthObtainedMarks !== undefined ||
-          s.tenthTotalMarks !== undefined ||
-          s.tenthPercentage !== undefined ||
-          s.twelfthObtainedMarks !== undefined ||
-          s.twelfthTotalMarks !== undefined ||
-          s.twelfthPercentage !== undefined ||
-          s.ugDegree !== undefined ||
-          s.ugStatus !== undefined ||
-          s.ugCgpa !== undefined ||
-          s.ugPercentage !== undefined ||
-          s.pgDegree !== undefined ||
-          s.pgStatus !== undefined ||
-          s.pgCgpa !== undefined ||
-          s.pgPercentage !== undefined;
 
-        if (!hasAcademic) return Promise.resolve(null);
+        // Insert skills if provided
+        if (s.skillsList && s.skillsList.length > 0) {
+          for (const skill of s.skillsList) {
+            const clean = skill.trim();
+            if (!clean) continue;
+            await prisma.studentSkill.upsert({
+              where: { studentId_name: { studentId: created.id, name: clean } },
+              create: {
+                studentId: created.id,
+                name: clean,
+                category: 'TECHNICAL',
+                level: 'INTERMEDIATE',
+                verified: false,
+              },
+              update: {},
+            });
+          }
+        }
+
+        const structure = getAcademicStructure({
+          degreeLevel: s.degreeLevel,
+          degreeName: s.ugDegree || s.pgDegree,
+        });
 
         const cgpaVal = s.cgpa ?? (s.ugCgpa !== undefined && s.ugCgpa !== null ? s.ugCgpa : null);
+        const pctVal = s.ugPercentage ?? (cgpaVal !== null ? parseFloat((cgpaVal * 9.5).toFixed(2)) : null);
+        const currentSem = s.currentSemester ?? Math.min((s.year || 1) * 2 - 1, structure.totalSemesters);
+
         const acadData = {
+          tenthBoard: s.tenthBoard ?? null,
+          tenthPassingYear: s.tenthPassingYear ?? null,
           tenthObtainedMarks: s.tenthObtainedMarks ?? null,
           tenthTotalMarks: s.tenthTotalMarks ?? null,
           tenthPercentage: s.tenthPercentage ?? null,
+          twelfthBoard: s.twelfthBoard ?? null,
+          twelfthPassingYear: s.twelfthPassingYear ?? null,
           twelfthObtainedMarks: s.twelfthObtainedMarks ?? null,
           twelfthTotalMarks: s.twelfthTotalMarks ?? null,
           twelfthPercentage: s.twelfthPercentage ?? null,
+          degreeLevel: s.degreeLevel || structure.degreeLevel,
           ugDegree: s.ugDegree ?? null,
+          ugBranch: s.ugBranch ?? s.specialization ?? null,
           ugStatus: s.ugStatus || 'STUDYING',
+          studyStatus: s.ugStatus || 'STUDYING',
           ugCgpa: s.ugCgpa ?? cgpaVal,
-          ugPercentage: s.ugPercentage ?? null,
+          ugPercentage: s.ugPercentage ?? pctVal,
+          currentSemester: currentSem,
+          activeBacklogs: s.activeBacklogs ?? 0,
+          historyOfBacklogs: s.historyOfBacklogs ?? 0,
           pgDegree: s.pgDegree ?? null,
           pgStatus: s.pgStatus ?? null,
           pgCgpa: s.pgCgpa ?? null,
           pgPercentage: s.pgPercentage ?? null,
           currentCgpa: s.ugCgpa ?? cgpaVal,
-          overallPercentage: s.ugPercentage ?? null,
+          overallPercentage: s.ugPercentage ?? pctVal,
+          schoolName: s.schoolName?.trim() || null,
+          ugCollegeName: s.ugCollegeName?.trim() || null,
+          graduationYear: s.graduationYear || null,
+          arrearStatus: s.arrearStatus?.trim() || null,
+          specialization: s.specialization?.trim() || s.ugBranch?.trim() || null,
+          internshipExperience: s.internshipExperience?.trim() || null,
+          placementWillingness: s.placementWillingness?.trim() || null,
         };
 
-        return prisma.studentAcademicRecord.upsert({
+        const acadRecord = await prisma.studentAcademicRecord.upsert({
           where: { studentId: created.id },
           create: {
             studentId: created.id,
@@ -1661,6 +1808,30 @@ export class ManagementRepository {
             ...acadData,
           },
         });
+
+        // Initialize semester records strictly matching structure.totalSemesters (Arts & Science = 6, PG = 4, Engineering = 8)
+        for (let sem = 1; sem <= structure.totalSemesters; sem++) {
+          await prisma.studentSemesterRecord.upsert({
+            where: {
+              academicRecordId_semesterNumber: {
+                academicRecordId: acadRecord.id,
+                semesterNumber: sem,
+              },
+            },
+            create: {
+              academicRecordId: acadRecord.id,
+              semesterNumber: sem,
+              sgpa: null,
+              cgpa: null,
+              totalCredits: 24,
+              creditsEarned: 24,
+              backlogsCount: 0,
+            },
+            update: {},
+          });
+        }
+
+        return acadRecord;
       })
     );
 

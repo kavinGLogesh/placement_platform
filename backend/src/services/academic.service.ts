@@ -17,6 +17,7 @@ import { AcademicRepository, academicRepository } from '../repositories/academic
 import { managementRepository, ManagementRepository } from '../repositories/management.repository.js';
 import { prisma } from '../config/prisma.config.js';
 import { calculateUniversityCgpa, calculateUniversityPercentage } from '../utils/cgpa-calculator.util.js';
+import { getAcademicStructure } from '../utils/academic-structure.util.js';
 
 export const marksheetUploadDir = path.resolve(process.cwd(), 'uploads', 'marksheets');
 if (!fs.existsSync(marksheetUploadDir)) {
@@ -65,13 +66,65 @@ export class AcademicService {
       throw new AppError('Student not found', 404);
     }
 
+    const structure = getAcademicStructure({
+      degreeLevel: (student.course as any)?.durationYears === 2 ? 'PG' : 'UG',
+      degreeName: student.course?.name,
+      courseName: student.course?.name,
+      courseCode: student.course?.code,
+      departmentName: student.department?.name,
+      departmentCode: student.department?.code,
+      durationYears: (student.course as any)?.durationYears,
+    });
+
     let record = await this.academicRepo.getAcademicRecord(studentId);
     if (!record) {
-      // Auto-initialize clean default academic record
+      const cgpa = student.cgpa || null;
+      const pct = cgpa ? parseFloat((cgpa * 9.5).toFixed(2)) : null;
+      const currentSemester = Math.min((student.year || 1) * 2 - 1, structure.totalSemesters);
+
       record = await this.academicRepo.upsertAcademicRecord(studentId, {
-        currentCgpa: student.cgpa || null,
+        degreeLevel: structure.degreeLevel,
+        studyStatus: 'STUDYING',
+        currentSemester,
+        ugDegree: student.course?.name || null,
         ugBranch: student.department?.name || null,
+        ugStatus: 'STUDYING',
+        ugCgpa: cgpa,
+        ugPercentage: pct,
+        currentCgpa: cgpa,
+        overallPercentage: pct,
+        activeBacklogs: 0,
+        historyOfBacklogs: 0,
+        semesters: Array.from({ length: structure.totalSemesters }, (_, i) => ({
+          semesterNumber: i + 1,
+          sgpa: null,
+          cgpa: null,
+          totalCredits: 24,
+          creditsEarned: 24,
+          backlogsCount: 0,
+        })),
       });
+    } else if (!record.semesters || record.semesters.length < structure.totalSemesters) {
+      // Ensure missing semesters exist strictly up to structure.totalSemesters
+      const existingSemSet = new Set((record.semesters || []).map((s) => s.semesterNumber));
+      const missingSemesters = [];
+      for (let s = 1; s <= structure.totalSemesters; s++) {
+        if (!existingSemSet.has(s)) {
+          missingSemesters.push({
+            semesterNumber: s,
+            sgpa: null,
+            cgpa: null,
+            totalCredits: 24,
+            creditsEarned: 24,
+            backlogsCount: 0,
+          });
+        }
+      }
+      if (missingSemesters.length > 0) {
+        record = await this.academicRepo.upsertAcademicRecord(studentId, {
+          semesters: missingSemesters,
+        });
+      }
     }
 
     return record;
@@ -653,6 +706,18 @@ export class AcademicService {
         detectedMapping['activeBacklogs'] = h;
       } else if (/^(historyofbacklogs|historyofarrears|totalbacklogs|standingarrears)$/.test(norm)) {
         detectedMapping['historyOfBacklogs'] = h;
+      } else if (/^(ugcgpa|undergraduatecgpa|currentugcgpa|finalugcgpa)$/.test(norm)) {
+        detectedMapping['ugCgpa'] = h;
+      } else if (/^(ugpercentage|undergraduatepercentage|overallpercentage|percentage)$/.test(norm)) {
+        detectedMapping['ugPercentage'] = h;
+      } else if (/^(pgdegree|postgraduatedegree|pgprogram)$/.test(norm)) {
+        detectedMapping['pgDegree'] = h;
+      } else if (/^(pgstatus|postgraduatestatus)$/.test(norm)) {
+        detectedMapping['pgStatus'] = h;
+      } else if (/^(pgcgpa|postgraduatecgpa)$/.test(norm)) {
+        detectedMapping['pgCgpa'] = h;
+      } else if (/^(pgpercentage|postgraduatepercentage)$/.test(norm)) {
+        detectedMapping['pgPercentage'] = h;
       }
     }
 
@@ -740,6 +805,23 @@ export class AcademicService {
       const ugDegree = getVal('ugDegree') ? String(getVal('ugDegree')).trim() : 'B.Tech';
       const ugBranch = getVal('ugBranch') ? String(getVal('ugBranch')).trim() : null;
       let currentCgpa = getVal('currentCgpa') ? Number(getVal('currentCgpa')) : null;
+      let ugCgpa = getVal('ugCgpa') ? Number(getVal('ugCgpa')) : currentCgpa;
+      if (currentCgpa === null && ugCgpa !== null) currentCgpa = ugCgpa;
+      if (ugCgpa === null && currentCgpa !== null) ugCgpa = currentCgpa;
+
+      let ugPercentage = getVal('ugPercentage') ? Number(getVal('ugPercentage')) : null;
+      if (ugPercentage === null && currentCgpa !== null) {
+        ugPercentage = parseFloat((currentCgpa * 9.5).toFixed(2));
+      }
+
+      const pgDegree = getVal('pgDegree') ? String(getVal('pgDegree')).trim() : null;
+      const pgStatus = getVal('pgStatus') ? String(getVal('pgStatus')).trim() : null;
+      const pgCgpa = getVal('pgCgpa') ? Number(getVal('pgCgpa')) : null;
+      let pgPercentage = getVal('pgPercentage') ? Number(getVal('pgPercentage')) : null;
+      if (pgPercentage === null && pgCgpa !== null) {
+        pgPercentage = parseFloat((pgCgpa * 9.5).toFixed(2));
+      }
+
       const activeBacklogs = getVal('activeBacklogs') !== '' && getVal('activeBacklogs') !== undefined ? Number(getVal('activeBacklogs')) : 0;
       const historyOfBacklogs = getVal('historyOfBacklogs') !== '' && getVal('historyOfBacklogs') !== undefined ? Number(getVal('historyOfBacklogs')) : 0;
 
@@ -795,6 +877,13 @@ export class AcademicService {
         ugDegree,
         ugBranch,
         currentCgpa,
+        ugCgpa,
+        ugPercentage,
+        overallPercentage: ugPercentage,
+        pgDegree,
+        pgStatus,
+        pgCgpa,
+        pgPercentage,
         activeBacklogs,
         historyOfBacklogs,
         semesters: semesters.length > 0 ? semesters : undefined,

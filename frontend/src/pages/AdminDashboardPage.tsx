@@ -16,6 +16,9 @@ import {
   TableRow,
   LinearProgress,
   Tooltip,
+  Divider,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -39,6 +42,8 @@ import { attendanceService } from '../services/attendance.service.js';
 export const AdminDashboardPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const {
@@ -415,7 +420,90 @@ export const AdminDashboardPage: React.FC = () => {
             <CircularProgress size={28} />
           </Box>
         ) : overview?.recentResults && overview.recentResults.length > 0 ? (
-          <TableContainer>
+          isMobile ? (
+            <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5, bgcolor: '#F8FAFC' }}>
+              {overview.recentResults.map((item) => (
+                <Card
+                  key={item.id}
+                  variant="outlined"
+                  sx={{
+                    p: 1.75,
+                    borderRadius: 2,
+                    borderColor: '#E2E8F0',
+                    bgcolor: '#FFFFFF',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#0F172A', lineHeight: 1.2 }}>
+                        {item.studentName}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#64748B', display: 'block' }}>
+                        {item.registerNumber} • {item.departmentCode || item.departmentName || '—'}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      icon={item.isPassed ? <CheckCircleOutlineIcon sx={{ '&&': { fontSize: 13 } }} /> : <CancelOutlinedIcon sx={{ '&&': { fontSize: 13 } }} />}
+                      label={item.isPassed ? 'PASS' : 'FAIL'}
+                      size="small"
+                      sx={{
+                        fontWeight: 800,
+                        fontSize: '0.68rem',
+                        bgcolor: item.isPassed ? '#ECFDF5' : '#FEF2F2',
+                        color: item.isPassed ? '#059669' : '#DC2626',
+                        border: item.isPassed ? '1px solid #A7F3D0' : '1px solid #FECACA',
+                      }}
+                    />
+                  </Box>
+
+                  <Typography variant="body2" sx={{ color: '#334155', fontWeight: 600, mb: 1, fontSize: '0.8rem' }}>
+                    {item.assessmentTitle}
+                  </Typography>
+
+                  <Divider sx={{ my: 0.75, borderColor: '#F1F5F9' }} />
+
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, my: 1 }}>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: '#64748B', fontSize: '0.65rem', fontWeight: 600, display: 'block' }}>
+                        SCORE
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: '#14264B', fontSize: '0.8rem' }}>
+                        {item.percentage}% ({item.obtainedMarks}/{item.totalMarks})
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: '#64748B', fontSize: '0.65rem', fontWeight: 600, display: 'block' }}>
+                        ACCURACY
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#405678', fontSize: '0.8rem' }}>
+                        {item.accuracy}%
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: '#64748B', fontSize: '0.65rem', fontWeight: 600, display: 'block' }}>
+                        WARNINGS
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontSize: '0.78rem', color: (item.violationCount || 0) > 0 ? '#DC2626' : '#059669', fontWeight: 600 }}>
+                        {item.violationCount || 0} violations
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    fullWidth
+                    onClick={() => navigate(`/admin/students/${item.studentId}/performance`)}
+                    sx={{ textTransform: 'none', borderRadius: 1.5, fontWeight: 600, fontSize: '0.72rem', py: 0.5, mt: 0.5 }}
+                  >
+                    View Detailed Scorecard
+                  </Button>
+                </Card>
+              ))}
+            </Box>
+          ) : (
+          <TableContainer sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <Table size="small">
               <TableHead sx={{ bgcolor: '#EDF2FF' }}>
                 <TableRow>
@@ -532,6 +620,7 @@ export const AdminDashboardPage: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          )
         ) : (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">

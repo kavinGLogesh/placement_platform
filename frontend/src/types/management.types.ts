@@ -350,6 +350,35 @@ export interface ColumnMappingResult {
   collegeEmail: string | null;
   year: string | null;
   cgpa: string | null;
+
+  // Academic Credentials Mapping
+  tenthBoard?: string | null;
+  tenthPassingYear?: string | null;
+  tenthMarksObtained?: string | null;
+  tenthTotalMarks?: string | null;
+  tenthPercentage?: string | null;
+
+  twelfthBoard?: string | null;
+  twelfthPassingYear?: string | null;
+  twelfthMarksObtained?: string | null;
+  twelfthTotalMarks?: string | null;
+  twelfthPercentage?: string | null;
+
+  degreeLevel?: string | null;
+  currentSemester?: string | null;
+  ugDegree?: string | null;
+  ugBranch?: string | null;
+  ugStatus?: string | null;
+  ugCgpa?: string | null;
+  ugPercentage?: string | null;
+  activeBacklogs?: string | null;
+  historyOfBacklogs?: string | null;
+
+  pgDegree?: string | null;
+  pgStatus?: string | null;
+  pgCgpa?: string | null;
+  pgPercentage?: string | null;
+
   rawHeaders: string[];
   aiAssisted: boolean;
   confidence: number;
@@ -369,6 +398,40 @@ export interface StudentImportItem {
   collegeEmail: string;
   year?: number;
   cgpa?: number;
+
+  // 10th Standard Academic Marks
+  tenthBoard?: string;
+  tenthPassingYear?: number;
+  tenthMarksObtained?: number;
+  tenthTotalMarks?: number;
+  tenthPercentage?: number;
+
+  // 12th Standard Academic Marks
+  twelfthBoard?: string;
+  twelfthPassingYear?: number;
+  twelfthObtainedMarks?: number;
+  twelfthTotalMarks?: number;
+  twelfthPercentage?: number;
+
+  // Academic Structure & Level
+  degreeLevel?: string;
+  currentSemester?: number;
+
+  // Undergraduate (UG) Credentials
+  ugDegree?: string;
+  ugBranch?: string;
+  ugStatus?: string;
+  ugCgpa?: number;
+  ugPercentage?: number;
+  activeBacklogs?: number;
+  historyOfBacklogs?: number;
+
+  // Postgraduate (PG) Credentials
+  pgDegree?: string;
+  pgStatus?: string;
+  pgCgpa?: number;
+  pgPercentage?: number;
+
   status: StudentImportRecordStatus;
   statusReasons: string[];
   isDuplicate: boolean;

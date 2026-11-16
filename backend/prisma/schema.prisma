@@ -57,6 +57,10 @@ model User {
   interviewRoundsCreated   InterviewRound[]       @relation("InterviewCreator")
   interviewEvaluations     InterviewEvaluation[]
   approvedQuestionClassifications QuestionAiClassification[] @relation("ApprovedClassifications")
+  createdChatGroups     ChatGroup[]          @relation("CreatedChatGroups")
+  chatGroupMemberships  ChatGroupMember[]
+  chatMessages          ChatMessage[]
+  chatReceipts          ChatMessageReceipt[]
 
   @@map("users")
 }
@@ -107,6 +111,7 @@ model Department {
   courses     Course[]
   classes     Class[]
   students    Student[]
+  chatGroupDepartments ChatGroupDepartment[]
   gdRounds    GdRound[]
   interviewRounds InterviewRound[]
 
@@ -175,11 +180,25 @@ model Student {
   id             String         @id @default(uuid())
   userId         String?        @unique
   registerNumber String         @unique
+  rollNo         String?
   name           String
+  gender         String?
   collegeEmail   String         @unique
-  phone          String?
-  dob            String?
   personalEmail  String?        @unique
+  phone          String?
+  whatsappNumber String?
+  dob            String?
+  schoolName     String?
+  ugCollegeName  String?
+  nativePlace    String?
+  languagesKnown String?
+  correspondenceAddress String? @db.Text
+  permanentAddress String?      @db.Text
+  graduationYear Int?
+  arrearStatus   String?
+  placementWillingness String?
+  specialization String?
+  internshipExperience String?  @db.Text
   isPersonalEmailVerified Boolean @default(false)
   personalEmailVerificationToken String?
   personalEmailVerificationExpiry DateTime?
@@ -211,6 +230,8 @@ model Student {
   auditLogs               StudentAuditLog[]
   skills                  StudentSkill[]
   driveRegistrations      DriveRegistration[]
+  notifications           StudentNotification[]
+  driveAuditLogs          DriveCandidateAuditLog[]
 
   @@index([departmentId])
   @@index([courseId])
@@ -1168,6 +1189,15 @@ model StudentAcademicRecord {
   pgCgpa               Float?   // Current CGPA if studying, Final CGPA if completed
   pgPercentage         Float?   // Current Percentage if studying, Final Percentage if completed
 
+  // Profile & Career Tracking Attributes
+  schoolName           String?
+  ugCollegeName        String?
+  graduationYear       Int?
+  arrearStatus         String?
+  specialization       String?
+  internshipExperience String?  @db.Text
+  placementWillingness String?
+
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -1247,6 +1277,8 @@ enum DriveStatus {
 }
 
 enum SelectionStage {
+  SHORTLISTED
+  APPLIED
   REGISTERED
   ASSESSMENT_SHORTLISTED
   TECHNICAL_ROUND
@@ -1276,12 +1308,16 @@ model PlacementDrive {
   eligibleBatchYears   Json?               // e.g. [2026, 2027]
   requiredSkills       Json?               // e.g. [{"name":"Python","minLevel":"INTERMEDIATE"}]
   selectionProcess     Json?               // e.g. ["Aptitude Test","Technical Interview","HR Round"]
+  registrationLink     String?
+  instructions         String?             @db.Text
   createdById          String?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
   company              Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
   registrations        DriveRegistration[]
+  notifications        StudentNotification[]
+  candidateAuditLogs   DriveCandidateAuditLog[]
 
   @@index([status])
   @@index([driveDate])
@@ -1307,4 +1343,168 @@ model DriveRegistration {
   @@index([currentStage])
   @@map("drive_registrations")
 }
+
+model StudentNotification {
+  id          String          @id @default(uuid())
+  studentId   String
+  title       String
+  message     String          @db.Text
+  type        String          @default("GENERAL")
+  driveId     String?
+  read        Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  student     Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  drive       PlacementDrive? @relation(fields: [driveId], references: [id], onDelete: SetNull)
+
+  @@index([studentId])
+  @@index([driveId])
+  @@index([read])
+  @@index([createdAt])
+  @@map("student_notifications")
+}
+
+model DriveCandidateAuditLog {
+  id            String          @id @default(uuid())
+  driveId       String
+  studentId     String
+  previousStage SelectionStage?
+  newStage      SelectionStage
+  changedBy     String
+  remarks       String?         @db.Text
+  createdAt     DateTime        @default(now())
+
+  drive         PlacementDrive  @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  student       Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([driveId])
+  @@index([studentId])
+  @@index([createdAt])
+  @@map("drive_candidate_audit_logs")
+}
+
+enum ChatGroupType {
+  DEPARTMENT
+  CROSS_DEPARTMENT
+  UG_ALL
+  PG_ALL
+  CUSTOM
+  BROADCAST
+  PLACEMENT_DRIVE
+}
+
+enum ChatMemberRole {
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+enum ChatMessageType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  FILE
+  SYSTEM
+}
+
+model ChatGroup {
+  id          String        @id @default(uuid())
+  name        String
+  description String?       @db.Text
+  avatarUrl   String?
+  type        ChatGroupType @default(CUSTOM)
+  createdById String
+  isArchived  Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  createdBy   User          @relation("CreatedChatGroups", fields: [createdById], references: [id], onDelete: Cascade)
+  members     ChatGroupMember[]
+  departments ChatGroupDepartment[]
+  messages    ChatMessage[]
+
+  @@index([createdById])
+  @@index([type])
+  @@map("chat_groups")
+}
+
+model ChatGroupDepartment {
+  id           String     @id @default(uuid())
+  groupId      String
+  departmentId String
+  createdAt    DateTime   @default(now())
+
+  group        ChatGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, departmentId])
+  @@index([groupId])
+  @@index([departmentId])
+  @@map("chat_group_departments")
+}
+
+model ChatGroupMember {
+  id            String         @id @default(uuid())
+  groupId       String
+  userId        String
+  role          ChatMemberRole @default(MEMBER)
+  joinedAt      DateTime       @default(now())
+  lastReadAt    DateTime       @default(now())
+  isDirectAdded Boolean        @default(false)
+
+  group         ChatGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("chat_group_members")
+}
+
+model ChatMessage {
+  id          String          @id @default(uuid())
+  groupId     String
+  senderId    String
+  senderName  String?
+  senderRole  String?
+  content     String?         @db.Text
+  messageType ChatMessageType @default(TEXT)
+  fileUrl     String?
+  fileName    String?
+  fileSize    Int?
+  mimeType    String?
+  replyToId   String?
+  isDeleted   Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  group        ChatGroup            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender       User                 @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo      ChatMessage?         @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      ChatMessage[]        @relation("MessageReplies")
+  readReceipts ChatMessageReceipt[]
+
+  @@index([groupId])
+  @@index([senderId])
+  @@index([replyToId])
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+model ChatMessageReceipt {
+  id        String      @id @default(uuid())
+  messageId String
+  userId    String
+  readAt    DateTime    @default(now())
+
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+  @@map("chat_message_receipts")
+}
+
 

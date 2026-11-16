@@ -33,6 +33,8 @@ import {
 } from '../types/management.types.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { parseStudentExcel } from '../utils/excel.util.js';
+import { getAcademicStructure } from '../utils/academic-structure.util.js';
+import { prisma } from '../config/prisma.config.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { hashPassword } from '../utils/password.util.js';
 import { Role } from '../types/auth.types.js';
@@ -508,6 +510,7 @@ export class ManagementService {
     const validStudentsToInsert: CreateStudentDto[] = [];
     const createdCredentials: ExcelImportCredential[] = [];
     let duplicateCount = 0;
+    let synchronizedCount = 0;
 
     for (const row of rows) {
       const regUpper = row.registerNumber.toUpperCase();
@@ -538,16 +541,141 @@ export class ManagementService {
       seenRegisterNumbers.add(regUpper);
       seenEmails.add(emailLower);
 
-      // 2. Database duplicate check
+      // 2. Check if student already exists -> Synchronize personal and academic details
       const existingStudent = await this.repo.findStudentByRegisterNumber(regUpper);
       if (existingStudent) {
-        duplicateCount++;
-        errors.push({
-          row: row.rowNumber,
-          registerNumber: regUpper,
-          field: 'Register Number',
-          message: `Register number "${regUpper}" already exists in database`,
+        const dept = allDepts.find((d) => 
+          (row.departmentCode && d.code.toUpperCase() === row.departmentCode.toUpperCase()) ||
+          (row.department && (d.name.toUpperCase() === row.department.toUpperCase() || d.code.toUpperCase() === row.department.toUpperCase()))
+        ) || (existingStudent as any).department;
+
+        const crs = dept ? (allCourses.find((c) => 
+          c.departmentId === dept.id && 
+          ((row.courseCode && c.code.toUpperCase() === row.courseCode.toUpperCase()) ||
+           (row.ugDegree && (c.name.toUpperCase().includes(row.ugDegree.toUpperCase()) || c.code.toUpperCase() === row.ugDegree.toUpperCase())) ||
+           (row.specialization && c.name.toUpperCase().includes(row.specialization.toUpperCase())))
+        ) || (existingStudent as any).course) : (existingStudent as any).course;
+
+        const studentYear = row.year || (row.currentSemester ? Math.ceil(row.currentSemester / 2) : (existingStudent as any).year || 1);
+        const gradYear = row.graduationYear || (existingStudent as any).graduationYear;
+
+        const cls = crs && dept ? (allClasses.find((cl) => 
+          cl.courseId === crs.id && cl.departmentId === dept.id && (cl.currentYear === studentYear || (gradYear && cl.batchYear === gradYear))
+        ) || (existingStudent as any).class) : (existingStudent as any).class;
+
+        const secName = row.sectionName?.trim() || 'A';
+        const sec = cls ? (allSections.find((s) => s.classId === cls.id && s.name.toUpperCase() === secName.toUpperCase()) || (existingStudent as any).section) : (existingStudent as any).section;
+
+        const cgpaVal = row.cgpa ?? row.ugCgpa ?? (existingStudent as any).cgpa;
+
+        // Synchronize Student entity
+        await this.repo.updateStudent(existingStudent.id, {
+          ...(row.name ? { name: row.name } : {}),
+          ...(row.phone ? { phone: row.phone } : {}),
+          ...(row.rollNo ? { rollNo: row.rollNo } : {}),
+          ...(row.gender ? { gender: row.gender } : {}),
+          ...(row.dob ? { dob: row.dob } : {}),
+          ...(row.personalEmail ? { personalEmail: row.personalEmail } : {}),
+          ...(row.whatsappNumber ? { whatsappNumber: row.whatsappNumber } : {}),
+          ...(row.schoolName ? { schoolName: row.schoolName } : {}),
+          ...(row.ugCollegeName ? { ugCollegeName: row.ugCollegeName } : {}),
+          ...(row.nativePlace ? { nativePlace: row.nativePlace } : {}),
+          ...(row.languagesKnown ? { languagesKnown: row.languagesKnown } : {}),
+          ...(row.correspondenceAddress ? { correspondenceAddress: row.correspondenceAddress } : {}),
+          ...(row.permanentAddress ? { permanentAddress: row.permanentAddress } : {}),
+          ...(row.graduationYear ? { graduationYear: row.graduationYear } : {}),
+          ...(row.arrearStatus ? { arrearStatus: row.arrearStatus } : {}),
+          ...(row.placementWillingness ? { placementWillingness: row.placementWillingness } : {}),
+          ...(row.specialization ? { specialization: row.specialization } : {}),
+          ...(row.skillsList && row.skillsList.length > 0 ? { skillsList: row.skillsList } : {}),
+          ...(row.internshipExperience ? { internshipExperience: row.internshipExperience } : {}),
+          ...(dept ? { departmentId: dept.id } : {}),
+          ...(crs ? { courseId: crs.id } : {}),
+          ...(cls ? { classId: cls.id } : {}),
+          ...(sec ? { sectionId: sec.id } : {}),
+          ...(studentYear ? { year: studentYear } : {}),
+          ...(cgpaVal !== undefined && cgpaVal !== null ? { cgpa: cgpaVal } : {}),
         });
+
+        // Resolve academic structure
+        const structure = getAcademicStructure({
+          degreeLevel: row.degreeLevel,
+          degreeName: row.ugDegree || row.pgDegree || crs?.name,
+          courseCode: row.courseCode,
+          departmentCode: row.departmentCode || dept?.code,
+        });
+
+        const currentSem = row.currentSemester || Math.min(studentYear * 2 - 1, structure.totalSemesters);
+        const overallPct = row.ugPercentage ?? (cgpaVal ? parseFloat((cgpaVal * 9.5).toFixed(2)) : null);
+
+        const syncAcadData = {
+          tenthBoard: row.tenthBoard ?? null,
+          tenthPassingYear: row.tenthPassingYear ?? null,
+          tenthObtainedMarks: row.tenthObtainedMarks ?? null,
+          tenthTotalMarks: row.tenthTotalMarks ?? null,
+          tenthPercentage: row.tenthPercentage ?? null,
+          twelfthBoard: row.twelfthBoard ?? null,
+          twelfthPassingYear: row.twelfthPassingYear ?? null,
+          twelfthObtainedMarks: row.twelfthObtainedMarks ?? null,
+          twelfthTotalMarks: row.twelfthTotalMarks ?? null,
+          twelfthPercentage: row.twelfthPercentage ?? null,
+          degreeLevel: row.degreeLevel || structure.degreeLevel,
+          ugDegree: row.ugDegree || crs?.name || 'UG',
+          ugBranch: row.ugBranch || row.specialization || dept?.name || null,
+          ugStatus: row.ugStatus || 'STUDYING',
+          ugCgpa: row.ugCgpa ?? cgpaVal,
+          ugPercentage: row.ugPercentage ?? overallPct,
+          currentSemester: currentSem,
+          activeBacklogs: row.activeBacklogs ?? 0,
+          historyOfBacklogs: row.historyOfBacklogs ?? 0,
+          pgDegree: row.pgDegree ?? null,
+          pgStatus: row.pgStatus ?? null,
+          pgCgpa: row.pgCgpa ?? null,
+          pgPercentage: row.pgPercentage ?? null,
+          currentCgpa: cgpaVal,
+          overallPercentage: overallPct,
+          schoolName: row.schoolName ?? null,
+          ugCollegeName: row.ugCollegeName ?? null,
+          arrearStatus: row.arrearStatus ?? null,
+          placementWillingness: row.placementWillingness ?? null,
+          specialization: row.specialization ?? null,
+          internshipExperience: row.internshipExperience ?? null,
+          graduationYear: row.graduationYear ?? null,
+        };
+
+        const acadRecord = await prisma.studentAcademicRecord.upsert({
+          where: { studentId: existingStudent.id },
+          create: {
+            studentId: existingStudent.id,
+            ...syncAcadData,
+          },
+          update: {
+            ...syncAcadData,
+          },
+        });
+
+        for (let sem = 1; sem <= structure.totalSemesters; sem++) {
+          await prisma.studentSemesterRecord.upsert({
+            where: {
+              academicRecordId_semesterNumber: {
+                academicRecordId: acadRecord.id,
+                semesterNumber: sem,
+              },
+            },
+            create: {
+              academicRecordId: acadRecord.id,
+              semesterNumber: sem,
+              sgpa: null,
+              cgpa: null,
+              totalCredits: 24,
+              creditsEarned: 24,
+              backlogsCount: 0,
+            },
+            update: {},
+          });
+        }
+
+        synchronizedCount++;
         continue;
       }
 
@@ -575,54 +703,78 @@ export class ManagementService {
         continue;
       }
 
-      // 3. Resolve Department
-      const dept = allDepts.find((d) => d.code === row.departmentCode);
+      // 3. Resolve Department (find by code or name, or auto-create)
+      let dept = allDepts.find((d) => 
+        (row.departmentCode && d.code.toUpperCase() === row.departmentCode.toUpperCase()) ||
+        (row.department && (d.name.toUpperCase() === row.department.toUpperCase() || d.code.toUpperCase() === row.department.toUpperCase()))
+      );
+      if (!dept && (row.departmentCode || row.department)) {
+        const rawCode = (row.departmentCode || row.department || 'DEPT').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const deptCode = rawCode.slice(0, 10) || 'DEPT';
+        const deptName = row.department || row.departmentCode || deptCode;
+        const defaultCollegeId = allDepts[0]?.collegeId || (await this.repo.findColleges())[0]?.id || '';
+        dept = await this.repo.createDepartment({ code: deptCode, name: deptName, collegeId: defaultCollegeId });
+        allDepts.push(dept);
+      }
       if (!dept) {
         errors.push({
           row: row.rowNumber,
           registerNumber: regUpper,
           field: 'Department',
-          message: `Department code "${row.departmentCode}" not found`,
+          message: `Department "${row.departmentCode || row.department || 'Unknown'}" could not be resolved`,
         });
         continue;
       }
 
-      // 4. Resolve Course
-      const crs = allCourses.find((c) => c.code === row.courseCode && c.departmentId === dept.id);
+      // 4. Resolve Course (find by code/degree/specialization, or auto-create)
+      let crs = allCourses.find((c) =>
+        c.departmentId === dept!.id &&
+        ((row.courseCode && c.code.toUpperCase() === row.courseCode.toUpperCase()) ||
+         (row.ugDegree && (c.name.toUpperCase().includes(row.ugDegree.toUpperCase()) || c.code.toUpperCase() === row.ugDegree.toUpperCase())) ||
+         (row.specialization && c.name.toUpperCase().includes(row.specialization.toUpperCase())))
+      );
       if (!crs) {
-        errors.push({
-          row: row.rowNumber,
-          registerNumber: regUpper,
-          field: 'Course',
-          message: `Course code "${row.courseCode}" not found under department "${dept.code}"`,
+        const rawCrsCode = (row.courseCode || row.ugDegree || dept.code).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const crsCode = rawCrsCode.slice(0, 10) || dept.code;
+        const crsName = row.specialization || row.ugDegree || `${dept.name} Program`;
+        crs = await this.repo.createCourse({
+          code: crsCode,
+          name: crsName,
+          departmentId: dept.id,
+          durationYears: 3,
         });
-        continue;
+        allCourses.push(crs);
       }
 
-      // 5. Resolve Class
-      const cls = allClasses.find(
-        (cl) => cl.courseId === crs.id && cl.departmentId === dept.id && cl.currentYear === row.year
+      // Compute student academic year and batch
+      const studentYear = row.year || (row.currentSemester ? Math.ceil(row.currentSemester / 2) : 1);
+      const batchYear = row.graduationYear || (new Date().getFullYear() + Math.max(0, 3 - studentYear));
+
+      // 5. Resolve Class (find or auto-create)
+      let cls = allClasses.find(
+        (cl) => cl.courseId === crs!.id && cl.departmentId === dept!.id && (cl.currentYear === studentYear || cl.batchYear === batchYear)
       );
       if (!cls) {
-        errors.push({
-          row: row.rowNumber,
-          registerNumber: regUpper,
-          field: 'Year/Class',
-          message: `No class found for course "${crs.code}" and year ${row.year}`,
+        const clsName = `${dept.code} Year ${studentYear} (Batch ${batchYear})`;
+        cls = await this.repo.createClass({
+          name: clsName,
+          batchYear,
+          currentYear: studentYear,
+          departmentId: dept.id,
+          courseId: crs.id,
         });
-        continue;
+        allClasses.push(cls);
       }
 
-      // 6. Resolve Section
-      const sec = allSections.find((s) => s.classId === cls.id && s.name === row.sectionName);
+      // 6. Resolve Section (find or auto-create)
+      const secName = row.sectionName?.trim() || 'A';
+      let sec = allSections.find((s) => s.classId === cls!.id && s.name.toUpperCase() === secName.toUpperCase());
       if (!sec) {
-        errors.push({
-          row: row.rowNumber,
-          registerNumber: regUpper,
-          field: 'Section',
-          message: `Section "${row.sectionName}" not found in class "${cls.name}"`,
+        sec = await this.repo.createSection({
+          name: secName,
+          classId: cls.id,
         });
-        continue;
+        allSections.push(sec);
       }
 
       // 7. CGPA validation if provided
@@ -647,29 +799,65 @@ export class ManagementService {
         mustChangePassword: true,
       });
 
+      const structure = getAcademicStructure({
+        degreeLevel: row.degreeLevel,
+        degreeName: row.ugDegree || row.pgDegree || crs.name,
+        courseCode: row.courseCode,
+        departmentCode: row.departmentCode || dept.code,
+      });
+      const currentSem = row.currentSemester || Math.min(studentYear * 2 - 1, structure.totalSemesters);
+      const cgpaCandidate = row.cgpa ?? row.ugCgpa;
+      const overallPct = row.ugPercentage ?? (cgpaCandidate !== undefined && cgpaCandidate !== null ? parseFloat((cgpaCandidate * 9.5).toFixed(2)) : undefined);
+
       validStudentsToInsert.push({
         userId: user.id,
         registerNumber: regUpper,
+        rollNo: row.rollNo || undefined,
         name: row.name,
+        gender: row.gender || undefined,
         collegeEmail: emailLower,
-        phone: row.phone,
+        personalEmail: row.personalEmail || undefined,
+        phone: row.phone || undefined,
+        whatsappNumber: row.whatsappNumber || row.phone || undefined,
+        dob: row.dob || undefined,
+        schoolName: row.schoolName || undefined,
+        ugCollegeName: row.ugCollegeName || undefined,
+        nativePlace: row.nativePlace || undefined,
+        languagesKnown: row.languagesKnown || undefined,
+        correspondenceAddress: row.correspondenceAddress || undefined,
+        permanentAddress: row.permanentAddress || undefined,
+        graduationYear: batchYear,
+        arrearStatus: row.arrearStatus || undefined,
+        placementWillingness: row.placementWillingness || undefined,
+        specialization: row.specialization || undefined,
+        skillsList: row.skillsList || [],
+        internshipExperience: row.internshipExperience || undefined,
         departmentId: dept.id,
         courseId: crs.id,
         classId: cls.id,
         sectionId: sec.id,
-        year: row.year,
-        cgpa: row.cgpa ?? row.ugCgpa,
-        status: StudentStatus.INACTIVE,
+        year: studentYear,
+        cgpa: cgpaCandidate,
+        status: (row.studentStatus as StudentStatus) || StudentStatus.ACTIVE,
+        tenthBoard: row.tenthBoard,
+        tenthPassingYear: row.tenthPassingYear,
         tenthObtainedMarks: row.tenthObtainedMarks,
         tenthTotalMarks: row.tenthTotalMarks,
         tenthPercentage: row.tenthPercentage,
+        twelfthBoard: row.twelfthBoard,
+        twelfthPassingYear: row.twelfthPassingYear,
         twelfthObtainedMarks: row.twelfthObtainedMarks,
         twelfthTotalMarks: row.twelfthTotalMarks,
         twelfthPercentage: row.twelfthPercentage,
+        degreeLevel: row.degreeLevel || structure.degreeLevel,
+        currentSemester: currentSem,
         ugDegree: row.ugDegree || crs.name,
+        ugBranch: row.ugBranch || row.specialization || dept.name,
         ugStatus: row.ugStatus || 'STUDYING',
         ugCgpa: row.ugCgpa ?? row.cgpa,
-        ugPercentage: row.ugPercentage,
+        ugPercentage: overallPct,
+        activeBacklogs: row.activeBacklogs ?? 0,
+        historyOfBacklogs: row.historyOfBacklogs ?? 0,
         pgDegree: row.pgDegree,
         pgStatus: row.pgStatus,
         pgCgpa: row.pgCgpa,
@@ -691,7 +879,7 @@ export class ManagementService {
     }
 
     return {
-      importedCount,
+      importedCount: importedCount + synchronizedCount,
       failedCount: errors.length,
       duplicateCount,
       errors,

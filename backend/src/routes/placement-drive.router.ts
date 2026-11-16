@@ -23,12 +23,22 @@ placementDriveRouter.delete('/:id', placementDriveController.deleteDrive);
 placementDriveRouter.get('/:id/eligibility', placementDriveController.getEligibility);
 
 // Student Selection & Registration
+placementDriveRouter.post('/:id/shortlist', placementDriveController.shortlistCandidates);
 placementDriveRouter.post('/:id/register', placementDriveController.registerStudents);
 placementDriveRouter.get('/:id/registrations', placementDriveController.getRegistrations);
 placementDriveRouter.put(
   '/:id/registrations/:registrationId',
   placementDriveController.updateRegistrationStage
 );
+placementDriveRouter.post('/:id/bulk-stage', placementDriveController.bulkUpdateStage);
+placementDriveRouter.post('/:id/finalize', placementDriveController.finalizeDriveSelections);
+placementDriveRouter.post('/:id/notify-eligible', placementDriveController.notifyEligibleStudents);
+placementDriveRouter.get('/:id/stats', placementDriveController.getDriveStats);
+placementDriveRouter.get('/:id/audit-logs', placementDriveController.getDriveAuditLogs);
+
+// Drive-Specific Selected Candidates Management
+placementDriveRouter.get('/:id/selection-overview', placementDriveController.getSelectionOverview);
+placementDriveRouter.post('/:id/mark-selection', placementDriveController.markCandidatesSelection);
 
 // Drive-wise selection history per student
 placementDriveRouter.get(

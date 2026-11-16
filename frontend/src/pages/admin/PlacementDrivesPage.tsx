@@ -38,6 +38,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import CurrencyRupeeIcon from '@mui/icons-material/CurrencyRupee';
 import GroupsIcon from '@mui/icons-material/Groups';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -232,10 +233,13 @@ export const PlacementDrivesPage: React.FC = () => {
         open: true,
         message: editingDrive
           ? `Placement drive for "${savedDrive.companyName}" successfully updated!`
-          : `Placement drive for "${savedDrive.companyName}" successfully created!`,
+          : `Placement drive for "${savedDrive.companyName}" successfully created! Redirecting to Candidate Visibility...`,
         severity: 'success',
       });
       handleCloseModal();
+      if (!editingDrive && savedDrive?.id) {
+        navigate(`/admin/placement-drives/${savedDrive.id}?tab=eligibility`);
+      }
     },
     onError: (err: any) => {
       setFormError(err?.response?.data?.message || err?.message || 'Failed to save placement drive');
@@ -625,6 +629,9 @@ export const PlacementDrivesPage: React.FC = () => {
       >
         <Tabs
           value={activeTab}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           onChange={(_, val) => {
             setActiveTab(val);
             setSearchParams((prev) => {
@@ -772,6 +779,10 @@ export const PlacementDrivesPage: React.FC = () => {
                         <GroupsIcon sx={{ fontSize: 16 }} />
                         {drive.vacancies || 1} Vacancies
                       </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: '#0284c7', fontSize: '0.8rem', fontWeight: 700 }}>
+                        <HowToRegIcon sx={{ fontSize: 16 }} />
+                        {drive._count?.registrations ?? 0} Enrolled
+                      </Box>
                     </Box>
 
                     <Divider sx={{ mb: 2, borderColor: '#f1f5f9' }} />
@@ -882,7 +893,7 @@ export const PlacementDrivesPage: React.FC = () => {
                       variant="contained"
                       size="small"
                       endIcon={<ArrowForwardIcon />}
-                      onClick={() => navigate(`/admin/placement-drives/${drive.id}`)}
+                      onClick={() => navigate(`/admin/placement-drives/${drive.id}?tab=eligibility`)}
                       sx={{
                         bgcolor: '#0284c7',
                         '&:hover': { bgcolor: '#0369a1' },
@@ -892,7 +903,7 @@ export const PlacementDrivesPage: React.FC = () => {
                         fontSize: '0.8rem',
                       }}
                     >
-                      Manage & Select
+                      View Candidates & Eligibility
                     </Button>
                   </Box>
                 </Card>

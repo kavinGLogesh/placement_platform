@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Outlet, Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Typography,
@@ -17,9 +18,14 @@ import {
   Avatar,
   useMediaQuery,
   useTheme,
+  BottomNavigation,
+  BottomNavigationAction,
+  Collapse,
+  Button,
+  Paper,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
 import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import QuizIcon from '@mui/icons-material/Quiz';
@@ -50,14 +56,17 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import SchoolIcon from '@mui/icons-material/School';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import RateReviewIcon from '@mui/icons-material/RateReview';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
 
 import { useHealthCheck } from '../hooks/useHealthCheck.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { assessmentService } from '../services/assessment.service.js';
 import { questionService } from '../services/question.service.js';
+import { attemptService } from '../services/attempt.service.js';
+import { NotificationBell } from '../components/common/NotificationBell.js';
 
 export interface SubtopicItem {
   id: string;
@@ -82,23 +91,51 @@ export interface NavigationModule {
 }
 
 const COLUMN_1_WIDTH = 80;
-const COLUMN_2_WIDTH = 244;
 
 export const RootLayout: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { isLoading: isHealthLoading, isError: isHealthError } = useHealthCheck();
   const { user, isAuthenticated, logout } = useAuth();
+  const isStudent = user?.role === 'STUDENT';
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Desktop subtopic panel collapse toggle
-  const [subtopicPanelCollapsed, setSubtopicPanelCollapsed] = useState(false);
+  // Student streak query
+  const { data: attendanceStreak, isError: isAttendanceStreakError } = useQuery({
+    queryKey: ['studentAttendanceStreak', user?.student?.id],
+    queryFn: () => attemptService.getStudentAttendanceStreak(),
+    enabled: isAuthenticated && isStudent,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  // Floating Submenu Overlay State
+  const [floatingMenuOpen, setFloatingMenuOpen] = useState(false);
+  const [floatingModuleId, setFloatingModuleId] = useState<string | null>(null);
+  const [floatingMenuTop, setFloatingMenuTop] = useState<number>(80);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [mobileExpandedModules, setMobileExpandedModules] = useState<Record<string, boolean>>({});
 
   const isExamMode = location.pathname.startsWith('/student/attempt/');
   const isLoginPage = location.pathname === '/login';
-  const isStudent = user?.role === 'STUDENT';
+
+  const currentBottomNavIndex = useMemo(() => {
+    const path = location.pathname;
+    if (isStudent) {
+      if (path === '/student/dashboard') return 0;
+      if (path.startsWith('/student/drives')) return 1;
+      if (path.startsWith('/student/tests')) return 2;
+      if (path.startsWith('/student/results')) return 3;
+      return -1;
+    } else {
+      if (path === '/admin/dashboard') return 0;
+      if (path.startsWith('/admin/placement-drives')) return 1;
+      if (path.startsWith('/admin/students')) return 2;
+      if (path.startsWith('/admin/results')) return 3;
+      return -1;
+    }
+  }, [location.pathname, isStudent]);
 
   // Live sidebar statistics queries for badges
   const { data: assessmentStats } = useQuery({
@@ -114,7 +151,7 @@ export const RootLayout: React.FC = () => {
       };
     },
     staleTime: 60000,
-    enabled: isAuthenticated && user?.role === 'PLACEMENT_ADMIN',
+    enabled: isAuthenticated && (user?.role === 'PLACEMENT_ADMIN' || user?.role === 'SUPER_ADMIN'),
   });
 
   const { data: questionStats } = useQuery({
@@ -126,10 +163,10 @@ export const RootLayout: React.FC = () => {
       };
     },
     staleTime: 60000,
-    enabled: isAuthenticated && user?.role === 'PLACEMENT_ADMIN',
+    enabled: isAuthenticated && (user?.role === 'PLACEMENT_ADMIN' || user?.role === 'SUPER_ADMIN'),
   });
 
-  // Navigation Modules structured for Two-Column layout
+  // Navigation Modules structured for Main Rail + Floating Overlay
   const navModules: NavigationModule[] = useMemo(() => {
     if (!isAuthenticated || !user) return [];
 
@@ -154,34 +191,30 @@ export const RootLayout: React.FC = () => {
               label: 'Executive Dashboard',
               path: '/admin/dashboard',
               icon: <DashboardIcon sx={{ fontSize: 18 }} />,
-              description: 'Campus placement indicators and recruitment summary',
             },
             {
               id: 'overview-analytics',
               label: 'Placement Analytics',
               path: '/admin/analytics',
               icon: <BarChartIcon sx={{ fontSize: 18 }} />,
-              description: 'Performance statistics across departments and batches',
             },
             {
               id: 'overview-reports',
               label: 'Audit Reports',
               path: '/admin/reports',
               icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
-              description: 'Consolidated records and tabular data exports',
             },
             {
               id: 'overview-attendance',
               label: 'Attendance Oversight',
               path: '/admin/attendance',
               icon: <HowToRegIcon sx={{ fontSize: 18 }} />,
-              description: 'Live candidate check-in and presence monitoring',
             },
           ],
         },
         {
           id: 'assessments',
-          label: 'Assessments Hub',
+          label: 'Assessments',
           shortLabel: 'Assessments',
           category: 'EVALUATION ENGINE',
           primaryPath: '/admin/assessments',
@@ -190,55 +223,46 @@ export const RootLayout: React.FC = () => {
           badgeColor: 'primary',
           subtopics: [
             {
-              id: 'assessments-all',
-              label: 'All Assessments',
-              path: '/admin/assessments',
-              icon: <FactCheckIcon sx={{ fontSize: 18 }} />,
-              badge: totalAsmts > 0 ? totalAsmts : undefined,
-              description: 'Complete inventory of recruitment tests',
-            },
-            {
               id: 'assessments-create',
               label: 'Create Assessment',
               path: '/admin/assessments/create',
               icon: <AddCircleOutlineIcon sx={{ fontSize: 18 }} />,
               badge: 'New',
               badgeColor: 'success',
-              description: 'Design new assessment with custom sections',
             },
             {
-              id: 'assessments-published',
-              label: 'Published Tests',
-              path: '/admin/assessments?status=PUBLISHED',
-              icon: <CheckCircleOutlineIcon sx={{ fontSize: 18 }} />,
-              badge: pubAsmts > 0 ? pubAsmts : undefined,
-              badgeColor: 'success',
-              description: 'Active tests available to candidate rosters',
+              id: 'assessments-manage',
+              label: 'Manage Assessments',
+              path: '/admin/assessments',
+              icon: <FactCheckIcon sx={{ fontSize: 18 }} />,
+              badge: totalAsmts > 0 ? totalAsmts : undefined,
             },
             {
-              id: 'assessments-scheduled',
-              label: 'Scheduled Tests',
+              id: 'assessments-upcoming',
+              label: 'Upcoming Assessments',
               path: '/admin/assessments?status=SCHEDULED',
               icon: <CalendarMonthIcon sx={{ fontSize: 18 }} />,
               badge: schedAsmts > 0 ? schedAsmts : undefined,
-              badgeColor: 'info',
-              description: 'Upcoming scheduled test timeframes',
             },
             {
-              id: 'assessments-draft',
-              label: 'Draft Assessments',
+              id: 'assessments-ongoing',
+              label: 'Ongoing Assessments',
+              path: '/admin/assessments?status=PUBLISHED',
+              icon: <LocalFireDepartmentIcon sx={{ fontSize: 18 }} />,
+              badge: pubAsmts > 0 ? pubAsmts : undefined,
+            },
+            {
+              id: 'assessments-completed',
+              label: 'Completed Assessments',
+              path: '/admin/assessments?status=ARCHIVED',
+              icon: <CheckCircleOutlineIcon sx={{ fontSize: 18 }} />,
+            },
+            {
+              id: 'assessments-cancelled',
+              label: 'Cancelled / Drafts',
               path: '/admin/assessments?status=DRAFT',
               icon: <EditNoteIcon sx={{ fontSize: 18 }} />,
               badge: draftAsmts > 0 ? draftAsmts : undefined,
-              badgeColor: 'warning',
-              description: 'Work-in-progress test configurations',
-            },
-            {
-              id: 'assessments-company-mocks',
-              label: 'Company Mock Drives',
-              path: '/admin/companies',
-              icon: <BusinessIcon sx={{ fontSize: 18 }} />,
-              description: 'Company-specific simulation pattern tests',
             },
           ],
         },
@@ -258,42 +282,36 @@ export const RootLayout: React.FC = () => {
               path: '/admin/questions',
               icon: <MenuBookIcon sx={{ fontSize: 18 }} />,
               badge: totalQues > 0 ? totalQues : undefined,
-              description: 'All questions with multi-tier filters and search',
             },
             {
               id: 'questions-quant',
               label: 'Quantitative Aptitude',
               path: '/admin/questions?category=QUANTITATIVE_APTITUDE',
               icon: <CalculateIcon sx={{ fontSize: 18 }} />,
-              description: 'Mathematics, arithmetic and numerical questions',
             },
             {
               id: 'questions-logical',
               label: 'Logical Reasoning',
               path: '/admin/questions?category=LOGICAL_REASONING',
               icon: <PsychologyIcon sx={{ fontSize: 18 }} />,
-              description: 'Deductive, inductive and pattern problem sets',
             },
             {
               id: 'questions-verbal',
               label: 'Verbal Ability',
               path: '/admin/questions?category=VERBAL_ABILITY',
               icon: <SpellcheckIcon sx={{ fontSize: 18 }} />,
-              description: 'Grammar, reading comprehension and vocabulary',
             },
             {
               id: 'questions-tech',
-              label: 'Technical MCQ',
+              label: 'Technical MCQs',
               path: '/admin/questions?category=TECHNICAL_MCQ',
               icon: <CodeIcon sx={{ fontSize: 18 }} />,
-              description: 'Computer science and core engineering MCQs',
             },
             {
               id: 'questions-coding',
               label: 'Coding Challenges',
               path: '/admin/questions?category=CODING',
               icon: <TerminalIcon sx={{ fontSize: 18 }} />,
-              description: 'Hands-on programming challenges with testcases',
             },
           ],
         },
@@ -307,45 +325,39 @@ export const RootLayout: React.FC = () => {
           subtopics: [
             {
               id: 'students-list',
-              label: 'Student Master Directory',
+              label: 'All Students',
               path: '/admin/students',
               icon: <PeopleAltIcon sx={{ fontSize: 18 }} />,
-              description: 'Candidate roster, profiles, register IDs & status',
             },
             {
               id: 'students-departments',
               label: 'Academic Departments',
               path: '/admin/departments',
               icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />,
-              description: 'College department setup and management',
             },
             {
               id: 'students-courses',
               label: 'Degree Courses',
               path: '/admin/courses',
               icon: <SchoolIcon sx={{ fontSize: 18 }} />,
-              description: 'Undergraduate and postgraduate programs',
             },
             {
               id: 'students-classes',
               label: 'Classes & Years',
               path: '/admin/classes',
               icon: <CalendarMonthIcon sx={{ fontSize: 18 }} />,
-              description: 'Graduating batches and academic years',
             },
             {
               id: 'students-sections',
               label: 'Class Sections',
               path: '/admin/sections',
               icon: <GroupsIcon sx={{ fontSize: 18 }} />,
-              description: 'Student classroom section divisions',
             },
             {
               id: 'students-college',
               label: 'College Profile',
               path: '/admin/college',
               icon: <BusinessIcon sx={{ fontSize: 18 }} />,
-              description: 'Institutional credentials and portal settings',
             },
           ],
         },
@@ -362,7 +374,6 @@ export const RootLayout: React.FC = () => {
               label: 'All Placement Drives',
               path: '/admin/placement-drives',
               icon: <WorkIcon sx={{ fontSize: 18 }} />,
-              description: 'Central campus placement drive campaigns',
             },
             {
               id: 'drives-upcoming',
@@ -370,31 +381,59 @@ export const RootLayout: React.FC = () => {
               path: '/admin/placement-drives?status=UPCOMING',
               icon: <CalendarMonthIcon sx={{ fontSize: 18 }} />,
               badge: 'Scheduled',
-              badgeColor: 'info',
-              description: 'Scheduled on-campus and virtual hiring drives',
             },
             {
               id: 'drives-ongoing',
               label: 'Ongoing Drives',
               path: '/admin/placement-drives?status=ONGOING',
               icon: <LocalFireDepartmentIcon sx={{ fontSize: 18 }} />,
-              badge: 'Active',
-              badgeColor: 'success',
-              description: 'Currently live recruitment stages',
+              badge: 'Live',
             },
             {
               id: 'drives-completed',
               label: 'Completed Drives',
               path: '/admin/placement-drives?status=COMPLETED',
               icon: <CheckCircleOutlineIcon sx={{ fontSize: 18 }} />,
-              description: 'Concluded drives and finalized recruitments',
             },
             {
               id: 'drives-companies',
               label: 'Partner Companies',
               path: '/admin/companies',
               icon: <BusinessIcon sx={{ fontSize: 18 }} />,
-              description: 'Corporate recruiter profiles and packages',
+            },
+          ],
+        },
+        {
+          id: 'chat',
+          label: 'Campus Chat',
+          shortLabel: 'Chat',
+          category: 'COMMUNICATION & GROUPS',
+          primaryPath: '/chat',
+          icon: <ChatBubbleOutlineIcon fontSize="small" />,
+          subtopics: [
+            {
+              id: 'chat-all',
+              label: 'All Conversations',
+              path: '/chat',
+              icon: <ChatBubbleOutlineIcon sx={{ fontSize: 18 }} />,
+            },
+            {
+              id: 'chat-departments',
+              label: 'Department Groups',
+              path: '/chat?filter=DEPARTMENT',
+              icon: <SchoolIcon sx={{ fontSize: 18 }} />,
+            },
+            {
+              id: 'chat-drives',
+              label: 'Placement Channels',
+              path: '/chat?filter=PLACEMENT_DRIVE',
+              icon: <WorkIcon sx={{ fontSize: 18 }} />,
+            },
+            {
+              id: 'chat-custom',
+              label: 'Custom Channels',
+              path: '/chat?filter=CUSTOM',
+              icon: <GroupsIcon sx={{ fontSize: 18 }} />,
             },
           ],
         },
@@ -411,7 +450,6 @@ export const RootLayout: React.FC = () => {
               label: 'GD Dashboard',
               path: '/admin/gd',
               icon: <GroupsIcon sx={{ fontSize: 18 }} />,
-              description: 'Overview of all group discussion rounds',
             },
             {
               id: 'gd-scheduled',
@@ -419,8 +457,6 @@ export const RootLayout: React.FC = () => {
               path: '/admin/gd?status=SCHEDULED',
               icon: <CalendarMonthIcon sx={{ fontSize: 18 }} />,
               badge: 'Upcoming',
-              badgeColor: 'info',
-              description: 'Upcoming GD batches and evaluator allocations',
             },
             {
               id: 'gd-in-progress',
@@ -428,22 +464,18 @@ export const RootLayout: React.FC = () => {
               path: '/admin/gd?status=IN_PROGRESS',
               icon: <RateReviewIcon sx={{ fontSize: 18 }} />,
               badge: 'Live',
-              badgeColor: 'success',
-              description: 'Real-time candidate rubric grading workspace',
             },
             {
               id: 'gd-completed',
               label: 'Completed GD Rounds',
               path: '/admin/gd?status=COMPLETED',
               icon: <CheckCircleOutlineIcon sx={{ fontSize: 18 }} />,
-              description: 'Concluded GD score records and feedback',
             },
             {
               id: 'gd-results',
               label: 'GD Scores & Merit',
               path: '/admin/results',
               icon: <FactCheckIcon sx={{ fontSize: 18 }} />,
-              description: 'Consolidated performance in group rounds',
             },
           ],
         },
@@ -460,28 +492,24 @@ export const RootLayout: React.FC = () => {
               label: 'Technical Interview Hub',
               path: '/admin/interviews?type=TECHNICAL',
               icon: <TerminalIcon sx={{ fontSize: 18 }} />,
-              description: 'Coding, architecture & problem-solving rounds',
             },
             {
               id: 'tech-all-rounds',
               label: 'All Interview Rounds',
               path: '/admin/interviews',
               icon: <WorkOutlineIcon sx={{ fontSize: 18 }} />,
-              description: 'Consolidated view of all interview pipelines',
             },
             {
               id: 'tech-attendance',
               label: 'Candidate Attendance',
               path: '/admin/attendance',
               icon: <HowToRegIcon sx={{ fontSize: 18 }} />,
-              description: 'Verify and check-in shortlisted interviewees',
             },
             {
               id: 'tech-results',
               label: 'Evaluation Results',
               path: '/admin/results',
               icon: <FactCheckIcon sx={{ fontSize: 18 }} />,
-              description: 'Technical rubrics, scores and candidate rankings',
             },
           ],
         },
@@ -498,28 +526,24 @@ export const RootLayout: React.FC = () => {
               label: 'HR Interviews Overview',
               path: '/admin/interviews?type=HR',
               icon: <SupervisorAccountIcon sx={{ fontSize: 18 }} />,
-              description: 'Soft skills, behavioral and communication interviews',
             },
             {
               id: 'hr-all-rounds',
               label: 'All Interview Schedules',
               path: '/admin/interviews',
               icon: <WorkOutlineIcon sx={{ fontSize: 18 }} />,
-              description: 'Rosters across technical, HR and mock panels',
             },
             {
               id: 'hr-attendance',
               label: 'Candidate Attendance',
               path: '/admin/attendance',
               icon: <HowToRegIcon sx={{ fontSize: 18 }} />,
-              description: 'Candidate queue check-in and attendance',
             },
             {
               id: 'hr-offers',
               label: 'Final Shortlists & Offers',
               path: '/admin/results',
               icon: <FactCheckIcon sx={{ fontSize: 18 }} />,
-              description: 'Cleared candidates and placement offer status',
             },
           ],
         },
@@ -536,28 +560,24 @@ export const RootLayout: React.FC = () => {
               label: 'Mock Interview Sessions',
               path: '/admin/interviews?type=MOCK',
               icon: <PsychologyIcon sx={{ fontSize: 18 }} />,
-              description: 'Simulated practice interviews with formative rubrics',
             },
             {
               id: 'mock-questions',
               label: 'Question Bank Prep',
               path: '/admin/questions',
               icon: <QuizIcon sx={{ fontSize: 18 }} />,
-              description: 'Curated technical and aptitude practice questions',
             },
             {
               id: 'mock-analytics',
               label: 'Readiness Analytics',
               path: '/admin/analytics',
               icon: <BarChartIcon sx={{ fontSize: 18 }} />,
-              description: 'Student improvement and skill readiness trajectories',
             },
             {
               id: 'mock-reports',
               label: 'Diagnostic Feedback',
               path: '/admin/reports',
               icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
-              description: 'Individual strengths and growth area reports',
             },
           ],
         },
@@ -574,28 +594,24 @@ export const RootLayout: React.FC = () => {
               label: 'Consolidated Results',
               path: '/admin/results',
               icon: <FactCheckIcon sx={{ fontSize: 18 }} />,
-              description: 'Merit lists across tests, GD and interview rounds',
             },
             {
               id: 'scoring-attendance',
               label: 'Attendance Records',
               path: '/admin/attendance',
               icon: <HowToRegIcon sx={{ fontSize: 18 }} />,
-              description: 'Multi-stage candidate appearance metrics',
             },
             {
               id: 'scoring-performance',
               label: 'Performance Analysis',
               path: '/admin/analytics',
               icon: <BarChartIcon sx={{ fontSize: 18 }} />,
-              description: 'Cohort benchmarks, percentiles and pass rates',
             },
             {
               id: 'scoring-exports',
               label: 'Audit & Export Sheets',
               path: '/admin/reports',
               icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
-              description: 'Excel/PDF placement records and formal reports',
             },
           ],
         },
@@ -617,14 +633,68 @@ export const RootLayout: React.FC = () => {
               label: 'My Dashboard',
               path: '/student/dashboard',
               icon: <SpeedIcon sx={{ fontSize: 18 }} />,
-              description: 'Upcoming tests, results summary and notifications',
             },
             {
               id: 'st-profile',
               label: 'My Profile',
               path: '/student/profile',
               icon: <PersonOutlineIcon sx={{ fontSize: 18 }} />,
-              description: 'Academic details, resume info and contact profile',
+            },
+          ],
+        },
+        {
+          id: 'student-drives',
+          label: 'Campus Drives',
+          shortLabel: 'Drives',
+          category: 'PLACEMENTS',
+          primaryPath: '/student/drives',
+          icon: <WorkIcon fontSize="small" />,
+          subtopics: [
+            {
+              id: 'st-drives-all',
+              label: 'All Campus Drives',
+              path: '/student/drives',
+              icon: <WorkIcon sx={{ fontSize: 18 }} />,
+            },
+            {
+              id: 'st-drives-eligible',
+              label: 'Eligible For Me',
+              path: '/student/drives?tab=eligible',
+              icon: <CheckCircleOutlineIcon sx={{ fontSize: 18 }} />,
+            },
+            {
+              id: 'st-drives-applied',
+              label: 'My Applications',
+              path: '/student/drives?tab=applied',
+              icon: <HowToRegIcon sx={{ fontSize: 18 }} />,
+            },
+          ],
+        },
+        {
+          id: 'student-chat',
+          label: 'Campus Chat',
+          shortLabel: 'Chat',
+          category: 'COMMUNICATION & GROUPS',
+          primaryPath: '/chat',
+          icon: <ChatBubbleOutlineIcon fontSize="small" />,
+          subtopics: [
+            {
+              id: 'st-chat-all',
+              label: 'All Conversations',
+              path: '/chat',
+              icon: <ChatBubbleOutlineIcon sx={{ fontSize: 18 }} />,
+            },
+            {
+              id: 'st-chat-departments',
+              label: 'Department Groups',
+              path: '/chat?filter=DEPARTMENT',
+              icon: <SchoolIcon sx={{ fontSize: 18 }} />,
+            },
+            {
+              id: 'st-chat-drives',
+              label: 'Placement Channels',
+              path: '/chat?filter=PLACEMENT_DRIVE',
+              icon: <WorkIcon sx={{ fontSize: 18 }} />,
             },
           ],
         },
@@ -640,53 +710,35 @@ export const RootLayout: React.FC = () => {
               id: 'st-tests-available',
               label: 'Available Tests',
               path: '/student/tests',
-              icon: <FactCheckIcon sx={{ fontSize: 18 }} />,
-              description: 'Active placement and mock assessments ready to take',
-            },
-            {
-              id: 'st-tests-upcoming',
-              label: 'Upcoming Tests',
-              path: '/student/tests/upcoming',
-              icon: <CalendarMonthIcon sx={{ fontSize: 18 }} />,
-              description: 'Scheduled examinations and start windows',
-            },
-            {
-              id: 'st-tests-completed',
-              label: 'Completed Tests',
-              path: '/student/tests/completed',
-              icon: <CheckCircleOutlineIcon sx={{ fontSize: 18 }} />,
-              description: 'Attempt history, scores and review feedback',
+              icon: <QuizIcon sx={{ fontSize: 18 }} />,
             },
             {
               id: 'st-tests-results',
-              label: 'Test Results',
+              label: 'Test Results & Scorecards',
               path: '/student/results',
               icon: <FactCheckIcon sx={{ fontSize: 18 }} />,
-              description: 'Detailed section-wise scorecards and answer reviews',
             },
           ],
         },
         {
-          id: 'student-rounds',
-          label: 'Selection Rounds',
-          shortLabel: 'Rounds',
-          category: 'EVALUATION STAGES',
+          id: 'student-gd-interviews',
+          label: 'GD & Interviews',
+          shortLabel: 'Interviews',
+          category: 'RECRUITMENT ROUNDS',
           primaryPath: '/student/gd',
           icon: <GroupsIcon fontSize="small" />,
           subtopics: [
             {
-              id: 'st-rounds-gd',
-              label: 'Lab Test / GD',
+              id: 'st-gd',
+              label: 'GD Rounds',
               path: '/student/gd',
               icon: <GroupsIcon sx={{ fontSize: 18 }} />,
-              description: 'Group discussion batches, timings and feedback',
             },
             {
-              id: 'st-rounds-interviews',
-              label: 'Recruit / Interviews',
+              id: 'st-interviews',
+              label: 'Interview Schedules',
               path: '/student/interviews',
               icon: <WorkOutlineIcon sx={{ fontSize: 18 }} />,
-              description: 'Technical, HR and Mock interview status and schedules',
             },
           ],
         },
@@ -703,21 +755,18 @@ export const RootLayout: React.FC = () => {
               label: 'My Analytics',
               path: '/student/performance',
               icon: <BarChartIcon sx={{ fontSize: 18 }} />,
-              description: 'Strengths, accuracy trends and skill radar',
             },
             {
               id: 'st-analytics-results',
               label: 'Results & Records',
               path: '/student/results',
               icon: <FactCheckIcon sx={{ fontSize: 18 }} />,
-              description: 'Placement test scorecards and verified marks',
             },
             {
               id: 'st-analytics-reports',
               label: 'Diagnostic Reports',
               path: '/student/reports',
               icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
-              description: 'Downloadable performance evaluation sheets',
             },
           ],
         },
@@ -734,14 +783,12 @@ export const RootLayout: React.FC = () => {
               label: 'Profile Details',
               path: '/student/profile',
               icon: <PersonOutlineIcon sx={{ fontSize: 18 }} />,
-              description: 'View and update candidate personal details',
             },
             {
               id: 'st-settings-password',
               label: 'Change Password',
               path: '/student/change-password',
               icon: <CheckCircleOutlineIcon sx={{ fontSize: 18 }} />,
-              description: 'Update your portal authentication credentials',
             },
           ],
         },
@@ -783,7 +830,7 @@ export const RootLayout: React.FC = () => {
       }
     }
 
-    // 4. Prefix match on pathname (e.g. /admin/assessments/123 matches /admin/assessments)
+    // 4. Prefix match on pathname
     for (const mod of navModules) {
       for (const sub of mod.subtopics) {
         const [basePath] = sub.path.split('?');
@@ -803,43 +850,51 @@ export const RootLayout: React.FC = () => {
     };
   }, [navModules, location.pathname, location.search]);
 
-  // Selected module state (driven by click or route)
-  const [selectedModuleId, setSelectedModuleId] = useState<string>('');
-
-  // Keep selectedModuleId aligned with active route when navigating
+  // Close floating menu on route change
   useEffect(() => {
-    if (activeRouteInfo.moduleId) {
-      setSelectedModuleId(activeRouteInfo.moduleId);
+    setFloatingMenuOpen(false);
+  }, [location.pathname, location.search]);
+
+  // Dismiss floating menu on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setFloatingMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Currently active module for floating menu overlay
+  const activeFloatingModule = useMemo(() => {
+    return navModules.find((m) => m.id === floatingModuleId) || null;
+  }, [navModules, floatingModuleId]);
+
+  // Handle module click in Main Rail (Column 1)
+  const handleModuleClick = (mod: NavigationModule, event: React.MouseEvent<HTMLElement>) => {
+    // If clicking the module that already has floating menu open, toggle it closed
+    if (floatingMenuOpen && floatingModuleId === mod.id) {
+      setFloatingMenuOpen(false);
+      return;
     }
-  }, [activeRouteInfo.moduleId]);
 
-  // Active module object
-  const activeModule = useMemo(() => {
-    const targetId = selectedModuleId || activeRouteInfo.moduleId;
-    return navModules.find((m) => m.id === targetId) || navModules[0];
-  }, [navModules, selectedModuleId, activeRouteInfo.moduleId]);
-
-  // Handle module click in Column 1
-  const handleModuleClick = (mod: NavigationModule) => {
-    setSelectedModuleId(mod.id);
-    if (subtopicPanelCollapsed) {
-      setSubtopicPanelCollapsed(false);
-    }
-
-    // If current route does not belong to clicked module, navigate to primaryPath
-    const isCurrentRouteInModule = mod.subtopics.some((s) => {
-      const [base] = s.path.split('?');
-      return location.pathname === base || location.pathname.startsWith(base + '/');
-    });
-
-    if (!isCurrentRouteInModule && mod.primaryPath) {
+    // If module has subtopics, position and open floating submenu directly adjacent to clicked item
+    if (mod.subtopics && mod.subtopics.length > 0) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setFloatingMenuTop(rect.top);
+      setFloatingModuleId(mod.id);
+      setFloatingMenuOpen(true);
+    } else if (mod.primaryPath) {
+      setFloatingMenuOpen(false);
       navigate(mod.primaryPath);
     }
   };
 
-  // Handle subtopic click in Column 2
+  // Handle direct navigation on subtopic click
   const handleSubtopicClick = (path: string) => {
     navigate(path);
+    setFloatingMenuOpen(false);
     if (isMobile) {
       setMobileDrawerOpen(false);
     }
@@ -893,7 +948,7 @@ export const RootLayout: React.FC = () => {
     return <Outlet />;
   }
 
-  // Two-column layout elements
+  // Dark Navy Main Sidebar Content (Column 1 Rail - 80px)
   const column1Content = (
     <Box
       sx={{
@@ -919,7 +974,10 @@ export const RootLayout: React.FC = () => {
           borderBottom: isStudent ? '1px solid #14223E' : '1px solid #1E293B',
           cursor: 'pointer',
         }}
-        onClick={() => navigate(isStudent ? '/student/dashboard' : '/admin/dashboard')}
+        onClick={() => {
+          setFloatingMenuOpen(false);
+          navigate(isStudent ? '/student/dashboard' : '/admin/dashboard');
+        }}
       >
         <Tooltip title="VET Institute of Arts and Science" placement="right">
           <Box
@@ -951,7 +1009,7 @@ export const RootLayout: React.FC = () => {
         </Tooltip>
       </Box>
 
-      {/* Primary Modules List (Vertical Column 1) */}
+      {/* Primary Modules List (Vertical Rail) */}
       <Box
         sx={{
           flex: 1,
@@ -968,7 +1026,9 @@ export const RootLayout: React.FC = () => {
         }}
       >
         {navModules.map((mod) => {
-          const isActive = mod.id === activeModule?.id;
+          const isRouteActive = mod.id === activeRouteInfo.moduleId;
+          const isMenuOpenForMod = floatingMenuOpen && floatingModuleId === mod.id;
+          const isActive = isMenuOpenForMod || isRouteActive;
 
           return (
             <Tooltip
@@ -977,7 +1037,7 @@ export const RootLayout: React.FC = () => {
                 <Box sx={{ p: 0.5 }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.8rem' }}>{mod.label}</Typography>
                   {mod.category && (
-                    <Typography sx={{ fontSize: '0.7rem', color: '#93C5FD' }}>
+                    <Typography sx={{ fontSize: '0.7rem', color: '#5EEAD4' }}>
                       {mod.category}
                     </Typography>
                   )}
@@ -987,7 +1047,7 @@ export const RootLayout: React.FC = () => {
               arrow
             >
               <Box
-                onClick={() => handleModuleClick(mod)}
+                onClick={(e) => handleModuleClick(mod, e)}
                 sx={{
                   width: '100%',
                   minHeight: 56,
@@ -1002,19 +1062,15 @@ export const RootLayout: React.FC = () => {
                   position: 'relative',
                   transition: 'all 0.18s ease',
                   bgcolor: isActive
-                    ? isStudent
-                      ? '#1E6BFF'
-                      : '#1765B5'
+                    ? '#0D9488'
                     : 'transparent',
                   color: isActive ? '#FFFFFF' : '#94A3B8',
                   boxShadow: isActive
-                    ? '0 4px 14px rgba(23, 101, 181, 0.45)'
+                    ? '0 4px 14px rgba(13, 148, 136, 0.45)'
                     : 'none',
                   '&:hover': {
                     bgcolor: isActive
-                      ? isStudent
-                        ? '#1D4ED8'
-                        : '#104B91'
+                      ? '#0F766E'
                       : 'rgba(255, 255, 255, 0.08)',
                     color: '#FFFFFF',
                   },
@@ -1030,7 +1086,7 @@ export const RootLayout: React.FC = () => {
                       bottom: '20%',
                       width: 4,
                       borderRadius: '0 4px 4px 0',
-                      bgcolor: '#FFFFFF',
+                      bgcolor: '#2DD4BF',
                     }}
                   />
                 )}
@@ -1052,8 +1108,8 @@ export const RootLayout: React.FC = () => {
                         minWidth: 16,
                         height: 16,
                         borderRadius: '8px',
-                        bgcolor: isActive ? '#FFFFFF' : '#1765B5',
-                        color: isActive ? '#1765B5' : '#FFFFFF',
+                        bgcolor: isActive ? '#FFFFFF' : '#0D9488',
+                        color: isActive ? '#0D9488' : '#FFFFFF',
                         fontSize: '0.62rem',
                         fontWeight: 800,
                         display: 'flex',
@@ -1120,7 +1176,7 @@ export const RootLayout: React.FC = () => {
             sx={{
               width: 34,
               height: 34,
-              bgcolor: isStudent ? '#009688' : '#1765B5',
+              bgcolor: '#0D9488',
               fontSize: '0.82rem',
               fontWeight: 700,
               color: '#ffffff',
@@ -1147,7 +1203,7 @@ export const RootLayout: React.FC = () => {
           </IconButton>
         </Tooltip>
 
-        {/* API Connection Indicator */}
+        {/* API Connection Dot */}
         <Tooltip
           title={
             isHealthLoading
@@ -1173,243 +1229,15 @@ export const RootLayout: React.FC = () => {
     </Box>
   );
 
-  const column2Content = (
-    <Box
-      sx={{
-        width: COLUMN_2_WIDTH,
-        height: '100%',
-        bgcolor: '#FFFFFF',
-        borderRight: '1px solid #DCE6F5',
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-        boxShadow: '4px 0 16px rgba(23, 101, 181, 0.03)',
-      }}
-    >
-      {/* Column 2 Header: Active Module Title & Collapse Action */}
-      <Box
-        sx={{
-          minHeight: 68,
-          px: 2,
-          py: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottom: '1px solid #EDF2F7',
-          bgcolor: '#FAFCFF',
-        }}
-      >
-        <Box sx={{ minWidth: 0, flex: 1, pr: 1 }}>
-          <Typography
-            sx={{
-              fontSize: '0.65rem',
-              fontWeight: 800,
-              color: '#1765B5',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              lineHeight: 1.2,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {activeModule?.category || 'MODULE'}
-          </Typography>
-          <Typography
-            variant="subtitle2"
-            sx={{
-              fontWeight: 800,
-              fontSize: '0.95rem',
-              color: '#10223D',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              mt: 0.25,
-            }}
-          >
-            {activeModule?.label}
-          </Typography>
-        </Box>
-
-        {/* Desktop Collapse Button */}
-        {!isMobile && (
-          <Tooltip title="Collapse subtopic panel">
-            <IconButton
-              size="small"
-              onClick={() => setSubtopicPanelCollapsed(true)}
-              sx={{
-                color: '#7182A0',
-                p: 0.5,
-                borderRadius: '6px',
-                border: '1px solid #E2E8F0',
-                bgcolor: '#FFFFFF',
-                '&:hover': { bgcolor: '#F1F5F9', color: '#1765B5' },
-              }}
-            >
-              <ChevronLeftIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-
-      {/* Dedicated Downward List of Subtopics */}
-      <Box
-        sx={{
-          flex: 1,
-          overflowY: 'auto',
-          py: 1.5,
-          px: 1.25,
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{
-            display: 'block',
-            px: 1,
-            mb: 1,
-            color: '#8293B0',
-            fontWeight: 700,
-            fontSize: '0.68rem',
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Navigation Topics ({activeModule?.subtopics?.length || 0})
-        </Typography>
-
-        <List dense disablePadding>
-          {activeModule?.subtopics?.map((subtopic) => {
-            const isActive = isSubtopicActive(subtopic.path);
-
-            return (
-              <ListItem key={subtopic.id} disablePadding sx={{ mb: 0.5 }}>
-                <Tooltip
-                  title={subtopic.description || ''}
-                  placement="right"
-                  arrow
-                  disableHoverListener={!subtopic.description}
-                >
-                  <ListItemButton
-                    onClick={() => handleSubtopicClick(subtopic.path)}
-                    sx={{
-                      borderRadius: '8px',
-                      py: 0.85,
-                      px: 1.25,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.25,
-                      bgcolor: isActive ? '#EDF4FC' : 'transparent',
-                      color: isActive ? '#1765B5' : '#475569',
-                      borderLeft: isActive ? '3.5px solid #1765B5' : '3.5px solid transparent',
-                      boxShadow: isActive ? '0 1px 4px rgba(23, 101, 181, 0.08)' : 'none',
-                      transition: 'all 0.15s ease',
-                      '&:hover': {
-                        bgcolor: isActive ? '#E2EEFA' : '#F6F9FD',
-                        color: isActive ? '#104B91' : '#10223D',
-                        '& .subtopic-icon': {
-                          color: '#1765B5',
-                        },
-                      },
-                    }}
-                  >
-                    <ListItemIcon
-                      className="subtopic-icon"
-                      sx={{
-                        minWidth: 22,
-                        color: isActive ? '#1765B5' : '#7182A0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'color 0.15s ease',
-                      }}
-                    >
-                      {subtopic.icon || <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'currentColor' }} />}
-                    </ListItemIcon>
-
-                    <ListItemText
-                      primary={subtopic.label}
-                      primaryTypographyProps={{
-                        fontSize: '0.8125rem',
-                        fontWeight: isActive ? 700 : 500,
-                        color: 'inherit',
-                        whiteSpace: 'nowrap',
-                        textOverflow: 'ellipsis',
-                        overflow: 'hidden',
-                      }}
-                    />
-
-                    {subtopic.badge !== undefined && (
-                      <Chip
-                        label={subtopic.badge}
-                        size="small"
-                        color={subtopic.badgeColor || (isActive ? 'primary' : 'default')}
-                        sx={{
-                          height: 18,
-                          fontSize: '0.65rem',
-                          fontWeight: 700,
-                          borderRadius: '4px',
-                          ml: 0.5,
-                          px: 0.4,
-                          ...(isActive && !subtopic.badgeColor && {
-                            bgcolor: '#1765B5',
-                            color: '#FFFFFF',
-                          }),
-                        }}
-                      />
-                    )}
-                  </ListItemButton>
-                </Tooltip>
-              </ListItem>
-            );
-          })}
-        </List>
-      </Box>
-
-      {/* Subtopic Panel Footer Note */}
-      <Box
-        sx={{
-          p: 1.5,
-          borderTop: '1px solid #EDF2F7',
-          bgcolor: '#FAFCFF',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Typography variant="caption" sx={{ color: '#8293B0', fontSize: '0.7rem', fontWeight: 600 }}>
-          {isStudent ? 'Candidate Workspace' : 'Placement Enterprise'}
-        </Typography>
-        <Chip
-          label="Active"
-          size="small"
-          sx={{
-            height: 18,
-            fontSize: '0.62rem',
-            fontWeight: 700,
-            bgcolor: '#E6F4EA',
-            color: '#137333',
-            borderRadius: '4px',
-          }}
-        />
-      </Box>
-    </Box>
-  );
-
-  // Total sidebar width calculation for desktop
-  const effectiveSidebarWidth = subtopicPanelCollapsed
-    ? COLUMN_1_WIDTH
-    : COLUMN_1_WIDTH + COLUMN_2_WIDTH;
-
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: isStudent ? '#F8F9FB' : '#EDF2FF' }}>
-      {/* Desktop Two-Column Sidebar */}
+      {/* Desktop Main Sidebar (Column 1 Rail - 80px) */}
       {!isMobile && (
         <Box
           component="nav"
           sx={{
-            width: effectiveSidebarWidth,
+            width: COLUMN_1_WIDTH,
             flexShrink: 0,
-            transition: 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
           }}
         >
           <Box
@@ -1418,45 +1246,562 @@ export const RootLayout: React.FC = () => {
               top: 0,
               bottom: 0,
               left: 0,
-              width: effectiveSidebarWidth,
-              zIndex: 1100,
+              width: COLUMN_1_WIDTH,
+              zIndex: 1200,
               display: 'flex',
               overflow: 'hidden',
-              transition: 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
-            {/* Column 1: Main Placement Modules */}
             {column1Content}
-
-            {/* Column 2: Dedicated Subtopic Panel */}
-            {!subtopicPanelCollapsed && column2Content}
           </Box>
         </Box>
       )}
 
-      {/* Mobile Drawer (Side-by-Side Two-Column Mobile Drawer) */}
+      {/* Mobile Drawer */}
       {isMobile && (
         <Drawer
           anchor="left"
           open={mobileDrawerOpen}
-          onClose={() => setMobileDrawerOpen(false)}
+          onClose={() => {
+            setMobileDrawerOpen(false);
+            setFloatingMenuOpen(false);
+          }}
           PaperProps={{
             sx: {
-              width: COLUMN_1_WIDTH + COLUMN_2_WIDTH,
-              maxWidth: '92vw',
+              width: { xs: 290, sm: 320 },
+              bgcolor: isStudent ? '#0B132B' : '#0E1726',
+              color: '#FFFFFF',
               display: 'flex',
-              flexDirection: 'row',
-              overflow: 'hidden',
+              flexDirection: 'column',
+              boxShadow: '4px 0 24px rgba(0,0,0,0.4)',
             },
           }}
         >
-          {column1Content}
-          {column2Content}
+          {/* Mobile Drawer Header */}
+          <Box
+            sx={{
+              p: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: isStudent ? '1px solid #14223E' : '1px solid #1E293B',
+            }}
+          >
+            <Box
+              sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'pointer' }}
+              onClick={() => {
+                setMobileDrawerOpen(false);
+                navigate(isStudent ? '/student/dashboard' : '/admin/dashboard');
+              }}
+            >
+              <Box
+                sx={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: '8px',
+                  bgcolor: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  p: 0.5,
+                }}
+              >
+                <Box
+                  component="img"
+                  src="/vetname.png"
+                  alt="VETIAS"
+                  sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              </Box>
+              <Box>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.88rem', color: '#FFFFFF', lineHeight: 1.2 }}>
+                  VETIAS Placements
+                </Typography>
+                <Typography sx={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                  {isStudent ? 'Candidate Portal' : 'Administration Portal'}
+                </Typography>
+              </Box>
+            </Box>
+
+            <IconButton
+              size="small"
+              onClick={() => setMobileDrawerOpen(false)}
+              sx={{ color: '#94A3B8', '&:hover': { color: '#FFFFFF' } }}
+            >
+              <CloseIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Box>
+
+          {/* User Profile Card in Drawer */}
+          <Box
+            sx={{
+              mx: 1.75,
+              my: 1.5,
+              p: 1.5,
+              borderRadius: '10px',
+              bgcolor: isStudent ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.04)',
+              border: isStudent ? '1px solid #14223E' : '1px solid #1E293B',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.25,
+            }}
+          >
+            <Avatar
+              sx={{
+                width: 36,
+                height: 36,
+                bgcolor: '#0D9488',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                color: '#FFFFFF',
+              }}
+            >
+              {user?.email?.charAt(0).toUpperCase() || 'U'}
+            </Avatar>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography
+                sx={{
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {isStudent ? studentDisplayName : user?.email || 'User'}
+              </Typography>
+              <Chip
+                label={isStudent ? 'Student' : user?.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Placement Admin'}
+                size="small"
+                sx={{
+                  height: 18,
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  bgcolor: '#0D9488',
+                  color: '#FFFFFF',
+                  mt: 0.3,
+                }}
+              />
+            </Box>
+          </Box>
+
+          {/* Navigation Items (Scrollable) */}
+          <Box
+            sx={{
+              flex: 1,
+              overflowY: 'auto',
+              px: 1.25,
+              py: 0.5,
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#334155 transparent',
+            }}
+          >
+            <List dense disablePadding>
+              {navModules.map((mod) => {
+                const isRouteActive = mod.id === activeRouteInfo.moduleId;
+                const isExpanded = !!mobileExpandedModules[mod.id] || isRouteActive;
+
+                return (
+                  <Box key={mod.id} sx={{ mb: 0.75 }}>
+                    <ListItemButton
+                      onClick={() => {
+                        if (mod.subtopics && mod.subtopics.length > 0) {
+                          setMobileExpandedModules((prev) => ({
+                            ...prev,
+                            [mod.id]: !prev[mod.id],
+                          }));
+                        } else {
+                          navigate(mod.primaryPath);
+                          setMobileDrawerOpen(false);
+                        }
+                      }}
+                      sx={{
+                        borderRadius: '8px',
+                        py: 0.9,
+                        px: 1.5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        bgcolor: isRouteActive ? 'rgba(13, 148, 136, 0.15)' : 'transparent',
+                        color: isRouteActive ? '#2DD4BF' : '#CBD5E1',
+                        borderLeft: isRouteActive ? '3.5px solid #0D9488' : '3.5px solid transparent',
+                        '&:hover': {
+                          bgcolor: 'rgba(255, 255, 255, 0.08)',
+                          color: '#FFFFFF',
+                        },
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+                        <ListItemIcon
+                          sx={{
+                            minWidth: 24,
+                            color: isRouteActive ? '#2DD4BF' : '#94A3B8',
+                          }}
+                        >
+                          {mod.icon}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={mod.label}
+                          primaryTypographyProps={{
+                            fontSize: '0.84rem',
+                            fontWeight: isRouteActive ? 700 : 500,
+                            color: 'inherit',
+                            noWrap: true,
+                          }}
+                        />
+                      </Box>
+
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        {mod.badge !== undefined && (
+                          <Chip
+                            label={mod.badge}
+                            size="small"
+                            sx={{
+                              height: 18,
+                              fontSize: '0.64rem',
+                              fontWeight: 700,
+                              bgcolor: '#0D9488',
+                              color: '#FFFFFF',
+                            }}
+                          />
+                        )}
+                        {mod.subtopics && mod.subtopics.length > 0 && (
+                          isExpanded ? <ExpandLess sx={{ fontSize: 18, color: '#94A3B8' }} /> : <ExpandMore sx={{ fontSize: 18, color: '#94A3B8' }} />
+                        )}
+                      </Box>
+                    </ListItemButton>
+
+                    {/* Subtopics Collapse */}
+                    {mod.subtopics && mod.subtopics.length > 0 && (
+                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                        <List dense disablePadding sx={{ pl: 2, pt: 0.25 }}>
+                          {mod.subtopics.map((subtopic) => {
+                            const isSubActive = isSubtopicActive(subtopic.path);
+
+                            return (
+                              <ListItemButton
+                                key={subtopic.id}
+                                onClick={() => {
+                                  navigate(subtopic.path);
+                                  setMobileDrawerOpen(false);
+                                }}
+                                sx={{
+                                  borderRadius: '6px',
+                                  py: 0.7,
+                                  px: 1.25,
+                                  my: 0.25,
+                                  bgcolor: isSubActive ? '#0D9488' : 'transparent',
+                                  color: isSubActive ? '#FFFFFF' : '#94A3B8',
+                                  '&:hover': {
+                                    bgcolor: isSubActive ? '#0D9488' : 'rgba(255, 255, 255, 0.05)',
+                                    color: '#FFFFFF',
+                                  },
+                                }}
+                              >
+                                <ListItemIcon
+                                  sx={{
+                                    minWidth: 20,
+                                    color: isSubActive ? '#FFFFFF' : '#64748B',
+                                    fontSize: 16,
+                                  }}
+                                >
+                                  {subtopic.icon || <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'currentColor' }} />}
+                                </ListItemIcon>
+                                <ListItemText
+                                  primary={subtopic.label}
+                                  primaryTypographyProps={{
+                                    fontSize: '0.78rem',
+                                    fontWeight: isSubActive ? 700 : 400,
+                                    color: 'inherit',
+                                    noWrap: true,
+                                  }}
+                                />
+                                {subtopic.badge !== undefined && (
+                                  <Chip
+                                    label={subtopic.badge}
+                                    size="small"
+                                    sx={{
+                                      height: 16,
+                                      fontSize: '0.6rem',
+                                      fontWeight: 700,
+                                      bgcolor: isSubActive ? '#FFFFFF' : '#334155',
+                                      color: isSubActive ? '#0D9488' : '#CBD5E1',
+                                    }}
+                                  />
+                                )}
+                              </ListItemButton>
+                            );
+                          })}
+                        </List>
+                      </Collapse>
+                    )}
+                  </Box>
+                );
+              })}
+            </List>
+          </Box>
+
+          {/* Drawer Footer */}
+          <Box
+            sx={{
+              p: 1.75,
+              borderTop: isStudent ? '1px solid #14223E' : '1px solid #1E293B',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<LogoutIcon sx={{ fontSize: 16 }} />}
+              onClick={() => {
+                setMobileDrawerOpen(false);
+                handleLogout();
+              }}
+              sx={{
+                color: '#EF4444',
+                borderColor: 'rgba(239, 68, 68, 0.3)',
+                fontSize: '0.75rem',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderRadius: '8px',
+                '&:hover': {
+                  borderColor: '#EF4444',
+                  bgcolor: 'rgba(239, 68, 68, 0.1)',
+                },
+              }}
+            >
+              Sign Out
+            </Button>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: isHealthError ? '#EF4444' : '#10B981',
+                }}
+              />
+              <Typography sx={{ fontSize: '0.7rem', color: '#94A3B8' }}>
+                {isHealthError ? 'Offline' : 'Online'}
+              </Typography>
+            </Box>
+          </Box>
         </Drawer>
       )}
 
+      {/* Floating Submenu Overlay & Backdrop */}
+      {floatingMenuOpen && activeFloatingModule && (
+        <>
+          {/* Subtle dim overlay behind the floating panel */}
+          <Box
+            onClick={() => setFloatingMenuOpen(false)}
+            sx={{
+              position: 'fixed',
+              top: 0,
+              left: isMobile ? 0 : COLUMN_1_WIDTH,
+              right: 0,
+              bottom: 0,
+              bgcolor: 'rgba(15, 23, 42, 0.28)',
+              backdropFilter: 'blur(1.5px)',
+              zIndex: 1250,
+              animation: 'fadeInBackdrop 0.15s ease-out',
+              '@keyframes fadeInBackdrop': {
+                from: { opacity: 0 },
+                to: { opacity: 1 },
+              },
+            }}
+          />
+
+          {/* Compact Floating White Panel positioned directly adjacent to clicked item */}
+          <Box
+            sx={{
+              position: 'fixed',
+              left: isMobile ? 86 : COLUMN_1_WIDTH + 6,
+              top: Math.max(12, Math.min(floatingMenuTop - 8, typeof window !== 'undefined' ? window.innerHeight - 380 : 80)),
+              width: 256,
+              maxHeight: 'calc(100vh - 24px)',
+              bgcolor: '#FFFFFF',
+              borderRadius: '14px',
+              border: '1px solid #E2E8F0',
+              boxShadow: '0 20px 35px -8px rgba(15, 23, 42, 0.18), 0 8px 16px -4px rgba(15, 23, 42, 0.08)',
+              zIndex: 1300,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              animation: 'popInSubmenu 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+              '@keyframes popInSubmenu': {
+                from: { opacity: 0, transform: 'translateX(-10px) scale(0.97)' },
+                to: { opacity: 1, transform: 'translateX(0) scale(1)' },
+              },
+            }}
+          >
+            {/* Submenu Header */}
+            <Box
+              sx={{
+                px: 2,
+                py: 1.25,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #F1F5F9',
+                bgcolor: '#FAFBFC',
+              }}
+            >
+              <Box sx={{ minWidth: 0, flex: 1, pr: 1 }}>
+                <Typography
+                  sx={{
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    color: '#0F172A',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {activeFloatingModule.label}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '0.66rem',
+                    fontWeight: 700,
+                    color: '#0D9488',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    mt: 0.1,
+                  }}
+                >
+                  {activeFloatingModule.category || 'Navigation'}
+                </Typography>
+              </Box>
+
+              <IconButton
+                size="small"
+                onClick={() => setFloatingMenuOpen(false)}
+                sx={{
+                  p: 0.5,
+                  color: '#64748B',
+                  borderRadius: '6px',
+                  border: '1px solid transparent',
+                  '&:hover': {
+                    bgcolor: '#F1F5F9',
+                    color: '#0F172A',
+                    borderColor: '#E2E8F0',
+                  },
+                }}
+              >
+                <CloseIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
+
+            {/* Vertically Stacked Subtopics List */}
+            <Box
+              sx={{
+                p: 1,
+                overflowY: 'auto',
+                maxHeight: 'calc(100vh - 120px)',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#CBD5E1 transparent',
+                '&::-webkit-scrollbar': { width: 5 },
+                '&::-webkit-scrollbar-thumb': { bgcolor: '#CBD5E1', borderRadius: 4 },
+              }}
+            >
+              <List dense disablePadding>
+                {activeFloatingModule.subtopics.map((subtopic) => {
+                  const isActive = isSubtopicActive(subtopic.path);
+
+                  return (
+                    <ListItem key={subtopic.id} disablePadding sx={{ mb: 0.5 }}>
+                      <ListItemButton
+                        onClick={() => handleSubtopicClick(subtopic.path)}
+                        sx={{
+                          borderRadius: '8px',
+                          py: 0.85,
+                          px: 1.25,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.25,
+                          bgcolor: isActive ? '#F0FDFA' : 'transparent',
+                          color: isActive ? '#0D9488' : '#334155',
+                          border: isActive ? '1px solid #CCFBF1' : '1px solid transparent',
+                          borderLeft: isActive ? '3.5px solid #0D9488' : '3.5px solid transparent',
+                          boxShadow: isActive ? '0 1px 3px rgba(13, 148, 136, 0.12)' : 'none',
+                          transition: 'all 0.15s ease',
+                          '&:hover': {
+                            bgcolor: isActive ? '#CCFBF1' : '#F8FAFC',
+                            color: isActive ? '#0F766E' : '#0F172A',
+                            '& .subtopic-icon': {
+                              color: '#0D9488',
+                            },
+                          },
+                        }}
+                      >
+                        <ListItemIcon
+                          className="subtopic-icon"
+                          sx={{
+                            minWidth: 20,
+                            color: isActive ? '#0D9488' : '#64748B',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'color 0.15s ease',
+                          }}
+                        >
+                          {subtopic.icon || <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'currentColor' }} />}
+                        </ListItemIcon>
+
+                        <ListItemText
+                          primary={subtopic.label}
+                          primaryTypographyProps={{
+                            fontSize: '0.8125rem',
+                            fontWeight: isActive ? 600 : 500,
+                            color: 'inherit',
+                            whiteSpace: 'nowrap',
+                            textOverflow: 'ellipsis',
+                            overflow: 'hidden',
+                          }}
+                        />
+
+                        {subtopic.badge !== undefined && (
+                          <Chip
+                            label={subtopic.badge}
+                            size="small"
+                            sx={{
+                              height: 18,
+                              fontSize: '0.64rem',
+                              fontWeight: 700,
+                              borderRadius: '4px',
+                              ml: 0.5,
+                              px: 0.4,
+                              bgcolor: isActive ? '#0D9488' : '#F1F5F9',
+                              color: isActive ? '#FFFFFF' : '#475569',
+                            }}
+                          />
+                        )}
+                      </ListItemButton>
+                    </ListItem>
+                  );
+                })}
+              </List>
+            </Box>
+          </Box>
+        </>
+      )}
+
       {/* Main Content Area */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          ml: { xs: 0, md: `${COLUMN_1_WIDTH}px` },
+          width: { xs: '100%', md: `calc(100% - ${COLUMN_1_WIDTH}px)` },
+        }}
+      >
         {/* Top Header Bar */}
         <Box
           component="header"
@@ -1474,15 +1819,15 @@ export const RootLayout: React.FC = () => {
             boxShadow: 'none',
           }}
         >
-          {/* Left: Sidebar Toggle & Greeting / Breadcrumbs */}
+          {/* Left: Mobile Menu Toggle / Breadcrumbs */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, overflow: 'hidden' }}>
             <Tooltip
               title={
                 isMobile
                   ? 'Open Navigation Menu'
-                  : subtopicPanelCollapsed
-                    ? 'Expand Subtopic Panel'
-                    : 'Collapse Subtopic Panel'
+                  : floatingMenuOpen
+                    ? 'Close Navigation Submenu'
+                    : 'Open Navigation Submenu'
               }
             >
               <Box
@@ -1490,7 +1835,16 @@ export const RootLayout: React.FC = () => {
                   if (isMobile) {
                     setMobileDrawerOpen(true);
                   } else {
-                    setSubtopicPanelCollapsed(!subtopicPanelCollapsed);
+                    if (floatingMenuOpen) {
+                      setFloatingMenuOpen(false);
+                    } else {
+                      const mod = navModules.find((m) => m.id === activeRouteInfo.moduleId) || navModules[0];
+                      if (mod) {
+                        setFloatingModuleId(mod.id);
+                        setFloatingMenuTop(70);
+                        setFloatingMenuOpen(true);
+                      }
+                    }
                   }
                 }}
                 sx={{
@@ -1510,10 +1864,8 @@ export const RootLayout: React.FC = () => {
               >
                 {isMobile ? (
                   <MenuIcon sx={{ fontSize: 20, color: '#374151' }} />
-                ) : subtopicPanelCollapsed ? (
-                  <ChevronRightIcon sx={{ fontSize: 20, color: '#1765B5' }} />
                 ) : (
-                  <ViewSidebarIcon sx={{ fontSize: 18, color: '#374151' }} />
+                  <ViewSidebarIcon sx={{ fontSize: 18, color: floatingMenuOpen ? '#0D9488' : '#374151' }} />
                 )}
               </Box>
             </Tooltip>
@@ -1529,7 +1881,7 @@ export const RootLayout: React.FC = () => {
               >
                 {getGreeting()},{' '}
                 <Box component="span" sx={{ fontWeight: 700, color: '#111827' }}>
-                  {studentDisplayName.toUpperCase()}!
+                  {studentDisplayName}!
                 </Box>
               </Typography>
             ) : (
@@ -1570,33 +1922,41 @@ export const RootLayout: React.FC = () => {
           {/* Right Header Controls */}
           {isStudent ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {/* Flame streak badge */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.75,
-                  bgcolor: '#FFF0E6',
-                  borderRadius: '20px',
-                  px: 1.5,
-                  py: 0.5,
-                  border: '1px solid #FFE4D6',
-                }}
+              <Tooltip
+                title={
+                  isAttendanceStreakError
+                    ? 'Could not load your attendance streak'
+                    : 'Consecutive days you have started an assessment'
+                }
               >
-                <LocalFireDepartmentIcon sx={{ color: '#FF5722', fontSize: 18 }} />
-                <Typography sx={{ color: '#E65100', fontWeight: 700, fontSize: '0.85rem' }}>
-                  0
-                </Typography>
-              </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    bgcolor: '#FFF0E6',
+                    borderRadius: '20px',
+                    px: 1.5,
+                    py: 0.5,
+                    border: '1px solid #FFE4D6',
+                  }}
+                >
+                  <LocalFireDepartmentIcon sx={{ color: '#FF5722', fontSize: 18 }} />
+                  <Typography sx={{ color: '#E65100', fontWeight: 700, fontSize: '0.85rem' }}>
+                    {isAttendanceStreakError ? '—' : attendanceStreak ?? 0}
+                  </Typography>
+                </Box>
+              </Tooltip>
 
-              {/* Avatar */}
+              <NotificationBell isStudent={isStudent} />
+
               <Avatar
                 component={RouterLink}
                 to="/student/profile"
                 sx={{
                   width: 36,
                   height: 36,
-                  bgcolor: '#009688',
+                  bgcolor: '#0D9488',
                   fontSize: '0.95rem',
                   fontWeight: 700,
                   color: '#FFFFFF',
@@ -1651,11 +2011,13 @@ export const RootLayout: React.FC = () => {
           component="main"
           sx={{
             flex: 1,
-            p: isStudent ? { xs: 2, sm: 3, md: 4 } : { xs: 2, sm: 2.5, md: 3.5 },
+            p: isStudent ? { xs: 1.5, sm: 2.5, md: 4 } : { xs: 1.5, sm: 2.5, md: 3.5 },
+            pb: isStudent ? { xs: 9.5, sm: 9.5, md: 4 } : { xs: 9.5, sm: 9.5, md: 3.5 },
             bgcolor: isStudent ? '#F8F9FB' : '#EDF2FF',
             maxWidth: 1600,
             width: '100%',
             mx: 'auto',
+            overflowX: 'hidden',
             '& .MuiCard-root': isStudent
               ? {
                   borderRadius: '12px',
@@ -1672,6 +2034,80 @@ export const RootLayout: React.FC = () => {
           <Outlet />
         </Box>
       </Box>
+
+      {/* Mobile Bottom Navigation Bar */}
+      {isMobile && !isLoginPage && !isExamMode && (
+        <Paper
+          elevation={8}
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1200,
+            borderTop: '1px solid #E2E8F0',
+            bgcolor: '#FFFFFF',
+            boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.08)',
+          }}
+        >
+          <BottomNavigation
+            value={currentBottomNavIndex}
+            onChange={(_event, newValue) => {
+              if (newValue === 4) {
+                setMobileDrawerOpen(true);
+              } else if (isStudent) {
+                if (newValue === 0) navigate('/student/dashboard');
+                else if (newValue === 1) navigate('/student/drives');
+                else if (newValue === 2) navigate('/student/tests');
+                else if (newValue === 3) navigate('/student/results');
+              } else {
+                if (newValue === 0) navigate('/admin/dashboard');
+                else if (newValue === 1) navigate('/admin/placement-drives');
+                else if (newValue === 2) navigate('/admin/students');
+                else if (newValue === 3) navigate('/admin/results');
+              }
+            }}
+            showLabels
+            sx={{
+              height: 58,
+              bgcolor: '#FFFFFF',
+              '& .MuiBottomNavigationAction-root': {
+                minWidth: 0,
+                px: 0.5,
+                py: '4px',
+                color: '#64748B',
+                '&.Mui-selected': {
+                  color: '#0D9488',
+                },
+              },
+              '& .MuiBottomNavigationAction-label': {
+                fontSize: '0.67rem',
+                fontWeight: 600,
+                lineHeight: 1.1,
+                mt: 0.2,
+                '&.Mui-selected': {
+                  fontSize: '0.70rem',
+                  fontWeight: 700,
+                },
+              },
+            }}
+          >
+            {isStudent ? [
+              <BottomNavigationAction key="m-dash" label="Home" icon={<DashboardIcon sx={{ fontSize: 21 }} />} />,
+              <BottomNavigationAction key="m-drives" label="Drives" icon={<WorkIcon sx={{ fontSize: 21 }} />} />,
+              <BottomNavigationAction key="m-tests" label="Tests" icon={<QuizIcon sx={{ fontSize: 21 }} />} />,
+              <BottomNavigationAction key="m-results" label="Results" icon={<FactCheckIcon sx={{ fontSize: 21 }} />} />,
+              <BottomNavigationAction key="m-menu" label="More" icon={<MenuIcon sx={{ fontSize: 21 }} />} />,
+            ] : [
+              <BottomNavigationAction key="m-dash" label="Overview" icon={<DashboardIcon sx={{ fontSize: 21 }} />} />,
+              <BottomNavigationAction key="m-drives" label="Drives" icon={<WorkIcon sx={{ fontSize: 21 }} />} />,
+              <BottomNavigationAction key="m-students" label="Students" icon={<PeopleAltIcon sx={{ fontSize: 21 }} />} />,
+              <BottomNavigationAction key="m-results" label="Results" icon={<FactCheckIcon sx={{ fontSize: 21 }} />} />,
+              <BottomNavigationAction key="m-menu" label="Menu" icon={<MenuIcon sx={{ fontSize: 21 }} />} />,
+            ]}
+          </BottomNavigation>
+        </Paper>
+      )}
     </Box>
   );
 };

@@ -2,6 +2,7 @@ export type Role = 'SUPER_ADMIN' | 'PLACEMENT_ADMIN' | 'STUDENT';
 
 export interface StudentProfile {
   id: string;
+  name: string;
   registerNumber: string;
   department: string;
   batchYear: number;
@@ -42,4 +43,3 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   updatePasswordCompleted: () => void;
 }
-

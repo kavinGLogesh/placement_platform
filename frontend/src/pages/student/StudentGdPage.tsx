@@ -311,7 +311,7 @@ export const StudentGdPage: React.FC = () => {
                         Criterion-wise Marks
                       </Typography>
 
-                      <TableContainer component={Paper} variant="outlined">
+                      <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                         <Table size="small">
                           <TableHead sx={{ backgroundColor: '#EDF2FF' }}>
                             <TableRow>
